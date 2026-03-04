@@ -1,0 +1,33 @@
+Generate a Marriage Monday post for the StillWaterGrace Instagram page.
+
+Theme this week: {{ weekly_marriage_theme }}
+{% if trending_topic %}Trending context: {{ trending_topic }}{% endif %}
+
+Approach: Practical, grace-filled, applicable to real marriages including hard seasons.
+Biblical anchor: Find a relevant verse (do not just use the obvious ones — be creative and specific).
+Tone: Like a trusted friend who has a strong marriage sharing what actually works, not a lecture.
+
+Generate the following as a JSON object:
+
+{
+  "hook": "First line — must stop the scroll, max 10 words, no emoji at start",
+  "caption_short": "Under 150 characters, punchy, shareable",
+  "caption_medium": "150-300 characters, adds one practical marriage insight",
+  "caption_long": "300-500 characters, connects a real marriage moment to biblical wisdom",
+  "story_text": "Story overlay text, max 3 lines",
+  "reel_script_15": "15-second spoken script about this marriage topic",
+  "reel_script_30": "30-second script with hook, practical point, and call to action",
+  "hashtags_large": ["10 hashtags over 1M posts, marriage and faith focused"],
+  "hashtags_medium": ["10 hashtags 100K-1M posts"],
+  "hashtags_niche": ["10 hashtags under 100K posts"],
+  "pinterest_description": "150 words about this marriage topic, keyword rich",
+  "facebook_variation": "Conversational marriage post, ends with a question for couples",
+  "image_prompt_leonardo": "Detailed image prompt — warm, intimate, marriage-themed (rings, hands, couple silhouette, etc.)",
+  "alt_text": "Image accessibility description",
+  "verse_used": "The verse reference you chose",
+  "verse_text": "The verse text",
+  "content_series_fit": "Marriage Monday",
+  "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
+}
+
+Output ONLY valid JSON.

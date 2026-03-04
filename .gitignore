@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Environment
+.env
+
+# Images (generated, not tracked in git)
+images/raw/
+images/processed/
+
+# Reports
+reports/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Node (dashboard)
+dashboard/node_modules/
+dashboard/dist/
+
+# Database
+*.db
+*.sqlite3
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.db
+
+# Claude Code
+.claude/

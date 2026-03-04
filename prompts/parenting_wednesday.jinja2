@@ -1,0 +1,33 @@
+Generate a Parenting Wednesday post for the StillWaterGrace Instagram page.
+
+Age focus this week: {{ age_group }}
+Theme: {{ parenting_theme }}
+{% if trending_topic %}Trending context: {{ trending_topic }}{% endif %}
+
+Angle: Connect a common parenting challenge to a biblical principle with a practical takeaway.
+Tone: Empathetic, real, grace-filled. Acknowledge the mess before offering the wisdom.
+
+Generate the following as a JSON object:
+
+{
+  "hook": "First line — relatable parenting moment, max 10 words, no emoji at start",
+  "caption_short": "Under 150 characters, punchy parenting truth",
+  "caption_medium": "150-300 characters with a practical takeaway",
+  "caption_long": "300-500 characters connecting parenting reality to biblical wisdom",
+  "story_text": "Story overlay text, max 3 lines",
+  "reel_script_15": "15-second spoken script about this parenting topic",
+  "reel_script_30": "30-second script with relatable hook, biblical wisdom, practical step",
+  "hashtags_large": ["10 hashtags over 1M posts"],
+  "hashtags_medium": ["10 hashtags 100K-1M posts"],
+  "hashtags_niche": ["10 hashtags under 100K posts"],
+  "pinterest_description": "150 words, parenting and faith keywords",
+  "facebook_variation": "Conversational parenting post, ends with a question for parents",
+  "image_prompt_leonardo": "Warm image prompt — children's hands, family scene, bedtime prayer, nature with kids",
+  "alt_text": "Image accessibility description",
+  "verse_used": "The verse reference you chose",
+  "verse_text": "The verse text",
+  "content_series_fit": "Parenting Wednesday",
+  "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
+}
+
+Output ONLY valid JSON.

@@ -1,0 +1,59 @@
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18
+
+# Database
+sqlalchemy==2.0.36
+alembic==1.14.1
+psycopg2-binary==2.9.10
+
+# Task Queue
+celery[redis]==5.4.0
+redis==5.2.1
+
+# Data Validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# HTTP Client
+httpx==0.28.1
+
+# AI / Content Generation
+anthropic==0.42.0
+
+# Scraping & Research
+praw==7.8.1
+pytrends==4.9.2
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# Image Processing
+Pillow==11.1.0
+
+# Cloud Storage (S3-compatible for Cloudflare R2)
+boto3==1.36.4
+
+# Email
+sendgrid==6.11.0
+
+# Templating
+Jinja2==3.1.5
+
+# PDF Generation
+reportlab==4.2.5
+
+# Environment
+python-dotenv==1.0.1
+
+# Date/Time
+python-dateutil==2.9.0.post0
+pytz==2024.2
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-cov==6.0.0
+
+# Utilities
+orjson==3.10.14

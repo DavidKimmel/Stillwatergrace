@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace — Build Plan</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream:       #FFF8F0;
+    --cream-dark:  #F5EBDC;
+    --gold:        #D4A853;
+    --gold-light:  #E8C88C;
+    --gold-faint:  #F3E4C4;
+    --green:       #2D4A3E;
+    --green-light: #3E6555;
+    --green-faint: #E8F0EC;
+    --white:       #FAFAFA;
+    --warm-gray:   #B4AAA0;
+    --text-dark:   #2C2C2C;
+    --shadow:      0 4px 24px rgba(45,74,62,.10);
+    --shadow-lg:   0 8px 40px rgba(45,74,62,.14);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--text-dark);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ═══════════════════════════════════════════════
+     HEADER / HERO
+     ═══════════════════════════════════════════════ */
+  .hero {
+    background: linear-gradient(160deg, var(--green) 0%, #1D352C 100%);
+    padding: 56px 32px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(212,168,83,.12) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(212,168,83,.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .hero-brand {
+    font-size: 14px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .hero h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    color: var(--cream);
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+  .hero-sub {
+    color: var(--gold-light);
+    font-size: 15px;
+    max-width: 640px;
+    margin: 0 auto;
+    opacity: .85;
+  }
+  .hero-rule {
+    width: 80px;
+    height: 2px;
+    background: var(--gold);
+    margin: 20px auto 16px;
+    border: none;
+  }
+
+  /* ═══════════════════════════════════════════════
+     NAV (sticky section tabs)
+     ═══════════════════════════════════════════════ */
+  .section-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--green);
+    border-bottom: 2px solid var(--gold);
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0 8px;
+  }
+  .section-nav a {
+    display: inline-block;
+    padding: 10px 16px;
+    color: var(--cream);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    opacity: .7;
+    transition: opacity .2s, background .2s;
+    white-space: nowrap;
+  }
+  .section-nav a:hover {
+    opacity: 1;
+    background: rgba(212,168,83,.15);
+  }
+
+  /* ═══════════════════════════════════════════════
+     MAIN CONTAINER
+     ═══════════════════════════════════════════════ */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     SECTION BLOCKS
+     ═══════════════════════════════════════════════ */
+  .section {
+    margin-bottom: 40px;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .section-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--green);
+    color: var(--cream);
+    padding: 10px 28px;
+    border-radius: 40px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    box-shadow: var(--shadow);
+  }
+  .section-badge .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .section-body {
+    background: var(--white);
+    border: 1px solid var(--cream-dark);
+    border-radius: 16px;
+    padding: 32px 28px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .section-body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+  }
+
+  /* ═══════════════════════════════════════════════
+     TYPOGRAPHY
+     ═══════════════════════════════════════════════ */
+  h2 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 24px;
+    color: var(--green);
+    margin-bottom: 16px;
+    font-weight: 400;
+  }
+  h3 {
+    font-size: 16px;
+    color: var(--green);
+    font-weight: 700;
+    margin: 20px 0 10px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--gold-faint);
+    padding-bottom: 6px;
+  }
+  p {
+    margin-bottom: 12px;
+    font-size: 14px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     TABLES
+     ═══════════════════════════════════════════════ */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 16px 0;
+    border-radius: 10px;
+    border: 1px solid var(--cream-dark);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead th {
+    background: var(--green);
+    color: var(--cream);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--cream-dark);
+    vertical-align: top;
+  }
+  tbody tr:nth-child(even) {
+    background: var(--cream);
+  }
+  tbody tr:nth-child(odd) {
+    background: var(--white);
+  }
+  tbody tr:hover {
+    background: var(--green-faint);
+  }
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+  td strong, .total-row td {
+    color: var(--green);
+    font-weight: 700;
+  }
+  .total-row {
+    background: var(--gold-faint) !important;
+  }
+
+  /* ═══════════════════════════════════════════════
+     TECH STACK PILLS
+     ═══════════════════════════════════════════════ */
+  .tech-group {
+    margin-bottom: 16px;
+  }
+  .tech-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .3px;
+  }
+  .pill-green {
+    background: var(--green-faint);
+    color: var(--green);
+    border: 1px solid #C8DDD2;
+  }
+  .pill-gold {
+    background: #FFF7EA;
+    color: #8B6914;
+    border: 1px solid var(--gold-faint);
+  }
+  .pill-blue {
+    background: #F0F0FA;
+    color: #4A4A7A;
+    border: 1px solid #D0D0E8;
+  }
+
+  /* ═══════════════════════════════════════════════
+     ARCHITECTURE DIAGRAM (CSS-based)
+     ═══════════════════════════════════════════════ */
+  .arch-diagram {
+    padding: 20px 0;
+  }
+  .arch-row {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .arch-group {
+    background: var(--white);
+    border: 2px solid var(--cream-dark);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    flex: 1 1 200px;
+    max-width: 320px;
+    min-width: 180px;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .arch-group:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+  }
+  .arch-group-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--gold-faint);
+  }
+  .arch-group.ag-sources { border-color: #C8DDD2; }
+  .arch-group.ag-sources .arch-group-title { color: var(--green); }
+  .arch-group.ag-queue { border-color: #D0D0E8; }
+  .arch-group.ag-queue .arch-group-title { color: #4A4A7A; }
+  .arch-group.ag-core { border-color: var(--gold-faint); }
+  .arch-group.ag-core .arch-group-title { color: #8B6914; }
+  .arch-group.ag-storage { border-color: #D0D0E8; }
+  .arch-group.ag-storage .arch-group-title { color: #4A4A7A; }
+  .arch-group.ag-posting { border-color: #C8DDD2; }
+  .arch-group.ag-posting .arch-group-title { color: var(--green); }
+  .arch-group.ag-dashboard { border-color: #F0D0D0; }
+  .arch-group.ag-dashboard .arch-group-title { color: #7A4A4A; }
+  .arch-group.ag-analytics { border-color: var(--gold-faint); }
+  .arch-group.ag-analytics .arch-group-title { color: #8B6914; }
+  .arch-group.ag-money { border-color: #C8DDD2; }
+  .arch-group.ag-money .arch-group-title { color: var(--green); }
+
+  .arch-node {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 3px;
+    background: var(--green-faint);
+    color: var(--green);
+    border: 1px solid #C8DDD2;
+  }
+  .arch-group.ag-core .arch-node {
+    background: #FFF7EA;
+    color: #8B6914;
+    border-color: var(--gold-faint);
+  }
+  .arch-group.ag-queue .arch-node,
+  .arch-group.ag-storage .arch-node {
+    background: #F0F0FA;
+    color: #4A4A7A;
+    border-color: #D0D0E8;
+  }
+  .arch-group.ag-dashboard .arch-node {
+    background: #FFF0F0;
+    color: #7A4A4A;
+    border-color: #F0D0D0;
+  }
+  .arch-group.ag-analytics .arch-node {
+    background: #FFF7EA;
+    color: #8B6914;
+    border-color: var(--gold-faint);
+  }
+  .arch-group.ag-money .arch-node {
+    background: var(--green-faint);
+    color: var(--green);
+    border-color: #C8DDD2;
+  }
+
+  /* Arrows between rows */
+  .arch-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 0;
+    color: var(--gold);
+    font-size: 22px;
+    user-select: none;
+  }
+  .arch-arrow-label {
+    font-size: 11px;
+    color: var(--warm-gray);
+    font-weight: 600;
+    letter-spacing: .5px;
+    margin: 0 10px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     DATA FLOW DIAGRAM (CSS-based)
+     ═══════════════════════════════════════════════ */
+  .flow-timeline {
+    position: relative;
+    padding-left: 36px;
+    margin: 16px 0;
+  }
+  .flow-timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--gold-light) 0px,
+      var(--gold-light) 6px,
+      transparent 6px,
+      transparent 12px
+    );
+    border-radius: 2px;
+  }
+  .flow-step {
+    position: relative;
+    margin-bottom: 24px;
+    padding-left: 24px;
+  }
+  .flow-step:last-child { margin-bottom: 0; }
+  .flow-step-dot {
+    position: absolute;
+    left: -28px;
+    top: 2px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--green);
+    color: var(--gold);
+    font-size: 12px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(45,74,62,.2);
+  }
+  .flow-step-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 6px;
+  }
+  .flow-step-time {
+    font-size: 11px;
+    color: var(--warm-gray);
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .flow-step-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .flow-step-items li {
+    font-size: 13px;
+    padding: 4px 0 4px 18px;
+    position: relative;
+    color: #555;
+    line-height: 1.5;
+  }
+  .flow-step-items li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 11px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gold-faint);
+    border: 2px solid var(--gold);
+  }
+
+  /* ═══════════════════════════════════════════════
+     DAY-ONE CHECKLIST
+     ═══════════════════════════════════════════════ */
+  .checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: checklist;
+  }
+  .checklist li {
+    counter-increment: checklist;
+    position: relative;
+    padding: 10px 12px 10px 44px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--cream-dark);
+    transition: background .15s;
+  }
+  .checklist li:hover {
+    background: var(--green-faint);
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before {
+    content: counter(checklist);
+    position: absolute;
+    left: 8px;
+    top: 10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--gold-faint);
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--gold);
+  }
+
+  /* ═══════════════════════════════════════════════
+     HIGHLIGHT BOX
+     ═══════════════════════════════════════════════ */
+  .highlight-box {
+    text-align: center;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--green-faint), #dfeee6);
+    border: 2px solid #C8DDD2;
+    border-radius: 12px;
+    margin: 16px 0;
+  }
+  .highlight-box .big-number {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 36px;
+    color: var(--green);
+    font-weight: 700;
+  }
+  .highlight-box .big-label {
+    font-size: 14px;
+    color: var(--green-light);
+    font-weight: 600;
+    letter-spacing: .5px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ */
+  .footer {
+    text-align: center;
+    padding: 32px 24px;
+    background: var(--green);
+    color: var(--cream);
+    font-size: 13px;
+  }
+  .footer-brand {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 18px;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .footer-sub {
+    opacity: .6;
+    font-size: 12px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .hero { padding: 40px 20px 36px; }
+    .section-body { padding: 24px 18px; }
+    .container { padding: 24px 16px 60px; }
+    .arch-row { gap: 10px; }
+    .arch-group { min-width: 140px; padding: 12px; }
+    .section-nav a { padding: 8px 10px; font-size: 11px; }
+    table { font-size: 12px; }
+    thead th, tbody td { padding: 8px 10px; }
+  }
+  @media (max-width: 480px) {
+    .arch-group { max-width: 100%; flex: 1 1 100%; }
+    .section-nav { justify-content: flex-start; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-brand">StillWaterGrace</div>
+  <h1>Build Plan</h1>
+  <hr class="hero-rule">
+  <p class="hero-sub">Automated Social Media Platform &mdash; Complete Architecture, Components, and Implementation Roadmap</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     NAV
+     ═══════════════════════════════════════════════ -->
+<nav class="section-nav">
+  <a href="#architecture">Architecture</a>
+  <a href="#components">Components</a>
+  <a href="#tech-stack">Tech Stack</a>
+  <a href="#data-flow">Data Flow</a>
+  <a href="#cost">Cost</a>
+  <a href="#timeline">Timeline</a>
+  <a href="#risk">Risk</a>
+  <a href="#day-one">Day One</a>
+</nav>
+
+<div class="container">
+
+  <!-- ═══════════════════════════════════════════════
+       1. SYSTEM ARCHITECTURE
+       ═══════════════════════════════════════════════ -->
+  <section id="architecture" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">1</span> System Architecture</div>
+    </div>
+    <div class="section-body">
+      <div class="arch-diagram">
+
+        <!-- Row 1: Data Sources -->
+        <div class="arch-row">
+          <div class="arch-group ag-sources">
+            <div class="arch-group-title">Data Sources</div>
+            <span class="arch-node">Google Trends (pytrends)</span>
+            <span class="arch-node">Reddit (PRAW)</span>
+            <span class="arch-node">Bible API</span>
+            <span class="arch-node">Pinterest Scraper</span>
+            <span class="arch-node">Competitor Scraper</span>
+          </div>
+          <div class="arch-group ag-queue">
+            <div class="arch-group-title">Task Queue</div>
+            <span class="arch-node">Celery Workers</span>
+            <span class="arch-node">Redis Broker</span>
+          </div>
+        </div>
+
+        <div class="arch-arrow">&#9660; &#9660; &#9660;</div>
+
+        <!-- Row 2: Core Engine -->
+        <div class="arch-row">
+          <div class="arch-group ag-core" style="max-width: 600px; flex: 1 1 400px;">
+            <div class="arch-group-title">Core Engine</div>
+            <span class="arch-node">Trend Research Aggregator</span>
+            <span class="arch-node">Content Generator (Claude API)</span>
+            <span class="arch-node">Image Generator (Leonardo.ai)</span>
+            <span class="arch-node">Canva Templating (Brand Overlay)</span>
+            <span class="arch-node">Content Scheduler (Calendar Logic)</span>
+          </div>
+        </div>
+
+        <div class="arch-arrow">&#9660; &#9660; &#9660;</div>
+
+        <!-- Row 3: Storage + Posting -->
+        <div class="arch-row">
+          <div class="arch-group ag-storage">
+            <div class="arch-group-title">Storage</div>
+            <span class="arch-node">PostgreSQL (All Data)</span>
+            <span class="arch-node">Cloudflare R2 (Images)</span>
+          </div>
+          <div class="arch-group ag-posting">
+            <div class="arch-group-title">Posting Engine</div>
+            <span class="arch-node">Instagram (Graph API)</span>
+            <span class="arch-node">Facebook (Graph API)</span>
+            <span class="arch-node">TikTok (Content API)</span>
+          </div>
+        </div>
+
+        <div class="arch-arrow">&#9660; &#9660; &#9660;</div>
+
+        <!-- Row 4: Dashboard + Analytics + Monetization -->
+        <div class="arch-row">
+          <div class="arch-group ag-dashboard">
+            <div class="arch-group-title">Dashboard</div>
+            <span class="arch-node">React + Tailwind Admin</span>
+            <span class="arch-node">FastAPI Backend</span>
+          </div>
+          <div class="arch-group ag-analytics">
+            <div class="arch-group-title">Analytics</div>
+            <span class="arch-node">Instagram Insights</span>
+            <span class="arch-node">Competitor Analytics</span>
+            <span class="arch-node">Hashtag Tracker</span>
+            <span class="arch-node">Report Generator</span>
+          </div>
+          <div class="arch-group ag-money">
+            <div class="arch-group-title">Monetization</div>
+            <span class="arch-node">Affiliate Manager</span>
+            <span class="arch-node">Gumroad (Digital Products)</span>
+            <span class="arch-node">Brand CRM</span>
+            <span class="arch-node">Link-in-Bio Page</span>
+            <span class="arch-node">Email (ConvertKit)</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       2. COMPONENT INVENTORY
+       ═══════════════════════════════════════════════ -->
+  <section id="components" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">2</span> Component Inventory</div>
+    </div>
+    <div class="section-body">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Component</th><th>Description</th><th>Dependencies</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td><strong>Database Schema</strong></td><td>PostgreSQL models, Alembic migrations</td><td>PostgreSQL</td></tr>
+            <tr><td>2</td><td><strong>Bible API Client</strong></td><td>Daily verse fetching, book/chapter rotation</td><td>bible-api.com (free)</td></tr>
+            <tr><td>3</td><td><strong>Reddit Scraper</strong></td><td>Hot posts from 6 faith subreddits</td><td>PRAW (free)</td></tr>
+            <tr><td>4</td><td><strong>Google Trends Client</strong></td><td>Trending faith/family topics</td><td>pytrends (free)</td></tr>
+            <tr><td>5</td><td><strong>Pinterest Scraper</strong></td><td>Trending pins in faith/family</td><td>requests / BeautifulSoup</td></tr>
+            <tr><td>6</td><td><strong>Competitor Tracker</strong></td><td>Public data scrape of 5 target pages</td><td>requests / BeautifulSoup</td></tr>
+            <tr><td>7</td><td><strong>Hashtag Research</strong></td><td>Categorized hashtag scoring</td><td>Instagram public web</td></tr>
+            <tr><td>8</td><td><strong>Trend Aggregator</strong></td><td>Scores and ranks all discovered content</td><td>Components 2&ndash;7</td></tr>
+            <tr><td>9</td><td><strong>Prompt Template Engine</strong></td><td>Manages all Claude prompt templates</td><td>Jinja2</td></tr>
+            <tr><td>10</td><td><strong>Content Generator</strong></td><td>Claude API content generation pipeline</td><td>Anthropic SDK</td></tr>
+            <tr><td>11</td><td><strong>Content Calendar Logic</strong></td><td>Scheduling, variety, rotation rules</td><td>Component 10</td></tr>
+            <tr><td>12</td><td><strong>Leonardo.ai Client</strong></td><td>Image generation, polling, download</td><td>Leonardo REST API</td></tr>
+            <tr><td>13</td><td><strong>Canva Client</strong></td><td>Brand template overlay, multi-format export</td><td>Canva Connect API</td></tr>
+            <tr><td>14</td><td><strong>Unsplash Client</strong></td><td>Fallback stock photos</td><td>Unsplash API (free)</td></tr>
+            <tr><td>15</td><td><strong>Image Processor</strong></td><td>Resize, optimize, format conversion</td><td>Pillow</td></tr>
+            <tr><td>16</td><td><strong>Instagram Posting Client</strong></td><td>Graph API photo/carousel/reel posting</td><td>Meta Graph API</td></tr>
+            <tr><td>17</td><td><strong>Facebook Posting Client</strong></td><td>Cross-posting to Facebook Page</td><td>Meta Graph API</td></tr>
+            <tr><td>18</td><td><strong>TikTok Posting Client</strong></td><td>Reel cross-posting</td><td>TikTok Content API</td></tr>
+            <tr><td>19</td><td><strong>Posting Scheduler</strong></td><td>Time-based dispatch, retry logic</td><td>Celery Beat</td></tr>
+            <tr><td>20</td><td><strong>FastAPI Backend</strong></td><td>REST API for dashboard and workers</td><td>FastAPI</td></tr>
+            <tr><td>21</td><td><strong>React Dashboard</strong></td><td>Content queue, calendar, analytics UI</td><td>React 18, Tailwind</td></tr>
+            <tr><td>22</td><td><strong>Instagram Insights</strong></td><td>Post and account analytics pull</td><td>Meta Graph API</td></tr>
+            <tr><td>23</td><td><strong>Competitor Analytics</strong></td><td>Weekly competitor data aggregation</td><td>Component 6</td></tr>
+            <tr><td>24</td><td><strong>Hashtag Performance</strong></td><td>Hashtag reach tracking</td><td>Component 22</td></tr>
+            <tr><td>25</td><td><strong>Report Generator</strong></td><td>Weekly HTML email reports</td><td>SendGrid</td></tr>
+            <tr><td>26</td><td><strong>Affiliate Manager</strong></td><td>Link tracking, UTM, conversion logging</td><td>Amazon Associates</td></tr>
+            <tr><td>27</td><td><strong>Gumroad Integration</strong></td><td>Digital product sales tracking</td><td>Gumroad API</td></tr>
+            <tr><td>28</td><td><strong>Devotional Generator</strong></td><td>30-day PDF devotional via Claude</td><td>Anthropic SDK, ReportLab</td></tr>
+            <tr><td>29</td><td><strong>Brand CRM</strong></td><td>Outreach tracking, rate card calculator</td><td>Component 20</td></tr>
+            <tr><td>30</td><td><strong>Link-in-Bio Page</strong></td><td>Static HTML with email capture</td><td>Cloudflare Pages</td></tr>
+            <tr><td>31</td><td><strong>Email Marketing</strong></td><td>ConvertKit subscriber management</td><td>ConvertKit API</td></tr>
+            <tr><td>32</td><td><strong>Celery Workers</strong></td><td>Async task execution for all jobs</td><td>Redis</td></tr>
+            <tr><td>33</td><td><strong>Docker Compose</strong></td><td>Local dev environment orchestration</td><td>Docker</td></tr>
+            <tr><td>34</td><td><strong>Deployment Config</strong></td><td>Railway deployment with env management</td><td>Railway</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       3. TECHNOLOGY STACK
+       ═══════════════════════════════════════════════ -->
+  <section id="tech-stack" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">3</span> Technology Stack</div>
+    </div>
+    <div class="section-body">
+
+      <h3>Backend</h3>
+      <div class="tech-group">
+        <div class="tech-pills">
+          <span class="pill pill-green">Python 3.11+</span>
+          <span class="pill pill-green">FastAPI 0.110+</span>
+          <span class="pill pill-green">SQLAlchemy 2.0+</span>
+          <span class="pill pill-green">Alembic 1.13+</span>
+          <span class="pill pill-green">Celery 5.3+</span>
+          <span class="pill pill-green">Redis 7+</span>
+          <span class="pill pill-green">Pydantic 2.0+</span>
+          <span class="pill pill-green">httpx 0.27+</span>
+          <span class="pill pill-green">Jinja2 3.1+</span>
+        </div>
+      </div>
+
+      <h3>Frontend</h3>
+      <div class="tech-group">
+        <div class="tech-pills">
+          <span class="pill pill-gold">React 18+</span>
+          <span class="pill pill-gold">Tailwind CSS 3.4+</span>
+          <span class="pill pill-gold">shadcn/ui</span>
+          <span class="pill pill-gold">React Query 5+</span>
+          <span class="pill pill-gold">React Router 6+</span>
+          <span class="pill pill-gold">recharts 2+</span>
+          <span class="pill pill-gold">react-beautiful-dnd 13+</span>
+        </div>
+      </div>
+
+      <h3>Infrastructure</h3>
+      <div class="tech-group">
+        <div class="tech-pills">
+          <span class="pill pill-blue">PostgreSQL (Free on Railway)</span>
+          <span class="pill pill-blue">Redis (Free on Railway)</span>
+          <span class="pill pill-blue">Cloudflare R2 (Free 10GB)</span>
+          <span class="pill pill-blue">Cloudflare Pages (Free)</span>
+          <span class="pill pill-blue">Railway (~$5/mo)</span>
+        </div>
+      </div>
+
+      <h3>Third-Party APIs</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>API</th><th>Cost</th><th>Auth</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>bible-api.com</td><td>Free, no key</td><td>None</td></tr>
+            <tr><td>Anthropic Claude (Sonnet)</td><td>~$15&ndash;30/mo</td><td>API key</td></tr>
+            <tr><td>Leonardo.ai</td><td>Existing subscription</td><td>Bearer token</td></tr>
+            <tr><td>Instagram Graph API</td><td>Free</td><td>OAuth token</td></tr>
+            <tr><td>Facebook Graph API</td><td>Free</td><td>OAuth token</td></tr>
+            <tr><td>Canva Connect API</td><td>Free tier</td><td>OAuth2</td></tr>
+            <tr><td>Reddit (PRAW)</td><td>Free</td><td>OAuth</td></tr>
+            <tr><td>Unsplash</td><td>Free (50 req/hr)</td><td>API key</td></tr>
+            <tr><td>TikTok Content API</td><td>Free</td><td>OAuth</td></tr>
+            <tr><td>SendGrid</td><td>Free (100/day)</td><td>API key</td></tr>
+            <tr><td>ConvertKit</td><td>Free (&lt;1K subs)</td><td>API key</td></tr>
+            <tr><td>Gumroad</td><td>Free + 10% fee</td><td>Access token</td></tr>
+            <tr><td>pytrends</td><td>Free, no key</td><td>None</td></tr>
+            <tr><td>Amazon Associates</td><td>Free + commission</td><td>Tag</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       4. DATA FLOW
+       ═══════════════════════════════════════════════ -->
+  <section id="data-flow" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">4</span> Data Flow</div>
+    </div>
+    <div class="section-body">
+      <p style="text-align:center;color:#666;font-size:14px;margin-bottom:20px;">Daily automated pipeline &mdash; triggered at 6:00 AM EST</p>
+      <div class="flow-timeline">
+
+        <div class="flow-step">
+          <div class="flow-step-dot">1</div>
+          <div class="flow-step-title">Discover</div>
+          <div class="flow-step-time">6:00 AM EST &mdash; Cron Trigger</div>
+          <ul class="flow-step-items">
+            <li>Fetch daily Bible verse (random book rotation)</li>
+            <li>Scrape Reddit hot posts (6 subreddits)</li>
+            <li>Pull Google Trends (faith/family keywords)</li>
+            <li>Scrape Pinterest trending pins</li>
+            <li>Score all content by virality potential &rarr; <strong>trending_content</strong> table</li>
+          </ul>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-dot">2</div>
+          <div class="flow-step-title">Generate</div>
+          <div class="flow-step-time">After Discovery completes</div>
+          <ul class="flow-step-items">
+            <li>Select top 3 trending topics</li>
+            <li>Match to content calendar slots</li>
+            <li>Generate content via Claude API (all caption variants + hashtags + image prompt)</li>
+            <li>Store to <strong>generated_content</strong> (status: pending)</li>
+          </ul>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-dot">3</div>
+          <div class="flow-step-title">Image</div>
+          <div class="flow-step-time">After Generation completes</div>
+          <ul class="flow-step-items">
+            <li>Submit image prompt to Leonardo.ai</li>
+            <li>Poll until complete &rarr; download raw image</li>
+            <li>Send to Canva API for brand overlay &rarr; export multi-format</li>
+            <li>Upload finals to Cloudflare R2</li>
+            <li>Store URLs to <strong>generated_images</strong> table</li>
+          </ul>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-dot">4</div>
+          <div class="flow-step-title">Queue</div>
+          <div class="flow-step-time">Dashboard Approval</div>
+          <ul class="flow-step-items">
+            <li>Content appears in admin dashboard for human review</li>
+            <li>Approved content &rarr; <strong>scheduled_at</strong> timestamp set</li>
+          </ul>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-dot">5</div>
+          <div class="flow-step-title">Post</div>
+          <div class="flow-step-time">6:30 AM, 12:00 PM, 7:30 PM EST</div>
+          <ul class="flow-step-items">
+            <li>Instagram &rarr; Facebook &rarr; TikTok</li>
+            <li>Log to <strong>posting_log</strong></li>
+            <li>Send email notification</li>
+          </ul>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-step-dot">6</div>
+          <div class="flow-step-title">Analyze</div>
+          <div class="flow-step-time">1 hr, 24 hr, 7 days after posting</div>
+          <ul class="flow-step-items">
+            <li>Pull Instagram Insights &rarr; <strong>analytics_snapshots</strong></li>
+            <li>Weekly competitor scrape</li>
+            <li>Feed performance data back to content scoring</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       5. MONTHLY COST ESTIMATE
+       ═══════════════════════════════════════════════ -->
+  <section id="cost" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">5</span> Monthly Cost Estimate</div>
+    </div>
+    <div class="section-body">
+      <p style="text-align:center;color:#666;font-size:14px;margin-bottom:16px;">Steady-state operating costs at full capacity</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Item</th><th style="text-align:right;">Monthly Cost</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Railway hosting</td><td style="text-align:right;">$5</td></tr>
+            <tr><td>Anthropic Claude API (~3 posts/day)</td><td style="text-align:right;">$15&ndash;30</td></tr>
+            <tr><td>Leonardo.ai (existing sub)</td><td style="text-align:right;">$0</td></tr>
+            <tr><td>Cloudflare R2 + Pages</td><td style="text-align:right;">$0</td></tr>
+            <tr><td>SendGrid (free tier)</td><td style="text-align:right;">$0</td></tr>
+            <tr><td>ConvertKit (free tier)</td><td style="text-align:right;">$0</td></tr>
+            <tr><td>Domain (optional)</td><td style="text-align:right;">$1</td></tr>
+            <tr class="total-row"><td><strong>Total</strong></td><td style="text-align:right;"><strong>$21&ndash;36/mo</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       6. BUILD TIME
+       ═══════════════════════════════════════════════ -->
+  <section id="timeline" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">6</span> Build Timeline</div>
+    </div>
+    <div class="section-body">
+      <div class="highlight-box">
+        <div class="big-number">55&ndash;65 hours</div>
+        <div class="big-label">Estimated Total Build Time</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       7. RISK ASSESSMENT
+       ═══════════════════════════════════════════════ -->
+  <section id="risk" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">7</span> Risk Assessment</div>
+    </div>
+    <div class="section-body">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Risk</th><th>Mitigation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Meta app review delay</strong> (1&ndash;2 weeks)</td><td>Start Day 1, build everything else while waiting</td></tr>
+            <tr><td><strong>Instagram API rate limits</strong> (25/24hr)</td><td>Well within 3 posts/day target</td></tr>
+            <tr><td><strong>Leonardo.ai API changes</strong></td><td>Unsplash fallback + PIL-based text overlay backup</td></tr>
+            <tr><td><strong>Claude API cost overrun</strong></td><td>Haiku for simple tasks, Sonnet for generation, cache prompts</td></tr>
+            <tr><td><strong>Content quality variance</strong></td><td>Approval queue ensures human review</td></tr>
+            <tr><td><strong>Algorithm changes</strong></td><td>Multi-platform strategy</td></tr>
+            <tr><td><strong>Account restrictions</strong></td><td>Follow all TOS, never automate engagement</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════
+       8. CRITICAL DAY-ONE ACTIONS
+       ═══════════════════════════════════════════════ -->
+  <section id="day-one" class="section">
+    <div class="section-header">
+      <div class="section-badge"><span class="num">8</span> Critical Day-One Actions</div>
+    </div>
+    <div class="section-body">
+      <ol class="checklist">
+        <li>Create Meta Business Account + begin Instagram Graph API approval</li>
+        <li>Set up Instagram Professional Account (Creator)</li>
+        <li>Create Facebook Page linked to Instagram</li>
+        <li>Register Meta Developer App + begin permissions review</li>
+        <li>Verify Leonardo.ai API access</li>
+        <li>Register Canva Developer account</li>
+        <li>Set up Reddit API credentials</li>
+        <li>Set up Cloudflare account + R2 bucket</li>
+        <li>Create ConvertKit free account</li>
+        <li>Register Amazon Associates account</li>
+      </ol>
+    </div>
+  </section>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="footer-brand">StillWaterGrace</div>
+  <div class="footer-sub">Automated Social Media Platform &mdash; Build Plan</div>
+</footer>
+
+</body>
+</html>

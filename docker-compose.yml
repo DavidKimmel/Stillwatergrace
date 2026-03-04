@@ -1,0 +1,99 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: faithpage
+      POSTGRES_PASSWORD: faithpage
+      POSTGRES_DB: faithpage
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faithpage"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    entrypoint: ["bash", "scripts/entrypoint.sh"]
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-worker:
+    build: .
+    entrypoint: ["bash", "scripts/entrypoint.sh"]
+    command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build: .
+    entrypoint: ["bash", "scripts/entrypoint.sh"]
+    command: ["celery", "-A", "workers.celery_app", "beat", "--loglevel=info"]
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    image: node:20-alpine
+    working_dir: /app
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0 --port 5175"]
+    ports:
+      - "5175:5175"
+    volumes:
+      - ./dashboard:/app
+      - dashboard_node_modules:/app/node_modules
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  dashboard_node_modules:

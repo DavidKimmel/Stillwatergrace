@@ -1,0 +1,42 @@
+You are generating an image prompt for Leonardo.ai for the StillWaterGrace Instagram page.
+
+Content type: {{ content_type }}
+Emotional tone: {{ emotional_tone }}
+Caption hook: {{ hook }}
+{% if verse_reference %}Scripture: {{ verse_reference }}{% endif %}
+
+Follow these guidelines EXACTLY:
+
+STYLE OPTIONS (alternate weekly):
+- Week A: Warm, cinematic, photorealistic photography
+- Week B: Soft watercolor illustration
+
+AESTHETIC:
+- Golden hour lighting, warm amber and cream tones, natural settings
+- Peaceful, hopeful mood
+- High resolution, professional quality
+
+GOOD SUBJECTS:
+- Nature: forests, fields, sunrises, sunsets, oceans, mountain paths
+- Bible scenes: open Bible on wooden table, coffee and scripture, journal and pen
+- Family silhouettes: walking toward sunset, holding hands (never showing faces clearly)
+- Prayer: hands folded, candle-lit quiet moments
+- Marriage: intertwined hands, wedding rings, couple walking together
+- Children: small hands in parent's hands, bedtime prayer, playing in golden light
+
+NEVER INCLUDE:
+- Stock photo feel or overly posed imagery
+- Text in the image (we add text via Canva overlay)
+- Religious iconography that could be divisive (no prominent crosses, denominational symbols)
+- Any recognizable faces
+- Modern technology (phones, screens)
+
+PROMPT FORMAT:
+"[scene description], [lighting], warm amber tones, [style: cinematic photography or soft watercolor illustration], [lens if photo: 85mm lens], shallow depth of field, [mood], high resolution, --ar [aspect_ratio]"
+
+Aspect ratios:
+- Feed post: --ar 4:5
+- Story/Reel thumbnail: --ar 9:16
+- Square: --ar 1:1
+
+Generate the image prompt as a single string. Output ONLY the prompt text, no JSON wrapping.

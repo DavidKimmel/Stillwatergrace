@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace — 6-Month Launch Calendar</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream:       #FFF8F0;
+    --cream-dark:  #F5EBDC;
+    --gold:        #D4A853;
+    --gold-light:  #E8C88C;
+    --gold-faint:  #F3E4C4;
+    --green:       #2D4A3E;
+    --green-light: #3E6555;
+    --green-faint: #E8F0EC;
+    --white:       #FAFAFA;
+    --warm-gray:   #B4AAA0;
+    --text-dark:   #2C2C2C;
+    --shadow:      0 4px 24px rgba(45,74,62,.10);
+    --shadow-lg:   0 8px 40px rgba(45,74,62,.14);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--text-dark);
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+
+  /* ═══════════════════════════════════════════════
+     HEADER / HERO
+     ═══════════════════════════════════════════════ */
+  .hero {
+    background: linear-gradient(160deg, var(--green) 0%, #1D352C 100%);
+    padding: 56px 32px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(212,168,83,.12) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(212,168,83,.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .hero-brand {
+    font-size: 14px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .hero h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    color: var(--cream);
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+  .hero-sub {
+    color: var(--gold-light);
+    font-size: 15px;
+    max-width: 640px;
+    margin: 0 auto;
+    opacity: .85;
+  }
+  .hero-rule {
+    width: 80px;
+    height: 2px;
+    background: var(--gold);
+    margin: 20px auto 16px;
+    border: none;
+  }
+
+  /* ═══════════════════════════════════════════════
+     NAV (sticky month tabs)
+     ═══════════════════════════════════════════════ */
+  .month-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--green);
+    border-bottom: 2px solid var(--gold);
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0 8px;
+  }
+  .month-nav a {
+    display: inline-block;
+    padding: 10px 16px;
+    color: var(--cream);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    opacity: .7;
+    transition: opacity .2s, background .2s;
+    white-space: nowrap;
+  }
+  .month-nav a:hover {
+    opacity: 1;
+    background: rgba(212,168,83,.15);
+  }
+
+  /* ═══════════════════════════════════════════════
+     MAIN CANVAS
+     ═══════════════════════════════════════════════ */
+  .canvas {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     DASHBOARD — overview stats
+     ═══════════════════════════════════════════════ */
+  .dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+  .dash-card {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 20px 24px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    border-top: 4px solid var(--gold);
+    transition: transform .2s, box-shadow .2s;
+  }
+  .dash-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+  }
+  .dash-month {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    margin-bottom: 8px;
+  }
+  .dash-focus {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 15px;
+    color: var(--green);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .dash-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .dash-stat {
+    font-size: 13px;
+    color: var(--text-dark);
+  }
+  .dash-stat .num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+    display: block;
+    line-height: 1.1;
+  }
+  .dash-stat .label {
+    font-size: 11px;
+    color: var(--warm-gray);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .dash-revenue {
+    margin-top: 8px;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--gold);
+  }
+
+  /* ═══════════════════════════════════════════════
+     SECTION HEADERS
+     ═══════════════════════════════════════════════ */
+  .section-title {
+    text-align: center;
+    margin: 48px 0 24px;
+  }
+  .section-title h2 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(20px, 3vw, 28px);
+    color: var(--green);
+    font-weight: 400;
+  }
+  .section-title .rule {
+    width: 60px;
+    height: 2px;
+    background: var(--gold);
+    margin: 12px auto 0;
+    border: none;
+  }
+
+  /* ═══════════════════════════════════════════════
+     MONTH SECTIONS
+     ═══════════════════════════════════════════════ */
+  .month-section {
+    margin-bottom: 48px;
+  }
+  .month-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--gold-faint);
+  }
+  .month-num {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--green);
+    color: var(--gold);
+    font-size: 28px;
+    font-weight: 800;
+    flex-shrink: 0;
+    box-shadow: var(--shadow);
+  }
+  .month-info h2 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(20px, 3vw, 28px);
+    color: var(--green);
+    font-weight: 400;
+    margin-bottom: 2px;
+  }
+  .month-info .weeks {
+    font-size: 12px;
+    color: var(--warm-gray);
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ═══════════════════════════════════════════════
+     WEEK CARDS
+     ═══════════════════════════════════════════════ */
+  .week-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .week-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--gold);
+    transition: transform .2s, box-shadow .2s;
+  }
+  .week-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+  .week-card h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .week-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--gold-faint);
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .week-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .week-card li {
+    font-size: 13px;
+    padding: 4px 0;
+    padding-left: 16px;
+    position: relative;
+    color: var(--text-dark);
+    line-height: 1.5;
+  }
+  .week-card li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+  .milestone {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--gold-faint);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .milestone::before {
+    content: '\2605';
+    color: var(--gold);
+    font-size: 14px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     CHECKPOINT
+     ═══════════════════════════════════════════════ */
+  .checkpoint {
+    background: var(--green-faint);
+    border: 2px solid var(--green-light);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-top: 16px;
+  }
+  .checkpoint h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .checkpoint ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    padding: 0;
+  }
+  .checkpoint li {
+    font-size: 13px;
+    color: var(--text-dark);
+    padding-left: 18px;
+    position: relative;
+  }
+  .checkpoint li::before {
+    content: '\2713';
+    position: absolute;
+    left: 0;
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  /* ═══════════════════════════════════════════════
+     MONTH SUMMARY (for months 4-6)
+     ═══════════════════════════════════════════════ */
+  .month-summary {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .month-summary .summary-col h4 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    margin-bottom: 10px;
+  }
+  .month-summary ul {
+    list-style: none;
+    padding: 0;
+  }
+  .month-summary li {
+    font-size: 13px;
+    padding: 5px 0;
+    padding-left: 16px;
+    position: relative;
+    color: var(--text-dark);
+  }
+  .month-summary li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 11px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+  .stat-highlight {
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  @media (max-width: 600px) {
+    .month-summary { grid-template-columns: 1fr; }
+  }
+
+  /* ═══════════════════════════════════════════════
+     REVENUE BREAKDOWN
+     ═══════════════════════════════════════════════ */
+  .revenue-breakdown {
+    margin-top: 16px;
+    background: var(--cream-dark);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .revenue-breakdown h4 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    margin-bottom: 12px;
+  }
+  .rev-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .rev-bar-label {
+    width: 110px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dark);
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .rev-bar-track {
+    flex: 1;
+    height: 22px;
+    background: var(--cream);
+    border-radius: 11px;
+    overflow: hidden;
+    position: relative;
+  }
+  .rev-bar-fill {
+    height: 100%;
+    border-radius: 11px;
+    background: linear-gradient(90deg, var(--green), var(--green-light));
+    transition: width .6s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+  }
+  .rev-bar-fill span {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--cream);
+    white-space: nowrap;
+  }
+
+  /* ═══════════════════════════════════════════════
+     GANTT — Revenue Activation Timeline
+     ═══════════════════════════════════════════════ */
+  .gantt-section {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+    overflow-x: auto;
+  }
+  .gantt-table {
+    width: 100%;
+    min-width: 700px;
+    border-collapse: collapse;
+  }
+  .gantt-table thead th {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--warm-gray);
+    padding: 4px 0;
+    text-align: center;
+    border-bottom: 1px solid var(--cream-dark);
+  }
+  .gantt-table thead th:first-child {
+    text-align: left;
+    width: 100px;
+  }
+  .gantt-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    padding: 6px 8px 6px 0;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .gantt-cell {
+    padding: 4px 1px;
+    vertical-align: middle;
+  }
+  .gantt-bar {
+    height: 20px;
+    border-radius: 4px;
+    min-width: 100%;
+  }
+  .gantt-bar.active {
+    background: linear-gradient(90deg, var(--green), var(--green-light));
+  }
+  .gantt-bar.inactive {
+    background: transparent;
+  }
+  .gantt-bar.start {
+    border-radius: 10px 4px 4px 10px;
+  }
+  .gantt-bar.end {
+    border-radius: 4px 10px 10px 4px;
+  }
+  .gantt-bar.single {
+    border-radius: 10px;
+  }
+  /* Color coding for different streams */
+  .gantt-row-build .gantt-bar.active { background: #5B8A72; }
+  .gantt-row-posts .gantt-bar.active { background: var(--green); }
+  .gantt-row-affil .gantt-bar.active { background: var(--gold); }
+  .gantt-row-email .gantt-bar.active { background: #C47D3B; }
+  .gantt-row-prod .gantt-bar.active { background: #8B6E4E; }
+  .gantt-row-brand .gantt-bar.active { background: #6B8F7B; }
+  .gantt-row-bonus .gantt-bar.active { background: #3E6555; }
+
+  /* ═══════════════════════════════════════════════
+     CONTENT VOLUME TABLE
+     ═══════════════════════════════════════════════ */
+  .styled-table-wrap {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+    overflow-x: auto;
+  }
+  .styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 540px;
+  }
+  .styled-table thead th {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--green);
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 2px solid var(--gold);
+    background: var(--green-faint);
+  }
+  .styled-table tbody td {
+    font-size: 13px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--cream-dark);
+    color: var(--text-dark);
+  }
+  .styled-table tbody tr:hover {
+    background: var(--cream-dark);
+  }
+  .styled-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .styled-table .week-range {
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  /* ═══════════════════════════════════════════════
+     DECISION POINT CALLOUTS
+     ═══════════════════════════════════════════════ */
+  .decision-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+  .decision-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--gold);
+    position: relative;
+    overflow: hidden;
+  }
+  .decision-card::after {
+    content: '?';
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    font-size: 64px;
+    font-weight: 800;
+    color: var(--gold-faint);
+    line-height: 1;
+    pointer-events: none;
+  }
+  .decision-when {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .decision-q {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+  .decision-criteria {
+    font-size: 12px;
+    color: var(--warm-gray);
+    font-style: italic;
+  }
+
+  /* ═══════════════════════════════════════════════
+     TIME COMMITMENT — visual bars
+     ═══════════════════════════════════════════════ */
+  .time-section {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+  }
+  .time-row {
+    display: grid;
+    grid-template-columns: 120px 80px 1fr 1.5fr;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--cream-dark);
+  }
+  .time-row:last-child { border-bottom: none; }
+  .time-row .period {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green);
+  }
+  .time-row .daily {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dark);
+  }
+  .time-bar-track {
+    height: 18px;
+    background: var(--cream-dark);
+    border-radius: 9px;
+    overflow: hidden;
+  }
+  .time-bar-fill {
+    height: 100%;
+    border-radius: 9px;
+    background: linear-gradient(90deg, var(--green), var(--green-light));
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    transition: width .6s;
+  }
+  .time-bar-fill span {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--cream);
+    white-space: nowrap;
+  }
+  .time-tasks {
+    font-size: 12px;
+    color: var(--warm-gray);
+  }
+
+  @media (max-width: 700px) {
+    .time-row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════
+     FOLLOWER GROWTH CHART — CSS bars
+     ═══════════════════════════════════════════════ */
+  .growth-chart-wrap {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    margin-bottom: 40px;
+  }
+  .growth-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    height: 220px;
+    padding-top: 20px;
+  }
+  .growth-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+  }
+  .growth-bar {
+    width: 100%;
+    max-width: 60px;
+    border-radius: 8px 8px 4px 4px;
+    background: linear-gradient(180deg, var(--gold) 0%, var(--green) 100%);
+    transition: height .6s ease;
+    position: relative;
+  }
+  .growth-val {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+  .growth-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--warm-gray);
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .growth-note {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--warm-gray);
+    font-style: italic;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ═══════════════════════════════════════════════
+     META SETUP — CRITICAL PATH
+     ═══════════════════════════════════════════════ */
+  .critical-path {
+    background: var(--white);
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: var(--shadow);
+    border-top: 4px solid #C04040;
+    margin-bottom: 40px;
+  }
+  .critical-badge {
+    display: inline-block;
+    background: #C04040;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 12px;
+  }
+  .critical-path h3 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 20px;
+    color: var(--green);
+    margin-bottom: 16px;
+  }
+  .critical-path ol {
+    padding-left: 24px;
+  }
+  .critical-path li {
+    font-size: 13px;
+    padding: 6px 0;
+    color: var(--text-dark);
+    line-height: 1.6;
+  }
+  .critical-path li::marker {
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ */
+  .footer {
+    text-align: center;
+    padding: 32px 24px 48px;
+    color: var(--warm-gray);
+    font-size: 12px;
+    letter-spacing: .5px;
+  }
+  .footer-brand {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 16px;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-brand">StillWaterGrace</div>
+  <h1>6-Month Launch &amp; Monetization Calendar</h1>
+  <hr class="hero-rule">
+  <p class="hero-sub">From zero to 40K followers and $3,000/month — a week-by-week execution plan for building, growing, and monetizing an automated faith-based Instagram presence.</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     STICKY NAV
+     ═══════════════════════════════════════════════ -->
+<nav class="month-nav">
+  <a href="#overview">Overview</a>
+  <a href="#month1">Month 1</a>
+  <a href="#month2">Month 2</a>
+  <a href="#month3">Month 3</a>
+  <a href="#month4">Month 4</a>
+  <a href="#month5">Month 5</a>
+  <a href="#month6">Month 6</a>
+  <a href="#timeline">Timeline</a>
+  <a href="#growth">Growth</a>
+  <a href="#decisions">Decisions</a>
+</nav>
+
+<div class="canvas">
+
+<!-- ═══════════════════════════════════════════════
+     DASHBOARD OVERVIEW
+     ═══════════════════════════════════════════════ -->
+<section id="overview">
+  <div class="section-title">
+    <h2>6-Month Overview</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="dashboard">
+    <div class="dash-card">
+      <div class="dash-month">Month 1</div>
+      <div class="dash-focus">Build &amp; Launch</div>
+      <div class="dash-stats">
+        <div class="dash-stat"><span class="num">1-2</span><span class="label">Posts / Day</span></div>
+        <div class="dash-stat"><span class="num">500</span><span class="label">Followers</span></div>
+      </div>
+      <div class="dash-revenue">$0</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-month">Month 2</div>
+      <div class="dash-focus">Consistency</div>
+      <div class="dash-stats">
+        <div class="dash-stat"><span class="num">2-3</span><span class="label">Posts / Day</span></div>
+        <div class="dash-stat"><span class="num">2K</span><span class="label">Followers</span></div>
+      </div>
+      <div class="dash-revenue">$0-50</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-month">Month 3</div>
+      <div class="dash-focus">Growth Mode</div>
+      <div class="dash-stats">
+        <div class="dash-stat"><span class="num">3</span><span class="label">Posts / Day</span></div>
+        <div class="dash-stat"><span class="num">5K</span><span class="label">Followers</span></div>
+      </div>
+      <div class="dash-revenue">$50-200</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-month">Month 4</div>
+      <div class="dash-focus">Monetization</div>
+      <div class="dash-stats">
+        <div class="dash-stat"><span class="num">3</span><span class="label">Posts / Day</span></div>
+        <div class="dash-stat"><span class="num">15K</span><span class="label">Followers</span></div>
+      </div>
+      <div class="dash-revenue">$200-500</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-month">Month 5</div>
+      <div class="dash-focus">Scale</div>
+      <div class="dash-stats">
+        <div class="dash-stat"><span class="num">3-4</span><span class="label">Posts / Day</span></div>
+        <div class="dash-stat"><span class="num">30K</span><span class="label">Followers</span></div>
+      </div>
+      <div class="dash-revenue">$500-1,500</div>
+    </div>
+    <div class="dash-card">
+      <div class="dash-month">Month 6</div>
+      <div class="dash-focus">Full Revenue</div>
+      <div class="dash-stats">
+        <div class="dash-stat"><span class="num">3-4</span><span class="label">Posts / Day</span></div>
+        <div class="dash-stat"><span class="num">40K+</span><span class="label">Followers</span></div>
+      </div>
+      <div class="dash-revenue">$1,500-3,000+</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     MONTH 1
+     ═══════════════════════════════════════════════ -->
+<section id="month1" class="month-section">
+  <div class="month-header">
+    <div class="month-num">1</div>
+    <div class="month-info">
+      <h2>Build &amp; Launch</h2>
+      <span class="weeks">Weeks 1 &ndash; 4</span>
+    </div>
+  </div>
+
+  <div class="week-grid">
+    <div class="week-card">
+      <h3><span class="week-badge">1</span> Infrastructure</h3>
+      <ul>
+        <li>Tech: Docker Compose, DB schema, Bible API + Reddit scraper</li>
+        <li>Instagram: Create account, optimize bio, profile pic, link-in-bio placeholder</li>
+        <li>Content: 0 posts (building)</li>
+        <li>Manual: ~4 hrs/day</li>
+      </ul>
+      <div class="milestone">Meta Business app submitted</div>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">2</span> Content Engine</h3>
+      <ul>
+        <li>Tech: Trends, Pinterest, competitor tracker, Claude content generation</li>
+        <li>Content: Generate 7 test posts (not posted)</li>
+        <li>Instagram: Follow 50 niche accounts</li>
+        <li>Manual: ~4 hrs/day</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">3</span> Image Pipeline + First Posts</h3>
+      <ul>
+        <li>Tech: Leonardo.ai, Canva templates, full pipeline</li>
+        <li>Content: 1 post/day, 1-2 stories/day</li>
+        <li>Followers: ~50-100</li>
+        <li>Manual: ~2 hrs/day</li>
+      </ul>
+      <div class="milestone">First automated content cycle</div>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">4</span> Posting Engine + Dashboard</h3>
+      <ul>
+        <li>Tech: Instagram API live, basic dashboard, scheduling</li>
+        <li>Content: 2 posts/day, 1-2 stories/day</li>
+        <li>Followers: ~300-500</li>
+        <li>Manual: ~1 hr/day</li>
+      </ul>
+      <div class="milestone">Full pipeline operational</div>
+    </div>
+  </div>
+
+  <div class="checkpoint">
+    <h4>Week 4 Checkpoint</h4>
+    <ul>
+      <li>28+ posts published, consistent brand</li>
+      <li>Meta app approved, Instagram API functional</li>
+      <li>Dashboard functional, ~15-30 min/day review time</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     MONTH 2
+     ═══════════════════════════════════════════════ -->
+<section id="month2" class="month-section">
+  <div class="month-header">
+    <div class="month-num">2</div>
+    <div class="month-info">
+      <h2>Consistency</h2>
+      <span class="weeks">Weeks 5 &ndash; 8</span>
+    </div>
+  </div>
+
+  <div class="week-grid">
+    <div class="week-card">
+      <h3><span class="week-badge">5</span> Ramp Volume</h3>
+      <ul>
+        <li>2-3 posts/day, 2-3 stories/day, first reel</li>
+        <li>All weekly series active</li>
+        <li>Followers: 500-700</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">6</span> Engagement Push</h3>
+      <ul>
+        <li>3 posts/day, first fill-in-blank and this-or-that posts</li>
+        <li>Story polls, questions, quizzes</li>
+        <li>Followers: 700-1,000</li>
+      </ul>
+      <div class="milestone">First 100+ likes post</div>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">7</span> Affiliate Launch</h3>
+      <ul>
+        <li>Amazon Associates active, 3 affiliate links in bio</li>
+        <li>Link-in-bio full page live, ConvertKit form live</li>
+        <li>Followers: 1,000-1,400</li>
+        <li>Revenue: First clicks tracked</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">8</span> Reel Strategy</h3>
+      <ul>
+        <li>3 posts/day, 2 reels/week, Facebook cross-posting active</li>
+        <li>First full month of analytics data</li>
+        <li>Followers: 1,400-2,000</li>
+        <li>Revenue: $0-50</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="checkpoint">
+    <h4>Month 2 Checkpoint</h4>
+    <ul>
+      <li>3 posts/day consistent, all series running</li>
+      <li>Reels published, affiliates generating clicks</li>
+      <li>Email: 50-100 subscribers, Engagement: 3-6%</li>
+      <li>Manual: under 30 min/day</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     MONTH 3
+     ═══════════════════════════════════════════════ -->
+<section id="month3" class="month-section">
+  <div class="month-header">
+    <div class="month-num">3</div>
+    <div class="month-info">
+      <h2>Growth Mode</h2>
+      <span class="weeks">Weeks 9 &ndash; 12</span>
+    </div>
+  </div>
+
+  <div class="week-grid">
+    <div class="week-card">
+      <h3><span class="week-badge">9</span> Content Optimization</h3>
+      <ul>
+        <li>Deep analysis: which types get most saves/shares?</li>
+        <li>First hashtag audit</li>
+        <li>Followers: 2,000-2,500</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">10</span> Digital Product Launch</h3>
+      <ul>
+        <li>30-Day Devotional PDF ($7) on Gumroad</li>
+        <li>Promotion: dedicated post + story series</li>
+        <li>Followers: 2,500-3,000</li>
+        <li>Revenue: $50-100</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">11</span> Cross-Platform</h3>
+      <ul>
+        <li>TikTok reels (2/week), Pinterest pinning, Facebook 2/day</li>
+        <li>Followers: 3,000-4,000</li>
+      </ul>
+      <div class="milestone">First viral post (1K+ likes or 10K+ reach)</div>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">12</span> Strategy Refinement</h3>
+      <ul>
+        <li>Competitor analysis, carousel posts, longer reels</li>
+        <li>Followers: 4,000-5,000</li>
+        <li>Revenue: $100-200/month</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="checkpoint">
+    <h4>Month 3 Checkpoint</h4>
+    <ul>
+      <li>5K followers, product selling, cross-posting active</li>
+      <li>Email: 200-400 subscribers, Engagement: 3-5%</li>
+      <li>Manual time: under 15 min/day (goal achieved)</li>
+      <li>Revenue: $100-200/month</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     MONTH 4
+     ═══════════════════════════════════════════════ -->
+<section id="month4" class="month-section">
+  <div class="month-header">
+    <div class="month-num">4</div>
+    <div class="month-info">
+      <h2>Monetization Push</h2>
+      <span class="weeks">Weeks 13 &ndash; 16</span>
+    </div>
+  </div>
+
+  <div class="week-grid">
+    <div class="week-card">
+      <h3><span class="week-badge">13</span> Premium Product</h3>
+      <ul>
+        <li>Launch $17 premium bundle</li>
+        <li>Multi-product storefront setup</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">14</span> Affiliate Expansion</h3>
+      <ul>
+        <li>ChristianBook, Proverbs31 partnerships</li>
+        <li>Diversify affiliate revenue streams</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">15</span> Brand Outreach</h3>
+      <ul>
+        <li>First 10 brand outreach emails sent</li>
+        <li>Media kit prepared and distributed</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">16</span> Creator Program Prep</h3>
+      <ul>
+        <li>Push reel views for Creator eligibility</li>
+        <li>Optimize content for maximum reach</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="month-summary">
+    <div class="summary-col">
+      <h4>Key Metrics</h4>
+      <ul>
+        <li>Followers: <span class="stat-highlight">5K &rarr; 15K</span></li>
+        <li>Revenue: <span class="stat-highlight">$300-500/month</span></li>
+        <li>Email: <span class="stat-highlight">500-700 subscribers</span></li>
+      </ul>
+    </div>
+    <div class="summary-col">
+      <h4>Decision Point</h4>
+      <ul>
+        <li>Evaluate need for VA for community management</li>
+        <li>Assess brand deal response rates</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     MONTH 5
+     ═══════════════════════════════════════════════ -->
+<section id="month5" class="month-section">
+  <div class="month-header">
+    <div class="month-num">5</div>
+    <div class="month-info">
+      <h2>Scale</h2>
+      <span class="weeks">Weeks 17 &ndash; 20</span>
+    </div>
+  </div>
+
+  <div class="week-grid">
+    <div class="week-card">
+      <h3><span class="week-badge">17</span> A/B Testing</h3>
+      <ul>
+        <li>Test captions, hashtags, posting times</li>
+        <li>Data-driven content optimization</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">18</span> Brand Deals</h3>
+      <ul>
+        <li>Second brand outreach wave</li>
+        <li>Close first deal: $200-500</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">19</span> Volume Scaling</h3>
+      <ul>
+        <li>Test 4 posts/day capacity</li>
+        <li>Evaluate quality vs. quantity tradeoff</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">20</span> Email Monetization</h3>
+      <ul>
+        <li>Launch $5/month premium newsletter</li>
+        <li>Convert free subscribers to paid</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="month-summary">
+    <div class="summary-col">
+      <h4>Key Metrics</h4>
+      <ul>
+        <li>Followers: <span class="stat-highlight">15K &rarr; 30K</span></li>
+        <li>Revenue: <span class="stat-highlight">$800-1,500/month</span></li>
+      </ul>
+    </div>
+    <div class="summary-col">
+      <h4>Decision Point</h4>
+      <ul>
+        <li>Evaluate launching a second niche page</li>
+        <li>Assess sub-niche opportunities</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     MONTH 6
+     ═══════════════════════════════════════════════ -->
+<section id="month6" class="month-section">
+  <div class="month-header">
+    <div class="month-num">6</div>
+    <div class="month-info">
+      <h2>Full Revenue</h2>
+      <span class="weeks">Weeks 21 &ndash; 26</span>
+    </div>
+  </div>
+
+  <div class="week-grid">
+    <div class="week-card">
+      <h3><span class="week-badge">21</span> Creator Bonus</h3>
+      <ul>
+        <li>Enroll in Creator Bonus program</li>
+        <li>Projected: $100-500/month</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">22</span> Premium Course</h3>
+      <ul>
+        <li>Launch $27 course product</li>
+        <li>Full funnel: free content &rarr; email &rarr; course</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">23</span> Brand Partnerships</h3>
+      <ul>
+        <li>2-3 deals in pipeline</li>
+        <li>$300-1,000 per post</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">24</span> Optimization Sprint</h3>
+      <ul>
+        <li>5-month data deep analysis</li>
+        <li>Refine all automated systems</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">25</span> Second Page Evaluation</h3>
+      <ul>
+        <li>Assess sub-niche viability</li>
+        <li>Replicate playbook if warranted</li>
+      </ul>
+    </div>
+    <div class="week-card">
+      <h3><span class="week-badge">26</span> 6-Month Review</h3>
+      <ul>
+        <li>Full performance review</li>
+        <li>Draft 12-month roadmap</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="month-summary" style="grid-template-columns: 1fr 1fr 1fr;">
+    <div class="summary-col">
+      <h4>Key Metrics</h4>
+      <ul>
+        <li>Followers: <span class="stat-highlight">30K &rarr; 40K+</span></li>
+        <li>Revenue: <span class="stat-highlight">$1,500-3,000/mo</span></li>
+        <li>Manual: <span class="stat-highlight">10-15 min/day</span></li>
+      </ul>
+    </div>
+    <div class="summary-col" style="grid-column: span 2;">
+      <h4>Revenue Breakdown</h4>
+      <div class="revenue-breakdown" style="margin-top: 0; background: var(--cream);">
+        <div class="rev-bar-row">
+          <span class="rev-bar-label">Affiliate</span>
+          <div class="rev-bar-track"><div class="rev-bar-fill" style="width: 33%;"><span>$300-500</span></div></div>
+        </div>
+        <div class="rev-bar-row">
+          <span class="rev-bar-label">Digital Products</span>
+          <div class="rev-bar-track"><div class="rev-bar-fill" style="width: 53%;"><span>$400-800</span></div></div>
+        </div>
+        <div class="rev-bar-row">
+          <span class="rev-bar-label">Brand Deals</span>
+          <div class="rev-bar-track"><div class="rev-bar-fill" style="width: 67%; background: linear-gradient(90deg, var(--gold), var(--gold-light));"><span>$500-1,000</span></div></div>
+        </div>
+        <div class="rev-bar-row">
+          <span class="rev-bar-label">Creator Bonus</span>
+          <div class="rev-bar-track"><div class="rev-bar-fill" style="width: 33%;"><span>$100-500</span></div></div>
+        </div>
+        <div class="rev-bar-row">
+          <span class="rev-bar-label">Newsletter</span>
+          <div class="rev-bar-track"><div class="rev-bar-fill" style="width: 13%;"><span>$100-200</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     REVENUE ACTIVATION TIMELINE (GANTT)
+     ═══════════════════════════════════════════════ -->
+<section id="timeline">
+  <div class="section-title">
+    <h2>Revenue Activation Timeline</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="gantt-section">
+    <table class="gantt-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th>
+          <th>9</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th>
+          <th>17</th><th>18</th><th>19</th><th>20</th><th>21</th><th>22</th><th>23</th><th>24</th><th>25</th><th>26</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="gantt-row-build">
+          <td class="gantt-label">Build</td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+        </tr>
+        <tr class="gantt-row-posts">
+          <td class="gantt-label">Posts</td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+        </tr>
+        <tr class="gantt-row-affil">
+          <td class="gantt-label">Affiliate</td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+        </tr>
+        <tr class="gantt-row-email">
+          <td class="gantt-label">Email</td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+        </tr>
+        <tr class="gantt-row-prod">
+          <td class="gantt-label">Products</td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+        </tr>
+        <tr class="gantt-row-brand">
+          <td class="gantt-label">Brand Deals</td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+        </tr>
+        <tr class="gantt-row-bonus">
+          <td class="gantt-label">Creator Bonus</td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar inactive"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active start"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active"></div></td>
+          <td class="gantt-cell"><div class="gantt-bar active end"></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     CONTENT VOLUME RAMP
+     ═══════════════════════════════════════════════ -->
+<section>
+  <div class="section-title">
+    <h2>Content Volume Ramp</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="styled-table-wrap">
+    <table class="styled-table">
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>Feed / Day</th>
+          <th>Stories / Day</th>
+          <th>Reels / Week</th>
+          <th>Carousels / Week</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="week-range">1-2</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+        <tr><td class="week-range">3</td><td>1</td><td>1</td><td>0</td><td>0</td></tr>
+        <tr><td class="week-range">4</td><td>2</td><td>2</td><td>0</td><td>0</td></tr>
+        <tr><td class="week-range">5-6</td><td>2-3</td><td>2-3</td><td>1</td><td>0</td></tr>
+        <tr><td class="week-range">7-8</td><td>3</td><td>3</td><td>2</td><td>1</td></tr>
+        <tr><td class="week-range">9-12</td><td>3</td><td>3-4</td><td>2-3</td><td>1-2</td></tr>
+        <tr><td class="week-range">13-16</td><td>3</td><td>4</td><td>4-5</td><td>2</td></tr>
+        <tr><td class="week-range">17-20</td><td>3-4</td><td>4-5</td><td>5-7</td><td>2-3</td></tr>
+        <tr><td class="week-range">21-26</td><td>3-4</td><td>5</td><td>7</td><td>3</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     KEY DECISION POINTS
+     ═══════════════════════════════════════════════ -->
+<section id="decisions">
+  <div class="section-title">
+    <h2>Key Decision Points</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="decision-grid">
+    <div class="decision-card">
+      <div class="decision-when">Week 3</div>
+      <div class="decision-q">Content quality OK?</div>
+      <div class="decision-criteria">Review first 7 posts for brand consistency and engagement signals</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 4</div>
+      <div class="decision-q">Meta app approved?</div>
+      <div class="decision-criteria">If delayed, activate manual posting backup plan</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 8</div>
+      <div class="decision-q">Engagement healthy?</div>
+      <div class="decision-criteria">Below 2%? Audit content strategy and posting times</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 10</div>
+      <div class="decision-q">Product viable?</div>
+      <div class="decision-criteria">Less than 5 sales in first week? Revise pricing or positioning</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 12</div>
+      <div class="decision-q">Growth on track?</div>
+      <div class="decision-criteria">Below 3K followers? Increase reel frequency</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 16</div>
+      <div class="decision-q">Brand deals responding?</div>
+      <div class="decision-criteria">No responses? Adjust outreach templates and targeting</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 20</div>
+      <div class="decision-q">Second page opportunity?</div>
+      <div class="decision-criteria">Evaluate sub-niche demand and capacity to replicate</div>
+    </div>
+    <div class="decision-card">
+      <div class="decision-when">Week 24</div>
+      <div class="decision-q">VA needed?</div>
+      <div class="decision-criteria">Above 15 min/day manual? Hire for community management</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     WEEKLY TIME COMMITMENT
+     ═══════════════════════════════════════════════ -->
+<section>
+  <div class="section-title">
+    <h2>Weekly Time Commitment</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="time-section">
+    <div class="time-row">
+      <span class="period">Week 1-2</span>
+      <span class="daily">4 hrs/day</span>
+      <div class="time-bar-track"><div class="time-bar-fill" style="width: 100%;"><span>28 hrs/week</span></div></div>
+      <span class="time-tasks">Building platform infrastructure</span>
+    </div>
+    <div class="time-row">
+      <span class="period">Week 3-4</span>
+      <span class="daily">2 hrs/day</span>
+      <div class="time-bar-track"><div class="time-bar-fill" style="width: 50%;"><span>14 hrs/week</span></div></div>
+      <span class="time-tasks">Testing pipeline, first posts</span>
+    </div>
+    <div class="time-row">
+      <span class="period">Week 5-8</span>
+      <span class="daily">30-45 min</span>
+      <div class="time-bar-track"><div class="time-bar-fill" style="width: 18%; background: linear-gradient(90deg, var(--gold), var(--gold-light));"><span>3.5-5 hrs</span></div></div>
+      <span class="time-tasks">Content approval, monitoring</span>
+    </div>
+    <div class="time-row">
+      <span class="period">Week 9-12</span>
+      <span class="daily">15-30 min</span>
+      <div class="time-bar-track"><div class="time-bar-fill" style="width: 12%; background: linear-gradient(90deg, var(--gold), var(--gold-light));"><span>2-3.5 hrs</span></div></div>
+      <span class="time-tasks">Approval, weekly review</span>
+    </div>
+    <div class="time-row">
+      <span class="period">Week 13-26</span>
+      <span class="daily">10-15 min</span>
+      <div class="time-bar-track"><div class="time-bar-fill" style="width: 7%; background: linear-gradient(90deg, #5B8A72, var(--green-light));"><span>1-2 hrs</span></div></div>
+      <span class="time-tasks">Quick approval, monthly strategy</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     FOLLOWER GROWTH CHART
+     ═══════════════════════════════════════════════ -->
+<section id="growth">
+  <div class="section-title">
+    <h2>Follower Growth Model</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="growth-chart-wrap">
+    <div class="growth-chart">
+      <div class="growth-col">
+        <span class="growth-val">0</span>
+        <div class="growth-bar" style="height: 2%;"></div>
+        <span class="growth-label">W1</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">500</span>
+        <div class="growth-bar" style="height: 3%;"></div>
+        <span class="growth-label">W4</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">2K</span>
+        <div class="growth-bar" style="height: 7%;"></div>
+        <span class="growth-label">W8</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">5K</span>
+        <div class="growth-bar" style="height: 15%;"></div>
+        <span class="growth-label">W12</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">15K</span>
+        <div class="growth-bar" style="height: 40%;"></div>
+        <span class="growth-label">W16</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">30K</span>
+        <div class="growth-bar" style="height: 76%;"></div>
+        <span class="growth-label">W20</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">35K</span>
+        <div class="growth-bar" style="height: 88%;"></div>
+        <span class="growth-label">W24</span>
+      </div>
+      <div class="growth-col">
+        <span class="growth-val">40K+</span>
+        <div class="growth-bar" style="height: 100%;"></div>
+        <span class="growth-label">W26</span>
+      </div>
+    </div>
+    <p class="growth-note">Growth driver: Reel-heavy strategy. Christian/faith niche has high engagement but moderate growth speed. A single viral reel can add 5-10K followers overnight.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     META BUSINESS APP SETUP
+     ═══════════════════════════════════════════════ -->
+<section>
+  <div class="section-title">
+    <h2>Meta Business App Setup</h2>
+    <hr class="rule">
+  </div>
+
+  <div class="critical-path">
+    <span class="critical-badge">Critical Path &mdash; Day 1</span>
+    <h3>Meta Business App Configuration</h3>
+    <ol>
+      <li>Create Facebook Page (facebook.com/pages/create) &mdash; "Religious Organization" or "Personal Blog"</li>
+      <li>Convert Instagram to Professional Account (Creator, not Business) &mdash; "Digital Creator"</li>
+      <li>Link Instagram to Facebook Page (Settings &rarr; Linked Accounts)</li>
+      <li>Create Meta Developer Account (developers.facebook.com)</li>
+      <li>Create App &mdash; type "Business", name "StillWaterGrace Content Manager"</li>
+      <li>Add Instagram Graph API product</li>
+      <li>Request permissions: <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>instagram_manage_comments</code>, <code>instagram_manage_insights</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code></li>
+      <li>Submit for App Review (1-2 week expected turnaround)</li>
+      <li>While waiting: use Development Mode for testing with own account</li>
+      <li>Generate Long-Lived Token (60 days) and set up auto-refresh</li>
+    </ol>
+  </div>
+</section>
+
+</div><!-- /.canvas -->
+
+<!-- ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="footer-brand">StillWaterGrace</div>
+  <p>6-Month Launch &amp; Monetization Calendar</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace — Platform Flowchart</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream:       #FFF8F0;
+    --cream-dark:  #F5EBDC;
+    --gold:        #D4A853;
+    --gold-light:  #E8C88C;
+    --gold-faint:  #F3E4C4;
+    --green:       #2D4A3E;
+    --green-light: #3E6555;
+    --green-faint: #E8F0EC;
+    --white:       #FAFAFA;
+    --warm-gray:   #B4AAA0;
+    --text-dark:   #2C2C2C;
+    --shadow:      0 4px 24px rgba(45,74,62,.10);
+    --shadow-lg:   0 8px 40px rgba(45,74,62,.14);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--text-dark);
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+
+  /* ═══════════════════════════════════════════════
+     HEADER / HERO
+     ═══════════════════════════════════════════════ */
+  .hero {
+    background: linear-gradient(160deg, var(--green) 0%, #1D352C 100%);
+    padding: 56px 32px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(212,168,83,.12) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(212,168,83,.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .hero-brand {
+    font-size: 14px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .hero h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    color: var(--cream);
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+  .hero-sub {
+    color: var(--gold-light);
+    font-size: 15px;
+    max-width: 640px;
+    margin: 0 auto;
+    opacity: .85;
+  }
+  .hero-rule {
+    width: 80px;
+    height: 2px;
+    background: var(--gold);
+    margin: 20px auto 16px;
+    border: none;
+  }
+
+  /* ═══════════════════════════════════════════════
+     NAV (sticky stage tabs)
+     ═══════════════════════════════════════════════ */
+  .stage-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--green);
+    border-bottom: 2px solid var(--gold);
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0 8px;
+  }
+  .stage-nav a {
+    display: inline-block;
+    padding: 10px 16px;
+    color: var(--cream);
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    opacity: .7;
+    transition: opacity .2s, background .2s;
+    white-space: nowrap;
+  }
+  .stage-nav a:hover {
+    opacity: 1;
+    background: rgba(212,168,83,.15);
+  }
+
+  /* ═══════════════════════════════════════════════
+     MAIN CANVAS
+     ═══════════════════════════════════════════════ */
+  .canvas {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+    position: relative;
+  }
+
+  /* Vertical spine connecting stages */
+  .canvas::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 80px;
+    width: 3px;
+    background: repeating-linear-gradient(
+      to bottom,
+      var(--gold-light) 0px,
+      var(--gold-light) 8px,
+      transparent 8px,
+      transparent 16px
+    );
+    transform: translateX(-50%);
+    z-index: 0;
+    opacity: .5;
+  }
+
+  /* ═══════════════════════════════════════════════
+     STAGE SECTIONS
+     ═══════════════════════════════════════════════ */
+  .stage {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 24px;
+  }
+
+  .stage-header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  .stage-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--green);
+    color: var(--cream);
+    padding: 10px 28px;
+    border-radius: 40px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    box-shadow: var(--shadow);
+  }
+  .stage-badge .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--gold);
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .stage-time {
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: var(--warm-gray);
+    margin-top: 6px;
+    letter-spacing: .5px;
+  }
+
+  .stage-body {
+    background: var(--white);
+    border: 1px solid var(--cream-dark);
+    border-radius: 16px;
+    padding: 32px 28px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .stage-body::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+  }
+
+  .stage-desc {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 24px;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.6;
+  }
+
+  /* ═══════════════════════════════════════════════
+     FLOW ROWS — horizontal groups inside a stage
+     ═══════════════════════════════════════════════ */
+  .flow-row {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .flow-row:last-child { margin-bottom: 0; }
+
+  /* ═══════════════════════════════════════════════
+     CARDS (API / process nodes)
+     ═══════════════════════════════════════════════ */
+  .card {
+    flex: 1 1 180px;
+    max-width: 240px;
+    min-width: 160px;
+    border-radius: 12px;
+    padding: 18px 16px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.45;
+    transition: transform .15s, box-shadow .15s;
+    position: relative;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .card-icon {
+    font-size: 26px;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .card-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  .card-detail {
+    font-size: 11.5px;
+    color: #777;
+    line-height: 1.5;
+  }
+
+  /* Card variants */
+  .card-api {
+    background: linear-gradient(135deg, #EFF7F3, #E4F0E9);
+    border: 1px solid #C8DDD2;
+  }
+  .card-api .card-title { color: var(--green); }
+
+  .card-process {
+    background: linear-gradient(135deg, var(--cream), #FFF4E6);
+    border: 1px solid var(--gold-faint);
+  }
+  .card-process .card-title { color: #8B6914; }
+
+  .card-storage {
+    background: linear-gradient(135deg, #F0F0FA, #E8E8F4);
+    border: 1px solid #D0D0E8;
+  }
+  .card-storage .card-title { color: #4A4A7A; }
+
+  .card-ui {
+    background: linear-gradient(135deg, #FFF0F0, #FFEAEA);
+    border: 1px solid #F0D0D0;
+  }
+  .card-ui .card-title { color: #8B3A3A; }
+
+  .card-money {
+    background: linear-gradient(135deg, #FFFBEF, #FFF5D6);
+    border: 1px solid #EDD89E;
+  }
+  .card-money .card-title { color: #7A5C00; }
+
+  .card-infra {
+    background: linear-gradient(135deg, #F5F5F5, #ECECEC);
+    border: 1px solid #D4D4D4;
+  }
+  .card-infra .card-title { color: #555; }
+
+  /* API tag in corner */
+  .api-tag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+  .api-tag-ext {
+    background: var(--green);
+    color: var(--cream);
+  }
+  .api-tag-int {
+    background: var(--gold);
+    color: var(--green);
+  }
+
+  /* Status dot */
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .dot-built { background: #4CAF50; }
+  .dot-partial { background: var(--gold); }
+  .dot-planned { background: #CCC; }
+
+  /* ═══════════════════════════════════════════════
+     ARROWS between rows
+     ═══════════════════════════════════════════════ */
+  .arrow-down {
+    display: flex;
+    justify-content: center;
+    margin: 12px 0;
+    position: relative;
+    z-index: 1;
+  }
+  .arrow-down svg {
+    display: block;
+  }
+
+  /* Large arrow between stages */
+  .stage-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 8px 0 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .stage-arrow-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .stage-arrow-line {
+    width: 3px;
+    height: 28px;
+    background: var(--gold);
+    border-radius: 2px;
+  }
+  .stage-arrow-head {
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 12px solid var(--gold);
+  }
+  .stage-arrow-label {
+    font-size: 10px;
+    color: var(--warm-gray);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     MERGE / POOL NODES (wide collector bars)
+     ═══════════════════════════════════════════════ */
+  .pool-bar {
+    background: var(--green);
+    color: var(--cream);
+    text-align: center;
+    padding: 14px 24px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: .5px;
+    box-shadow: var(--shadow);
+    position: relative;
+  }
+  .pool-bar .pool-sub {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--gold-light);
+    margin-top: 3px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     OUTPUT NODES (wide result bars)
+     ═══════════════════════════════════════════════ */
+  .output-bar {
+    background: linear-gradient(135deg, var(--gold-faint), #FFF6E0);
+    border: 1px solid var(--gold-light);
+    text-align: center;
+    padding: 14px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #6B4F00;
+    box-shadow: var(--shadow);
+  }
+  .output-bar .output-sub {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: #9A7C30;
+    margin-top: 3px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     WEEK SCHEDULE mini-table
+     ═══════════════════════════════════════════════ */
+  .schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-top: 16px;
+    font-size: 11px;
+  }
+  .schedule-day {
+    background: var(--cream);
+    border: 1px solid var(--cream-dark);
+    border-radius: 8px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  .schedule-day-name {
+    font-weight: 700;
+    color: var(--green);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 4px;
+  }
+  .schedule-day-slot {
+    display: block;
+    font-size: 10px;
+    color: #888;
+    line-height: 1.5;
+  }
+  .schedule-day-slot strong {
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════
+     LEGEND
+     ═══════════════════════════════════════════════ */
+  .legend-section {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 2px solid var(--cream-dark);
+  }
+  .legend-section h3 {
+    text-align: center;
+    font-size: 16px;
+    color: var(--green);
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--white);
+    border: 1px solid var(--cream-dark);
+  }
+  .legend-swatch {
+    width: 32px;
+    height: 22px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════════════
+     CROSS-CUTTING SECTION
+     ═══════════════════════════════════════════════ */
+  .cross-cutting {
+    margin-top: 40px;
+    background: linear-gradient(135deg, var(--green), #1D352C);
+    border-radius: 16px;
+    padding: 32px 28px;
+    box-shadow: var(--shadow-lg);
+  }
+  .cross-cutting h3 {
+    color: var(--gold);
+    font-size: 16px;
+    text-align: center;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .infra-row {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .infra-card {
+    flex: 1 1 180px;
+    max-width: 220px;
+    background: rgba(255,248,240,.08);
+    border: 1px solid rgba(212,168,83,.25);
+    border-radius: 10px;
+    padding: 18px 14px;
+    text-align: center;
+  }
+  .infra-card .card-icon { color: var(--gold); }
+  .infra-card .card-title { color: var(--cream); font-size: 13px; margin-bottom: 4px; }
+  .infra-card .card-detail { color: rgba(255,248,240,.55); font-size: 11px; }
+
+  /* ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ */
+  .footer {
+    text-align: center;
+    padding: 40px 24px 32px;
+    color: var(--warm-gray);
+    font-size: 12px;
+  }
+  .footer-brand {
+    font-family: Georgia, serif;
+    font-size: 18px;
+    color: var(--green);
+    margin-bottom: 4px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .flow-row { gap: 10px; }
+    .card { min-width: 140px; max-width: 100%; flex: 1 1 140px; padding: 14px 10px; }
+    .stage-body { padding: 20px 16px; }
+    .schedule-grid { grid-template-columns: repeat(4, 1fr); }
+    .stage-nav a { padding: 8px 10px; font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-brand">StillWaterGrace</div>
+  <h1>Automated Content Platform</h1>
+  <hr class="hero-rule">
+  <p class="hero-sub">
+    A complete view of how faith-based content flows from trend discovery
+    through AI generation, human review, multi-platform posting, analytics,
+    and monetization &mdash; fully automated, every single day.
+  </p>
+</header>
+
+<!-- ═══════════════════════════════════════════════════
+     STAGE NAV
+     ═══════════════════════════════════════════════════ -->
+<nav class="stage-nav">
+  <a href="#stage1">1 &middot; Discover</a>
+  <a href="#stage2">2 &middot; Generate</a>
+  <a href="#stage3">3 &middot; Image</a>
+  <a href="#stage4">4 &middot; Review</a>
+  <a href="#stage5">5 &middot; Post</a>
+  <a href="#stage6">6 &middot; Analyze</a>
+  <a href="#stage7">7 &middot; Monetize</a>
+  <a href="#infra">Infrastructure</a>
+</nav>
+
+<main class="canvas">
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 1 — DAILY TREND DISCOVERY
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage1">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">1</span> Daily Trend Discovery</div>
+    <span class="stage-time">Celery Beat &mdash; 6:00 AM EST &bull; run_trend_discovery()</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      Every morning the system wakes up and scans the internet for what faith and family
+      communities are talking about. Four data sources are scraped in parallel and scored
+      by virality potential.
+    </p>
+
+    <div class="flow-row">
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F50D;</span>
+        <div class="card-title">Google Trends</div>
+        <div class="card-detail">
+          pytrends library (free, no key)<br>
+          Faith &amp; family keywords<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4AC;</span>
+        <div class="card-title">Reddit (PRAW)</div>
+        <div class="card-detail">
+          r/Christian, r/Marriage,<br>r/Parenting + 3 more<br>
+          Hot posts &amp; engagement signals<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4D6;</span>
+        <div class="card-title">Bible API</div>
+        <div class="card-detail">
+          bible-api.com (free, no key)<br>
+          Curated verse of the day<br>
+          Book rotation &mdash; avoids 90-day repeats<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-process">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">#</span>
+        <div class="card-title">Hashtag Research</div>
+        <div class="card-detail">
+          90 curated hashtags<br>
+          3 tiers: niche / medium / large<br>
+          Performance-scored over time<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+    </div>
+
+    <!-- Arrow down -->
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Pool bar -->
+    <div class="pool-bar">
+      Trending Content Pool
+      <span class="pool-sub">PostgreSQL &mdash; trending_content table &bull; Scored 0&ndash;100 by virality potential</span>
+    </div>
+  </div>
+</section>
+
+<!-- Stage connector arrow -->
+<div class="stage-arrow">
+  <div class="stage-arrow-inner">
+    <div class="stage-arrow-line"></div>
+    <div class="stage-arrow-head"></div>
+    <span class="stage-arrow-label">feeds into</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 2 — CONTENT GENERATION
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage2">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">2</span> Content Generation</div>
+    <span class="stage-time">Celery Beat &mdash; 6:30 AM EST &bull; run_content_generation()</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      The content calendar decides what types of posts to create today. Trending topics
+      and Bible verses are woven into Jinja2 prompt templates, then Claude generates
+      every piece of content the platform needs for each post.
+    </p>
+
+    <!-- Row 1: Calendar + Series -->
+    <div class="flow-row">
+      <div class="card card-process">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">&#x1F4C5;</span>
+        <div class="card-title">Content Calendar Logic</div>
+        <div class="card-detail">
+          Weekly schedule template<br>
+          Day-of-week content types<br>
+          Posts-per-day ramping<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-process">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">&#x1F504;</span>
+        <div class="card-title">Series Manager</div>
+        <div class="card-detail">
+          Marriage / Parenting / Faith themes<br>
+          8-week repeat avoidance<br>
+          Viral format rotation<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-process">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">&#x1F4DD;</span>
+        <div class="card-title">Prompt Template Engine</div>
+        <div class="card-detail">
+          Jinja2 templates per content type<br>
+          System prompt + user prompt<br>
+          Versioned for A/B testing<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Row 2: Claude API -->
+    <div class="flow-row">
+      <div class="card card-api" style="max-width: 420px; flex: 1 1 380px;">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F9E0;</span>
+        <div class="card-title">Claude API (Anthropic)</div>
+        <div class="card-detail" style="text-align: left; padding-left: 16px;">
+          Model: claude-sonnet-4-6 &bull; ~$15&ndash;30/mo<br><br>
+          Generates per post:<br>
+          &bull; Hook line &bull; 3 caption lengths (short / medium / long)<br>
+          &bull; Story text &bull; Reel scripts (15s + 30s)<br>
+          &bull; 30 hashtags across 3 tiers &bull; Leonardo image prompt<br>
+          &bull; Pinterest description &bull; Facebook variation<br>
+          &bull; Alt text &bull; Emotional tone classification<br>
+          <br>
+          <span class="status-dot dot-built"></span> Built &mdash; JSON-validated output with cost tracking
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="pool-bar">
+      Generated Content (status: pending)
+      <span class="pool-sub">PostgreSQL &mdash; generated_content table &bull; Awaiting image generation then human review</span>
+    </div>
+
+    <!-- Mini schedule -->
+    <div class="schedule-grid">
+      <div class="schedule-day">
+        <div class="schedule-day-name">Mon</div>
+        <span class="schedule-day-slot"><strong>Marriage Monday</strong></span>
+        <span class="schedule-day-slot">Encouragement</span>
+      </div>
+      <div class="schedule-day">
+        <div class="schedule-day-name">Tue</div>
+        <span class="schedule-day-slot"><strong>Daily Verse</strong></span>
+        <span class="schedule-day-slot">Encouragement</span>
+      </div>
+      <div class="schedule-day">
+        <div class="schedule-day-name">Wed</div>
+        <span class="schedule-day-slot"><strong>Parenting Wed</strong></span>
+        <span class="schedule-day-slot">Daily Verse</span>
+      </div>
+      <div class="schedule-day">
+        <div class="schedule-day-name">Thu</div>
+        <span class="schedule-day-slot"><strong>Viral Format</strong></span>
+        <span class="schedule-day-slot">Encouragement</span>
+      </div>
+      <div class="schedule-day">
+        <div class="schedule-day-name">Fri</div>
+        <span class="schedule-day-slot"><strong>Faith Friday</strong></span>
+        <span class="schedule-day-slot">Daily Verse</span>
+      </div>
+      <div class="schedule-day">
+        <div class="schedule-day-name">Sat</div>
+        <span class="schedule-day-slot"><strong>Carousel</strong></span>
+        <span class="schedule-day-slot">Reel</span>
+      </div>
+      <div class="schedule-day">
+        <div class="schedule-day-name">Sun</div>
+        <span class="schedule-day-slot"><strong>Gratitude</strong></span>
+        <span class="schedule-day-slot">Prayer Prompt</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="stage-arrow">
+  <div class="stage-arrow-inner">
+    <div class="stage-arrow-line"></div>
+    <div class="stage-arrow-head"></div>
+    <span class="stage-arrow-label">image prompts sent</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 3 — IMAGE GENERATION
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage3">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">3</span> Image Generation</div>
+    <span class="stage-time">Celery Beat &mdash; 7:00 AM EST &bull; run_image_generation()</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      Claude's image prompt is sent to Leonardo.ai for AI-generated visuals.
+      If that fails, Unsplash provides fallback stock photos. Either way, PIL processes
+      every image through branded layout templates and exports 3 formats per post.
+    </p>
+
+    <!-- Row 1: Image sources -->
+    <div class="flow-row">
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F3A8;</span>
+        <div class="card-title">Leonardo.ai</div>
+        <div class="card-detail">
+          AI image generation<br>
+          Photorealistic style<br>
+          Prompt from Claude output<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4F7;</span>
+        <div class="card-title">Unsplash</div>
+        <div class="card-detail">
+          Fallback stock photos<br>
+          Free tier (50 req/hr)<br>
+          Auto-attribution per TOS<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-process" style="max-width: 300px; flex: 1 1 260px;">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">&#x1F5BC;</span>
+        <div class="card-title">PIL Image Processor</div>
+        <div class="card-detail" style="text-align: left;">
+          4 branded layouts:<br>
+          &bull; Verse Card (cream gradient, ornaments)<br>
+          &bull; Minimal Quote (white, gold accent bar)<br>
+          &bull; Series Banner (green header bar)<br>
+          &bull; Bold Statement (dark green, high contrast)<br><br>
+          Text overlay with branded fonts/colors<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Row 2: Output formats -->
+    <div class="flow-row">
+      <div class="card card-process">
+        <span class="card-icon">&#x25A0;</span>
+        <div class="card-title">Feed 4:5</div>
+        <div class="card-detail">1080 &times; 1350 px<br>Primary Instagram feed</div>
+      </div>
+      <div class="card card-process">
+        <span class="card-icon">&#x25A1;</span>
+        <div class="card-title">Feed 1:1</div>
+        <div class="card-detail">1080 &times; 1080 px<br>Facebook &amp; fallback</div>
+      </div>
+      <div class="card card-process">
+        <span class="card-icon">&#x25AE;</span>
+        <div class="card-title">Story 9:16</div>
+        <div class="card-detail">1080 &times; 1920 px<br>Stories &amp; Reels</div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="output-bar">
+      Images stored locally (dev) &rarr; Cloudflare R2 CDN (production)
+      <span class="output-sub">generated_images table &bull; 3 formats per content piece &bull; R2 key: content/{id}/{format}.jpg</span>
+    </div>
+  </div>
+</section>
+
+<div class="stage-arrow">
+  <div class="stage-arrow-inner">
+    <div class="stage-arrow-line"></div>
+    <div class="stage-arrow-head"></div>
+    <span class="stage-arrow-label">queued for review</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 4 — HUMAN REVIEW
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage4">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">4</span> Human Review</div>
+    <span class="stage-time">Admin Dashboard &mdash; whenever you are ready</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      Nothing goes live without a human eye. The admin dashboard presents the full content
+      queue where you approve, reject, or edit every post before it is scheduled.
+    </p>
+
+    <div class="flow-row">
+      <div class="card card-ui">
+        <span class="card-icon">&#x1F4CB;</span>
+        <div class="card-title">Content Queue</div>
+        <div class="card-detail">
+          Approve / Reject / Edit<br>
+          Preview all 3 image formats<br>
+          Edit captions &amp; swap hashtags<br>
+          <span class="status-dot dot-partial"></span> In progress
+        </div>
+      </div>
+
+      <div class="card card-ui">
+        <span class="card-icon">&#x2714;</span>
+        <div class="card-title">Bulk Actions</div>
+        <div class="card-detail">
+          Approve all for the day<br>
+          Reject with reason<br>
+          Regenerate content<br>
+          <span class="status-dot dot-partial"></span> In progress
+        </div>
+      </div>
+
+      <div class="card card-ui">
+        <span class="card-icon">&#x1F4C6;</span>
+        <div class="card-title">Calendar View</div>
+        <div class="card-detail">
+          Week-ahead schedule<br>
+          Drag &amp; drop reordering<br>
+          Content type color coding<br>
+          <span class="status-dot dot-partial"></span> In progress
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="output-bar">
+      Approved content &rarr; status: "approved" &bull; scheduled_at timestamp set
+      <span class="output-sub">React 18 + Tailwind CSS + shadcn/ui &bull; FastAPI backend &bull; /api/content endpoints</span>
+    </div>
+  </div>
+</section>
+
+<div class="stage-arrow">
+  <div class="stage-arrow-inner">
+    <div class="stage-arrow-line"></div>
+    <div class="stage-arrow-head"></div>
+    <span class="stage-arrow-label">scheduled for posting</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 5 — AUTOMATED POSTING
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage5">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">5</span> Automated Posting</div>
+    <span class="stage-time">3 daily windows &mdash; 6:30 AM &bull; 12:00 PM &bull; 7:30 PM EST</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      At each posting window, Celery picks up approved content within a 1-hour window
+      of the scheduled time. The caption is assembled with 30 tiered hashtags, then
+      dispatched across all configured platforms.
+    </p>
+
+    <!-- Posting windows -->
+    <div class="flow-row">
+      <div class="card card-process">
+        <span class="card-icon">&#x1F305;</span>
+        <div class="card-title">Morning Window</div>
+        <div class="card-detail">6:30 AM EST<br>Primary daily content</div>
+      </div>
+      <div class="card card-process">
+        <span class="card-icon">&#x2600;</span>
+        <div class="card-title">Noon Window</div>
+        <div class="card-detail">12:00 PM EST<br>Midday engagement</div>
+      </div>
+      <div class="card card-process">
+        <span class="card-icon">&#x1F319;</span>
+        <div class="card-title">Evening Window</div>
+        <div class="card-detail">7:30 PM EST<br>Peak scrolling hours</div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Platform APIs -->
+    <div class="flow-row">
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4F8;</span>
+        <div class="card-title">Instagram Graph API</div>
+        <div class="card-detail">
+          v19.0 &bull; Photos, carousels, reels<br>
+          Rate limit: 25 posts/day<br>
+          30 hashtags injected (3 tiers)<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4D8;</span>
+        <div class="card-title">Facebook Graph API</div>
+        <div class="card-detail">
+          Cross-post to Page<br>
+          Facebook caption variation<br>
+          <span class="status-dot dot-planned"></span> Planned
+        </div>
+      </div>
+
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F3B5;</span>
+        <div class="card-title">TikTok Content API</div>
+        <div class="card-detail">
+          Short-form video cross-post<br>
+          Reel script &rarr; TikTok format<br>
+          <span class="status-dot dot-planned"></span> Planned
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="pool-bar">
+      Posting Log
+      <span class="pool-sub">PostgreSQL &mdash; posting_log table &bull; Platform post ID, caption used, hashtags, status, retry count</span>
+    </div>
+  </div>
+</section>
+
+<div class="stage-arrow">
+  <div class="stage-arrow-inner">
+    <div class="stage-arrow-line"></div>
+    <div class="stage-arrow-head"></div>
+    <span class="stage-arrow-label">engagement tracked</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 6 — ANALYTICS & OPTIMIZATION
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage6">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">6</span> Analytics &amp; Optimization</div>
+    <span class="stage-time">Continuous &mdash; 1hr, 24hr, 7-day intervals &bull; Weekly reports on Mondays</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      Engagement is captured at three intervals after every post. Competitor pages are
+      scraped weekly. Hashtag performance is tracked. A weekly HTML report is emailed
+      with top posts, metrics, and revenue. All data feeds back into content strategy.
+    </p>
+
+    <div class="flow-row">
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4CA;</span>
+        <div class="card-title">Instagram Insights</div>
+        <div class="card-detail">
+          Likes, comments, shares, saves<br>
+          Reach, impressions, profile visits<br>
+          Engagement rate calculation<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-process">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">&#x1F441;</span>
+        <div class="card-title">Competitor Tracker</div>
+        <div class="card-detail">
+          5 competitor pages<br>
+          Weekly scrape (Sundays 5 AM)<br>
+          Follower &amp; engagement trends<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-process">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">#</span>
+        <div class="card-title">Hashtag Performance</div>
+        <div class="card-detail">
+          Which hashtags drive reach<br>
+          0&ndash;100 performance score<br>
+          Auto-rotate underperformers<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="flow-row">
+      <div class="card card-process">
+        <span class="card-icon">&#x1F4E7;</span>
+        <div class="card-title">Weekly Report Generator</div>
+        <div class="card-detail">
+          HTML email &bull; Top posts, metrics, revenue<br>
+          Mondays 7:00 AM EST<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-api">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x2709;</span>
+        <div class="card-title">SendGrid</div>
+        <div class="card-detail">
+          Free tier (100 emails/day)<br>
+          Delivers weekly reports<br>
+          <span class="status-dot dot-planned"></span> Planned
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="output-bar">
+      Feedback Loop &rarr; best performing content types, posting times, emotional tones, and hashtags
+      <span class="output-sub">analytics_snapshots + competitor_snapshots + hashtag_performance tables &bull; Data informs Stage 1 &amp; 2 decisions</span>
+    </div>
+  </div>
+</section>
+
+<div class="stage-arrow">
+  <div class="stage-arrow-inner">
+    <div class="stage-arrow-line"></div>
+    <div class="stage-arrow-head"></div>
+    <span class="stage-arrow-label">audience grows &rarr; revenue</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAGE 7 — MONETIZATION
+     ═══════════════════════════════════════════════════════════ -->
+<section class="stage" id="stage7">
+  <div class="stage-header">
+    <div class="stage-badge"><span class="num">7</span> Monetization</div>
+    <span class="stage-time">Always on &mdash; passive income streams feeding into revenue_log</span>
+  </div>
+  <div class="stage-body">
+    <p class="stage-desc">
+      Multiple revenue streams work in parallel. Affiliate links earn commissions,
+      digital products sell on Gumroad, brand partnerships are managed through a CRM,
+      and email subscribers are nurtured through ConvertKit. Everything logs to PostgreSQL.
+    </p>
+
+    <div class="flow-row">
+      <div class="card card-money">
+        <span class="card-icon">&#x1F517;</span>
+        <div class="card-title">Affiliate Manager</div>
+        <div class="card-detail">
+          Amazon Associates<br>
+          UTM tracking per link<br>
+          Click &amp; conversion logging<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+
+      <div class="card card-money">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4E6;</span>
+        <div class="card-title">Gumroad</div>
+        <div class="card-detail">
+          Devotionals, prayer journals<br>
+          Digital product sales<br>
+          Free + 10% fee<br>
+          <span class="status-dot dot-planned"></span> Planned
+        </div>
+      </div>
+
+      <div class="card card-money">
+        <span class="api-tag api-tag-int">Internal</span>
+        <span class="card-icon">&#x1F91D;</span>
+        <div class="card-title">Brand CRM</div>
+        <div class="card-detail">
+          Rate card calculator<br>
+          Outreach pipeline &amp; deal stages<br>
+          prospect &rarr; contacted &rarr; closed<br>
+          <span class="status-dot dot-built"></span> Built
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-row">
+      <div class="card card-money">
+        <span class="api-tag api-tag-ext">API</span>
+        <span class="card-icon">&#x1F4E8;</span>
+        <div class="card-title">ConvertKit</div>
+        <div class="card-detail">
+          Email list building<br>
+          Subscriber management &amp; tags<br>
+          Free tier (&lt;1K subs)<br>
+          <span class="status-dot dot-planned"></span> Planned
+        </div>
+      </div>
+
+      <div class="card card-money">
+        <span class="card-icon">&#x1F310;</span>
+        <div class="card-title">Link-in-Bio Page</div>
+        <div class="card-detail">
+          Static HTML landing page<br>
+          Funnels to products &amp; affiliates<br>
+          Email capture form<br>
+          <span class="status-dot dot-planned"></span> Planned
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow-down">
+      <svg width="24" height="28" viewBox="0 0 24 28"><path d="M12 0v22M4 16l8 10 8-10" fill="none" stroke="#D4A853" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="pool-bar">
+      Revenue Log
+      <span class="pool-sub">PostgreSQL &mdash; revenue_log table &bull; affiliate, product, sponsorship, creator_bonus &bull; All USD amounts tracked</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CROSS-CUTTING INFRASTRUCTURE
+     ═══════════════════════════════════════════════════════════ -->
+<div class="cross-cutting" id="infra">
+  <h3>Cross-Cutting Infrastructure</h3>
+  <div class="infra-row">
+    <div class="infra-card">
+      <span class="card-icon">&#x23F0;</span>
+      <div class="card-title">Celery + Redis</div>
+      <div class="card-detail">
+        Task queue orchestrates all scheduled jobs<br>
+        Beat scheduler for cron-based triggers<br>
+        Retry logic with exponential backoff<br>
+        <span class="status-dot dot-built"></span> Built
+      </div>
+    </div>
+    <div class="infra-card">
+      <span class="card-icon">&#x1F5C4;</span>
+      <div class="card-title">PostgreSQL</div>
+      <div class="card-detail">
+        13 tables across 5 domains<br>
+        Content, images, analytics, revenue, CRM<br>
+        SQLAlchemy 2.0 + Alembic migrations<br>
+        <span class="status-dot dot-built"></span> Built
+      </div>
+    </div>
+    <div class="infra-card">
+      <span class="card-icon">&#x26A1;</span>
+      <div class="card-title">FastAPI</div>
+      <div class="card-detail">
+        REST API for dashboard + workers<br>
+        /api/content, /analytics, /monetization<br>
+        CORS enabled for React dev server<br>
+        <span class="status-dot dot-built"></span> Built
+      </div>
+    </div>
+    <div class="infra-card">
+      <span class="card-icon">&#x1F433;</span>
+      <div class="card-title">Docker Compose</div>
+      <div class="card-detail">
+        Full-stack local development<br>
+        PostgreSQL + Redis + API + Workers<br>
+        Railway deployment in production<br>
+        <span class="status-dot dot-partial"></span> In progress
+      </div>
+    </div>
+    <div class="infra-card">
+      <span class="card-icon">&#x1F512;</span>
+      <div class="card-title">.env Configuration</div>
+      <div class="card-detail">
+        All 25+ API keys &amp; secrets<br>
+        Pydantic settings validation<br>
+        Feature flags via has_* properties<br>
+        <span class="status-dot dot-built"></span> Built
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     LEGEND
+     ═══════════════════════════════════════════════════════════ -->
+<div class="legend-section">
+  <h3>Legend</h3>
+  <div class="legend-grid">
+    <!-- Card types -->
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: linear-gradient(135deg, #EFF7F3, #E4F0E9); border: 1px solid #C8DDD2;"></div>
+      <span>External API Integration</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: linear-gradient(135deg, #FFF8F0, #FFF4E6); border: 1px solid #F3E4C4;"></div>
+      <span>Internal Process / Logic</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: linear-gradient(135deg, #F0F0FA, #E8E8F4); border: 1px solid #D0D0E8;"></div>
+      <span>Data Storage</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: linear-gradient(135deg, #FFF0F0, #FFEAEA); border: 1px solid #F0D0D0;"></div>
+      <span>Dashboard / UI</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background: linear-gradient(135deg, #FFFBEF, #FFF5D6); border: 1px solid #EDD89E;"></div>
+      <span>Monetization</span>
+    </div>
+
+    <!-- Status -->
+    <div class="legend-item">
+      <span class="status-dot dot-built" style="width: 12px; height: 12px;"></span>
+      <span><strong>Built</strong> &mdash; Code complete and functional</span>
+    </div>
+    <div class="legend-item">
+      <span class="status-dot dot-partial" style="width: 12px; height: 12px;"></span>
+      <span><strong>In Progress</strong> &mdash; Partially implemented</span>
+    </div>
+    <div class="legend-item">
+      <span class="status-dot dot-planned" style="width: 12px; height: 12px;"></span>
+      <span><strong>Planned</strong> &mdash; Architecture ready, not yet coded</span>
+    </div>
+
+    <!-- Tags -->
+    <div class="legend-item">
+      <span class="api-tag api-tag-ext" style="position: static; font-size: 10px;">API</span>
+      <span>External API call (requires key/token)</span>
+    </div>
+    <div class="legend-item">
+      <span class="api-tag api-tag-int" style="position: static; font-size: 10px;">Internal</span>
+      <span>Internal module (no external dependency)</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     DATABASE TABLES OVERVIEW
+     ═══════════════════════════════════════════════════════════ -->
+<div class="legend-section" style="margin-top: 32px;">
+  <h3>Database Schema &mdash; 13 Tables</h3>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; max-width: 960px; margin: 0 auto;">
+
+    <div class="legend-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+      <strong style="color: var(--green); font-size: 12px;">Trend &amp; Research</strong>
+      <span style="font-size: 11.5px; color: #666;">trending_content &bull; bible_verses &bull; hashtag_performance</span>
+    </div>
+
+    <div class="legend-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+      <strong style="color: var(--green); font-size: 12px;">Content Generation</strong>
+      <span style="font-size: 11.5px; color: #666;">generated_content &bull; generated_images &bull; content_calendar_slots</span>
+    </div>
+
+    <div class="legend-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+      <strong style="color: var(--green); font-size: 12px;">Posting &amp; Analytics</strong>
+      <span style="font-size: 11.5px; color: #666;">posting_log &bull; analytics_snapshots &bull; competitor_snapshots</span>
+    </div>
+
+    <div class="legend-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+      <strong style="color: var(--green); font-size: 12px;">Monetization &amp; CRM</strong>
+      <span style="font-size: 11.5px; color: #666;">affiliate_links &bull; affiliate_clicks &bull; email_subscribers &bull; revenue_log &bull; brand_contacts</span>
+    </div>
+
+  </div>
+</div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="footer-brand">StillWaterGrace</div>
+  <p>Automated Faith &amp; Family Content Platform &mdash; System Flowchart</p>
+  <p style="margin-top: 8px; font-size: 11px;">
+    Monthly cost: ~$21&ndash;36 &bull; Stack: Python + FastAPI + Celery + React &bull;
+    Est. build time: 55&ndash;65 hours
+  </p>
+</footer>
+
+</body>
+</html>

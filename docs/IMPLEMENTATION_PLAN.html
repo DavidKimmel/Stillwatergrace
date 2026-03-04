@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace — Implementation Plan</title>
+<style>
+  /* ═══════════════════════════════════════════════
+     RESET & BASE
+     ═══════════════════════════════════════════════ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cream:       #FFF8F0;
+    --cream-dark:  #F5EBDC;
+    --gold:        #D4A853;
+    --gold-light:  #E8C88C;
+    --gold-faint:  #F3E4C4;
+    --green:       #2D4A3E;
+    --green-light: #3E6555;
+    --green-faint: #E8F0EC;
+    --white:       #FAFAFA;
+    --warm-gray:   #B4AAA0;
+    --text-dark:   #2C2C2C;
+    --shadow:      0 4px 24px rgba(45,74,62,.10);
+    --shadow-lg:   0 8px 40px rgba(45,74,62,.14);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--text-dark);
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+
+  /* ═══════════════════════════════════════════════
+     HEADER / HERO
+     ═══════════════════════════════════════════════ */
+  .hero {
+    background: linear-gradient(160deg, var(--green) 0%, #1D352C 100%);
+    padding: 56px 32px 48px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 20% 80%, rgba(212,168,83,.12) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(212,168,83,.08) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .hero-brand {
+    font-size: 14px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .hero h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    color: var(--cream);
+    font-weight: 400;
+    margin-bottom: 8px;
+  }
+  .hero-sub {
+    color: var(--gold-light);
+    font-size: 15px;
+    max-width: 640px;
+    margin: 0 auto;
+    opacity: .85;
+  }
+  .hero-rule {
+    width: 80px;
+    height: 2px;
+    background: var(--gold);
+    margin: 20px auto 16px;
+    border: none;
+  }
+
+  /* ═══════════════════════════════════════════════
+     PHASE NAV (sticky)
+     ═══════════════════════════════════════════════ */
+  .phase-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--green);
+    border-bottom: 2px solid var(--gold);
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0 8px;
+  }
+  .phase-nav a {
+    display: inline-block;
+    padding: 10px 14px;
+    color: var(--cream);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .8px;
+    text-transform: uppercase;
+    opacity: .7;
+    transition: opacity .2s, background .2s;
+    white-space: nowrap;
+  }
+  .phase-nav a:hover {
+    opacity: 1;
+    background: rgba(212,168,83,.15);
+  }
+
+  /* ═══════════════════════════════════════════════
+     TIMELINE PROGRESS BAR
+     ═══════════════════════════════════════════════ */
+  .timeline-bar {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 8px;
+  }
+  .timeline-bar h3 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 16px;
+    color: var(--green);
+    margin-bottom: 16px;
+    text-align: center;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .timeline-track {
+    display: flex;
+    gap: 4px;
+    align-items: stretch;
+  }
+  .timeline-segment {
+    flex: 1;
+    text-align: center;
+    position: relative;
+  }
+  .timeline-segment .bar {
+    height: 10px;
+    border-radius: 5px;
+    background: var(--gold-faint);
+    position: relative;
+    overflow: hidden;
+  }
+  .timeline-segment .bar-fill {
+    position: absolute;
+    inset: 0;
+    border-radius: 5px;
+    background: linear-gradient(90deg, var(--green), var(--green-light));
+  }
+  .timeline-segment .label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--green);
+    margin-top: 6px;
+    letter-spacing: .5px;
+    line-height: 1.3;
+  }
+  .timeline-segment .weeks {
+    font-size: 9px;
+    color: var(--warm-gray);
+    margin-top: 2px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     MAIN CANVAS
+     ═══════════════════════════════════════════════ */
+  .canvas {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 24px 80px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     PHASE SECTION
+     ═══════════════════════════════════════════════ */
+  .phase {
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--gold-faint);
+  }
+  .phase-number {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green) 0%, var(--green-light) 100%);
+    color: var(--gold);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 24px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+  .phase-title-group {
+    flex: 1;
+  }
+  .phase-title {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(20px, 3vw, 28px);
+    color: var(--green);
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .phase-timeline {
+    font-size: 13px;
+    color: var(--gold);
+    font-weight: 600;
+    margin-top: 4px;
+    letter-spacing: .5px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     WEEK HEADER
+     ═══════════════════════════════════════════════ */
+  .week-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0 16px;
+  }
+  .week-header::before,
+  .week-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gold-faint);
+  }
+  .week-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    white-space: nowrap;
+  }
+
+  /* ═══════════════════════════════════════════════
+     DAY CARD
+     ═══════════════════════════════════════════════ */
+  .day-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow);
+    border-left: 4px solid var(--gold);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .day-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+  .day-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .day-badge {
+    background: var(--green);
+    color: var(--gold);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: .5px;
+    white-space: nowrap;
+  }
+  .day-title {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--green);
+  }
+  .day-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .day-card li {
+    position: relative;
+    padding: 6px 0 6px 20px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-dark);
+  }
+  .day-card li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 13px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gold-faint);
+    border: 2px solid var(--gold);
+  }
+  .day-card li strong {
+    color: var(--green);
+  }
+
+  /* ═══════════════════════════════════════════════
+     TECH TAGS
+     ═══════════════════════════════════════════════ */
+  .tag {
+    display: inline-block;
+    background: var(--green-faint);
+    color: var(--green);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 1px 2px;
+    letter-spacing: .3px;
+    white-space: nowrap;
+  }
+  .tag.gold {
+    background: var(--gold-faint);
+    color: #8B6914;
+  }
+  .tag.critical {
+    background: #FDE8E8;
+    color: #9B2C2C;
+    font-weight: 700;
+  }
+
+  /* ═══════════════════════════════════════════════
+     BULLET LIST (for phases without day breakdown)
+     ═══════════════════════════════════════════════ */
+  .bullet-list {
+    list-style: none;
+    padding: 0;
+  }
+  .bullet-list li {
+    background: var(--white);
+    border-radius: 10px;
+    padding: 14px 20px 14px 24px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+    font-size: 14px;
+    line-height: 1.55;
+    position: relative;
+    padding-left: 44px;
+    border-left: 4px solid var(--gold);
+  }
+  .bullet-list li::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    top: 19px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+
+  /* ═══════════════════════════════════════════════
+     TESTING SECTION
+     ═══════════════════════════════════════════════ */
+  .testing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .testing-card {
+    background: var(--white);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    border-top: 4px solid var(--gold);
+  }
+  .testing-card h4 {
+    font-family: Georgia, 'Times New Roman', serif;
+    color: var(--green);
+    font-size: 16px;
+    margin-bottom: 10px;
+  }
+  .testing-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .testing-card li {
+    font-size: 13px;
+    padding: 4px 0;
+    color: var(--text-dark);
+    position: relative;
+    padding-left: 16px;
+  }
+  .testing-card li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+
+  /* ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ */
+  .footer {
+    text-align: center;
+    padding: 32px 24px;
+    background: var(--green);
+    color: var(--cream);
+    font-size: 13px;
+    opacity: .85;
+  }
+  .footer span {
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════════
+     RESPONSIVE
+     ═══════════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    .hero { padding: 40px 20px 36px; }
+    .canvas { padding: 16px 12px 60px; }
+    .phase-header { flex-direction: column; text-align: center; gap: 12px; }
+    .phase-number { width: 48px; height: 48px; font-size: 20px; }
+    .day-card { padding: 16px; }
+    .day-card-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .timeline-track { flex-wrap: wrap; }
+    .timeline-segment { min-width: 80px; flex: 1 1 calc(25% - 4px); }
+    .phase-nav a { padding: 8px 10px; font-size: 10px; }
+    .testing-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 480px) {
+    .timeline-segment { flex: 1 1 calc(50% - 4px); }
+    .phase-nav { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .phase-nav a { flex-shrink: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     HERO
+     ═══════════════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-brand">StillWaterGrace</div>
+  <h1>Implementation Plan</h1>
+  <hr class="hero-rule">
+  <p class="hero-sub">Automated Social Media Platform &mdash; 8-Phase Build Roadmap</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     PHASE NAV
+     ═══════════════════════════════════════════════ -->
+<nav class="phase-nav">
+  <a href="#phase-1">1 &middot; Infrastructure</a>
+  <a href="#phase-2">2 &middot; Content</a>
+  <a href="#phase-3">3 &middot; Images</a>
+  <a href="#phase-4">4 &middot; Posting</a>
+  <a href="#phase-5">5 &middot; Dashboard</a>
+  <a href="#phase-6">6 &middot; Analytics</a>
+  <a href="#phase-7">7 &middot; Monetization</a>
+  <a href="#phase-8">8 &middot; Optimization</a>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     TIMELINE PROGRESS BAR
+     ═══════════════════════════════════════════════ -->
+<section class="timeline-bar">
+  <h3>Project Timeline</h3>
+  <div class="timeline-track">
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Infrastructure</div>
+      <div class="weeks">Wk 1-2</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Content</div>
+      <div class="weeks">Wk 3-4</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Images</div>
+      <div class="weeks">Wk 5-6</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Posting</div>
+      <div class="weeks">Wk 7-8</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Dashboard</div>
+      <div class="weeks">Wk 9-10</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Analytics</div>
+      <div class="weeks">Wk 11-12</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Monetize</div>
+      <div class="weeks">Wk 13-16</div>
+    </div>
+    <div class="timeline-segment">
+      <div class="bar"><div class="bar-fill"></div></div>
+      <div class="label">Optimize</div>
+      <div class="weeks">Mo 5-6</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     PHASES
+     ═══════════════════════════════════════════════ -->
+<main class="canvas">
+
+  <!-- ═══ PHASE 1 ═══ -->
+  <section class="phase" id="phase-1">
+    <div class="phase-header">
+      <div class="phase-number">1</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Infrastructure &amp; Foundation</div>
+        <div class="phase-timeline">Week 1 &ndash; 2 &bull; Days 1&ndash;10</div>
+      </div>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 1 &mdash; Project Setup &amp; Database</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 1-2</span>
+        <span class="day-title">Environment &amp; Meta App Process</span>
+      </div>
+      <ul>
+        <li>Initialize <span class="tag">Git</span> repo, <span class="tag">Docker Compose</span> (<span class="tag">PostgreSQL</span>, <span class="tag">Redis</span>, <span class="tag">FastAPI</span>, <span class="tag">Celery</span>)</li>
+        <li>Python venv, <span class="tag">requirements.txt</span>, <span class="tag">.env.example</span></li>
+        <li>Create full project directory structure</li>
+        <li><strong><span class="tag critical">START META BUSINESS VERIFICATION</span></strong> (critical path)</li>
+        <li>Register <span class="tag">Reddit API</span> app, verify <span class="tag">Leonardo.ai</span> key, set up <span class="tag">Cloudflare R2</span></li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 3-4</span>
+        <span class="day-title">Database Schema</span>
+      </div>
+      <ul>
+        <li><span class="tag">SQLAlchemy</span> models: trending_content, bible_verses, generated_content, generated_images, posting_log, analytics_snapshots, competitor_snapshots, content_calendar, affiliate_links, affiliate_clicks, email_subscribers, revenue_log, brand_contacts, hashtag_performance</li>
+        <li><span class="tag">Alembic</span> initial migration + seed data script</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 5</span>
+        <span class="day-title">FastAPI Skeleton</span>
+      </div>
+      <ul>
+        <li><span class="tag">FastAPI</span> app with CORS, health check, route modules</li>
+        <li><span class="tag">Celery</span> app + Beat schedule config</li>
+        <li>API key auth middleware</li>
+        <li><span class="tag">Docker Compose</span> full stack verification</li>
+      </ul>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 2 &mdash; Core API Clients</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 6-7</span>
+        <span class="day-title">Bible API + Reddit Scraper</span>
+      </div>
+      <ul>
+        <li><span class="tag">bible_api.py</span>: fetch by reference, random verse rotation, 90-day dedup, caching</li>
+        <li><span class="tag">reddit_scraper.py</span>: <span class="tag">PRAW</span> client, 6 subreddits, engagement scoring, rate limiting</li>
+        <li>Tests + Celery tasks</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 8-9</span>
+        <span class="day-title">Google Trends + Pinterest</span>
+      </div>
+      <ul>
+        <li><span class="tag">google_trends.py</span>: <span class="tag">pytrends</span> with faith/family keyword groups, scoring</li>
+        <li><span class="tag">pinterest_scraper.py</span>: web scraping trending pins, engagement signals</li>
+        <li>Tests for both</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 10</span>
+        <span class="day-title">Competitor Tracker + Hashtag Research + Aggregator</span>
+      </div>
+      <ul>
+        <li><span class="tag">competitor_tracker.py</span>: 5 target pages, public data, engagement rate calc</li>
+        <li><span class="tag">hashtag_research.py</span>: 90 curated hashtags (30 per tier), scoring</li>
+        <li><span class="tag">trend_aggregator.py</span>: normalize scores 0-100, composite ranking, daily brief output</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 2 ═══ -->
+  <section class="phase" id="phase-2">
+    <div class="phase-header">
+      <div class="phase-number">2</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Content Generation Engine</div>
+        <div class="phase-timeline">Week 3 &ndash; 4 &bull; Days 11&ndash;20</div>
+      </div>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 3 &mdash; Prompt Templates &amp; Claude Integration</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 11-12</span>
+        <span class="day-title">Prompt Template System</span>
+      </div>
+      <ul>
+        <li>All prompt files: system_prompt, daily_verse, marriage_monday, parenting_wednesday, faith_friday, viral_formats, devotional_book, image_prompt_guidelines</li>
+        <li><span class="tag">prompt_templates.py</span>: <span class="tag">Jinja2</span> loading, variable injection, validation, versioning</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 13-14</span>
+        <span class="day-title">Claude API Content Generator</span>
+      </div>
+      <ul>
+        <li><span class="tag">generator.py</span>: <span class="tag">Anthropic SDK</span>, system prompt loading, per-type generation</li>
+        <li>JSON response parsing + validation (15+ keys, hashtag counts, char limits)</li>
+        <li>Retry logic, cost tracking, rate limiting, batch generation</li>
+        <li>Model: <span class="tag gold">claude-sonnet-4-6</span></li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 15</span>
+        <span class="day-title">Content Calendar Logic</span>
+      </div>
+      <ul>
+        <li><span class="tag">calendar_logic.py</span>: Weekly slot allocation (Mon=Marriage, Tue=Verse, Wed=Parenting, Thu=Viral, Fri=Hardship, Sat=Reel, Sun=Gratitude)</li>
+        <li>Posting times: <strong>6:30am, 12pm, 7:30pm EST</strong></li>
+        <li>Diversity enforcement, tone rotation, 7-day lookahead, JSON export</li>
+      </ul>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 4 &mdash; Pipeline Integration</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 16-17</span>
+        <span class="day-title">Series Manager</span>
+      </div>
+      <ul>
+        <li><span class="tag">series_manager.py</span>: theme libraries for each series, age group rotation, 8-week no-repeat rule, trending topic integration</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 18-19</span>
+        <span class="day-title">End-to-End Content Pipeline</span>
+      </div>
+      <ul>
+        <li>Wire: trends &rarr; calendar &rarr; series &rarr; generator &rarr; DB (status=pending)</li>
+        <li><span class="tag">Celery</span> orchestration, regeneration endpoint, duplication detection</li>
+        <li>Full pipeline test with real API calls</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 20</span>
+        <span class="day-title">Quality Assurance</span>
+      </div>
+      <ul>
+        <li>All templates produce valid JSON, calendar produces balanced weeks</li>
+        <li>Hashtags properly tiered, image prompts follow guidelines</li>
+        <li>7-day pipeline simulation</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 3 ═══ -->
+  <section class="phase" id="phase-3">
+    <div class="phase-header">
+      <div class="phase-number">3</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Image Generation Pipeline</div>
+        <div class="phase-timeline">Week 5 &ndash; 6 &bull; Days 21&ndash;28</div>
+      </div>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 5 &mdash; Leonardo.ai + Fallback</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 21-22</span>
+        <span class="day-title">Leonardo.ai Client</span>
+      </div>
+      <ul>
+        <li><span class="tag">leonardo_client.py</span>: REST API, model selection (<span class="tag gold">Diffusion XL</span> / <span class="tag gold">AlbedoBase XL</span> / <span class="tag gold">Creative</span>)</li>
+        <li>Params: guidance_scale=7, steps=30, aspect ratio handling (4:5, 9:16, 1:1)</li>
+        <li>Async polling, download, quota tracking, retry logic</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 23-24</span>
+        <span class="day-title">Unsplash + Image Processing</span>
+      </div>
+      <ul>
+        <li><span class="tag">unsplash_client.py</span>: search, keyword mapping, attribution, rate limits</li>
+        <li><span class="tag">image_processor.py</span>: <span class="tag">Pillow</span> resize/crop, optimization, format conversion, R2 upload</li>
+      </ul>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 6 &mdash; Canva + Brand System</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 25-26</span>
+        <span class="day-title">Canva Client</span>
+      </div>
+      <ul>
+        <li><span class="tag">canva_client.py</span>: OAuth2, template management (scripture, encouragement, carousel, story)</li>
+        <li>Brand: <span class="tag gold">Playfair Display</span> + <span class="tag gold">Lato</span> fonts, cream/gold/green/white palette</li>
+        <li>Dynamic text injection, multi-format export, template rotation</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 27-28</span>
+        <span class="day-title">PIL Fallback + Pipeline Integration</span>
+      </div>
+      <ul>
+        <li><span class="tag">PIL</span>-based text overlay backup (brand fonts, shadows, blur)</li>
+        <li>Full image pipeline: prompt &rarr; Leonardo &rarr; Canva &rarr; optimize &rarr; R2 &rarr; DB</li>
+        <li>Test with 10 sample pieces</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 4 ═══ -->
+  <section class="phase" id="phase-4">
+    <div class="phase-header">
+      <div class="phase-number">4</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Posting Engine</div>
+        <div class="phase-timeline">Week 7 &ndash; 8 &bull; Days 31&ndash;40</div>
+      </div>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 7 &mdash; Instagram + Facebook</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 31-32</span>
+        <span class="day-title">Instagram Client</span>
+      </div>
+      <ul>
+        <li><span class="tag">instagram_client.py</span>: <span class="tag gold">Graph API v19.0</span></li>
+        <li>Photo/carousel/reel post flows, caption formatting, hashtag strategy</li>
+        <li>Rate limits (25/24hr), token refresh, retry with backoff</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 33-34</span>
+        <span class="day-title">Facebook Client</span>
+      </div>
+      <ul>
+        <li><span class="tag">facebook_client.py</span>: Page posts, photo/link posts, adapted captions/hashtags</li>
+      </ul>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 8 &mdash; TikTok + Scheduling</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 35-36</span>
+        <span class="day-title">TikTok Client</span>
+      </div>
+      <ul>
+        <li><span class="tag">tiktok_client.py</span>: <span class="tag gold">Content Posting API</span>, video upload, caption adaptation</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 37-38</span>
+        <span class="day-title">Posting Scheduler</span>
+      </div>
+      <ul>
+        <li><span class="tag">scheduler.py</span>: <span class="tag">Celery Beat</span> for 3 daily windows, pre-post validation, multi-platform dispatch, retry logic, failure alerting</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 39-40</span>
+        <span class="day-title">Email Notifications + E2E Testing</span>
+      </div>
+      <ul>
+        <li><span class="tag">SendGrid</span>: success/failure alerts, daily summary, weekly digest</li>
+        <li>Full E2E: generate &rarr; image &rarr; approve &rarr; post &rarr; verify &rarr; log</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 5 ═══ -->
+  <section class="phase" id="phase-5">
+    <div class="phase-header">
+      <div class="phase-number">5</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Dashboard</div>
+        <div class="phase-timeline">Week 9 &ndash; 10 &bull; Days 41&ndash;50</div>
+      </div>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 9 &mdash; Foundation</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 41-42</span>
+        <span class="day-title">React Setup</span>
+      </div>
+      <ul>
+        <li><span class="tag">Vite</span> + <span class="tag">Tailwind</span> + <span class="tag">shadcn/ui</span> + <span class="tag">React Router</span></li>
+        <li>Routes: /, /queue, /calendar, /analytics, /competitors, /monetization, /settings</li>
+        <li><span class="tag">React Query</span> API layer</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 43-44</span>
+        <span class="day-title">Content Queue</span>
+      </div>
+      <ul>
+        <li>ContentQueue: cards with image preview, caption variants, hashtag tiers</li>
+        <li>Approve/Reject/Regenerate, bulk approve, search/filter</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 45</span>
+        <span class="day-title">Calendar View</span>
+      </div>
+      <ul>
+        <li>CalendarView: 7-day + month views, drag-drop, content type colors, mix meter</li>
+      </ul>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 10 &mdash; Analytics + Polish</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 46-47</span>
+        <span class="day-title">Analytics Dashboard</span>
+      </div>
+      <ul>
+        <li>Follower growth chart, post performance table, content type breakdown</li>
+        <li>Posting time heatmap, growth projection, key metric cards</li>
+      </ul>
+    </div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-badge">Day 48-50</span>
+        <span class="day-title">Competitor + Monetization + Mobile</span>
+      </div>
+      <ul>
+        <li>CompetitorWatch: comparison table, growth chart, gap analysis</li>
+        <li>MonetizationTracker: revenue by source, affiliate performance, brand pipeline</li>
+        <li>Mobile responsiveness, loading/error/empty states</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 6 ═══ -->
+  <section class="phase" id="phase-6">
+    <div class="phase-header">
+      <div class="phase-number">6</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Analytics &amp; Monitoring</div>
+        <div class="phase-timeline">Week 11 &ndash; 12</div>
+      </div>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 11 &mdash; Analytics Engine</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-title">Analytics Engine</span>
+      </div>
+      <ul>
+        <li><span class="tag">instagram_insights.py</span>: per-post metrics at 1hr/24hr/7d, account-level metrics</li>
+        <li><span class="tag">hashtag_tracker.py</span>: performance correlation, scoring, optimization suggestions</li>
+        <li>Content performance analyzer: rank types, identify time patterns, feedback loop</li>
+      </ul>
+    </div>
+
+    <div class="week-header"><span class="week-label">Week 12 &mdash; Reporting + Intelligence</span></div>
+
+    <div class="day-card">
+      <div class="day-card-header">
+        <span class="day-title">Reporting + Intelligence</span>
+      </div>
+      <ul>
+        <li><span class="tag">report_generator.py</span>: weekly HTML email, PDF export</li>
+        <li><span class="tag">competitor_analytics.py</span>: weekly collection, trend detection, gap analysis</li>
+        <li>Feedback loop: weight top performers 2x, rotate weak hashtags, adjust posting times</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ PHASE 7 ═══ -->
+  <section class="phase" id="phase-7">
+    <div class="phase-header">
+      <div class="phase-number">7</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Monetization</div>
+        <div class="phase-timeline">Month 4 &bull; Weeks 13&ndash;16</div>
+      </div>
+    </div>
+
+    <ul class="bullet-list">
+      <li><span class="tag">affiliate_manager.py</span>: link DB, UTM, click tracking, <span class="tag gold">Amazon</span> / <span class="tag gold">ChristianBook</span></li>
+      <li><span class="tag">gumroad_client.py</span>: product listing, sales webhooks, revenue tracking</li>
+      <li>30-day devotional PDF via <span class="tag">Claude</span> + <span class="tag">ReportLab</span> &rarr; <span class="tag gold">Gumroad</span> ($7/$17)</li>
+      <li>Link-in-bio page &rarr; <span class="tag">Cloudflare Pages</span></li>
+      <li><span class="tag">brand_crm.py</span>: partner DB, outreach templates, deal stages, rate card</li>
+      <li><span class="tag">ConvertKit</span>: subscribers, welcome sequence, weekly email, segmentation</li>
+    </ul>
+  </section>
+
+  <!-- ═══ PHASE 8 ═══ -->
+  <section class="phase" id="phase-8">
+    <div class="phase-header">
+      <div class="phase-number">8</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Optimization</div>
+        <div class="phase-timeline">Month 5 &ndash; 6</div>
+      </div>
+    </div>
+
+    <ul class="bullet-list">
+      <li>Deep analytics, A/B testing (captions, hashtags, posting times)</li>
+      <li>Scale to <strong>4 posts/day</strong> if engagement supports it</li>
+      <li>Active brand outreach (<strong>10/week</strong>)</li>
+      <li><span class="tag gold">Creator Bonus</span> enrollment</li>
+      <li>Premium product launch (<strong>$27</strong>)</li>
+      <li>VA evaluation, second page decision</li>
+    </ul>
+  </section>
+
+  <!-- ═══ TESTING STRATEGY ═══ -->
+  <section class="phase" id="testing">
+    <div class="phase-header">
+      <div class="phase-number" style="background: linear-gradient(135deg, var(--gold) 0%, #C49A3C 100%); color: var(--green);">&#x2713;</div>
+      <div class="phase-title-group">
+        <div class="phase-title">Testing Strategy</div>
+        <div class="phase-timeline">Continuous throughout all phases</div>
+      </div>
+    </div>
+
+    <div class="testing-grid">
+      <div class="testing-card">
+        <h4>Unit Tests</h4>
+        <ul>
+          <li>All API clients (mocked)</li>
+          <li>Calendar logic</li>
+          <li>Hashtag scoring</li>
+        </ul>
+      </div>
+      <div class="testing-card">
+        <h4>Integration Tests</h4>
+        <ul>
+          <li>Full content pipeline</li>
+          <li>Posting pipeline</li>
+          <li>Dashboard API</li>
+        </ul>
+      </div>
+      <div class="testing-card">
+        <h4>End-to-End Tests</h4>
+        <ul>
+          <li>Real Instagram post</li>
+          <li>Analytics pull</li>
+          <li>Approval workflow</li>
+        </ul>
+      </div>
+      <div class="testing-card">
+        <h4>Monitoring</h4>
+        <ul>
+          <li>Celery Flower</li>
+          <li>Health checks</li>
+          <li>Quota tracking</li>
+          <li>Error alerts</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════ -->
+<footer class="footer">
+  <span>StillWaterGrace</span> &mdash; Implementation Plan &bull; 8 Phases &bull; ~6 Months
+</footer>
+
+</body>
+</html>

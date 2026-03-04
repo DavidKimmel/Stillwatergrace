@@ -1,0 +1,26 @@
+Today's scripture: {{ verse_text }} ({{ verse_reference }})
+{% if trending_topic %}Trending topic context: {{ trending_topic }}{% endif %}
+Content type: {{ content_type }}
+
+Generate the following as a JSON object:
+
+{
+  "hook": "First line of caption — must stop the scroll, max 10 words, no emoji at start",
+  "caption_short": "Under 150 characters, punchy, shareable",
+  "caption_medium": "150-300 characters, adds one practical insight",
+  "caption_long": "300-500 characters, mini devotional connecting verse to real family/marriage life",
+  "story_text": "Overlay text for Instagram story, max 3 lines, large font friendly",
+  "reel_script_15": "15-second spoken script, warm and direct",
+  "reel_script_30": "30-second spoken script with a hook, point, and call to action",
+  "hashtags_large": ["10 hashtags over 1M posts"],
+  "hashtags_medium": ["10 hashtags 100K-1M posts"],
+  "hashtags_niche": ["10 hashtags under 100K posts"],
+  "pinterest_description": "150 words, keyword rich, search optimized",
+  "facebook_variation": "Conversational, slightly longer, ends with a question to drive comments",
+  "image_prompt_leonardo": "Detailed image generation prompt for Leonardo.ai following the image style guidelines",
+  "alt_text": "Accessibility description of the ideal image",
+  "content_series_fit": "Does this fit into a weekly series? Suggest which one and why",
+  "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
+}
+
+Output ONLY valid JSON. No explanation text before or after.

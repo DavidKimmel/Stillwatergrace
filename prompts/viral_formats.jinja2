@@ -1,0 +1,29 @@
+Generate 5 high-engagement post concepts for the StillWaterGrace Instagram page.
+
+{% if trending_topic %}Current trending topic: {{ trending_topic }}{% endif %}
+
+Create one of each format:
+
+1. FILL_IN_THE_BLANK: A statement like "I know God is faithful when ___" that drives comments
+2. THIS_OR_THAT: A simple faith/family choice that sparks friendly debate (e.g., "Morning devotions or evening devotions?")
+3. CONVICTION_QUOTE: A bold, shareable one-liner that makes believers nod
+4. PARENTING_LIST: "5 things Christian parents can say instead of..." or similar list format
+5. MARRIAGE_CHALLENGE: A 7-day marriage challenge with daily micro-actions
+
+For each, generate a JSON object in an array:
+
+[
+  {
+    "format": "fill_in_blank",
+    "hook": "Max 10 words, scroll-stopping",
+    "caption_medium": "150-300 characters",
+    "caption_long": "300-500 characters with context",
+    "hashtags_large": ["10 hashtags"],
+    "hashtags_medium": ["10 hashtags"],
+    "hashtags_niche": ["10 hashtags"],
+    "image_prompt_leonardo": "Image prompt for this specific post",
+    "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
+  }
+]
+
+Output ONLY a valid JSON array of 5 objects.
