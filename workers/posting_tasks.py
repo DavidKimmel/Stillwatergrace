@@ -1,6 +1,7 @@
 """Posting Celery tasks for scheduled content dispatch."""
 
 import logging
+import random
 from datetime import datetime, timedelta
 
 from workers.celery_app import app
@@ -33,7 +34,14 @@ def post_scheduled_content(self, time_slot: str):
 
     logger.info(f"Running {time_slot} posting window...")
 
-    now = datetime.utcnow()
+    # Use app timezone for window matching (scheduled_at is stored in EST)
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo(settings.timezone)
+        now = datetime.now(tz).replace(tzinfo=None)
+    except Exception:
+        now = datetime.utcnow()
+
     # Find content scheduled within a 1-hour window of the target time
     window_start = now - timedelta(minutes=30)
     window_end = now + timedelta(minutes=30)
@@ -81,7 +89,7 @@ def post_scheduled_content(self, time_slot: str):
 
 
 def _post_to_instagram(db, content):
-    """Post a single content piece to Instagram."""
+    """Post a single content piece to Instagram (photo or reel)."""
     from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
 
     logger.info(f"Posting content #{content.id} to Instagram...")
@@ -90,7 +98,21 @@ def _post_to_instagram(db, content):
         from core.posting.instagram_client import InstagramClient
         client = InstagramClient()
 
-        # Get the feed image
+        # Check for reel first
+        reel = (
+            db.query(GeneratedImage)
+            .filter(
+                GeneratedImage.content_id == content.id,
+                GeneratedImage.format == ImageFormat.reel_9x16,
+            )
+            .first()
+        )
+
+        if reel and reel.final_url:
+            # Post as reel
+            return _publish_reel(db, client, content, reel)
+
+        # Fall back to photo post
         image = (
             db.query(GeneratedImage)
             .filter(
@@ -101,19 +123,12 @@ def _post_to_instagram(db, content):
         )
 
         if not image or not image.final_url:
-            raise ValueError(f"No feed image found for content #{content.id}")
+            raise ValueError(f"No feed image or reel found for content #{content.id}")
 
         # Build caption with hashtags
-        caption = content.caption_long or content.caption_medium or content.caption_short
-        hashtags = []
-        for tag_list in [content.hashtags_niche, content.hashtags_medium, content.hashtags_large]:
-            if tag_list:
-                hashtags.extend(tag_list[:5])  # 5 from each tier = 15 total
+        caption = _build_caption(content)
 
-        if hashtags:
-            caption += "\n.\n.\n.\n" + " ".join(hashtags[:30])
-
-        # Post
+        # Post photo
         result = client.publish_photo(
             image_url=image.final_url,
             caption=caption,
@@ -127,14 +142,14 @@ def _post_to_instagram(db, content):
             platform_media_id=result.get("media_id"),
             status=PostingStatus.success,
             caption_used=caption,
-            hashtags_used=hashtags,
+            hashtags_used=_get_hashtags(content),
             posted_at=datetime.utcnow(),
             scheduled_for=content.scheduled_at,
         )
         db.add(log)
 
-        logger.info(f"Successfully posted content #{content.id} to Instagram")
-        return {"content_id": content.id, "platform": "instagram", "status": "success"}
+        logger.info(f"Successfully posted content #{content.id} as photo to Instagram")
+        return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "photo"}
 
     except Exception as e:
         logger.error(f"Failed to post content #{content.id} to Instagram: {e}")
@@ -149,3 +164,88 @@ def _post_to_instagram(db, content):
         db.add(log)
 
         return {"content_id": content.id, "platform": "instagram", "status": "failed", "error": str(e)}
+
+
+def _publish_reel(db, client, content, reel):
+    """Publish a reel to Instagram."""
+    from database.models import PostingLog, PostingStatus, Platform
+
+    caption = _build_caption(content)
+
+    result = client.publish_reel(
+        video_url=reel.final_url,
+        caption=caption,
+    )
+
+    log = PostingLog(
+        content_id=content.id,
+        platform=Platform.instagram,
+        platform_post_id=result.get("id"),
+        platform_media_id=result.get("media_id"),
+        status=PostingStatus.success,
+        caption_used=caption,
+        hashtags_used=_get_hashtags(content),
+        posted_at=datetime.utcnow(),
+        scheduled_for=content.scheduled_at,
+    )
+    db.add(log)
+
+    logger.info(f"Successfully posted content #{content.id} as reel to Instagram")
+    return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "reel"}
+
+
+# Engagement CTAs — appended to captions that don't already contain one
+ENGAGEMENT_CTAS = [
+    "Type 'Amen' if you needed this today.",
+    "Share this with someone who needs to hear it.",
+    "Save this for when you need a reminder.",
+    "Tag someone who needs this word today.",
+    "Double tap if this spoke to your heart.",
+    "Drop a heart if this hit home.",
+    "Comment 'Yes' if you're claiming this.",
+    "Share this with your prayer partner.",
+]
+
+# Phrases that indicate a CTA is already present
+CTA_INDICATORS = [
+    "type amen", "share with", "save this", "tag someone", "double tap",
+    "drop a", "comment", "let me know", "tell me", "what do you think",
+    "do you agree",
+]
+
+
+def _build_caption(content) -> str:
+    """Build caption with engagement CTA and hashtags."""
+    caption = content.caption_long or content.caption_medium or content.caption_short or ""
+
+    # Include full verse text in caption if available (hook-on-image strategy)
+    verse_text = ""
+    if content.verse and content.verse.text:
+        verse_ref = content.verse.reference or ""
+        verse_text = f'\n\n"{content.verse.text}" — {verse_ref}'
+
+    # Append CTA if caption doesn't already have one
+    caption_lower = caption.lower()
+    has_cta = any(indicator in caption_lower for indicator in CTA_INDICATORS)
+    if not has_cta:
+        cta = random.choice(ENGAGEMENT_CTAS)
+        caption += f"\n\n{cta}"
+
+    # Add verse to caption if not already included
+    if verse_text and content.verse.reference not in caption:
+        caption += verse_text
+
+    hashtags = _get_hashtags(content)
+    if hashtags:
+        caption += "\n.\n.\n.\n" + " ".join(hashtags[:30])
+
+    return caption
+
+
+def _get_hashtags(content) -> list[str]:
+    """Extract hashtags from content, 5 from each tier."""
+    hashtags = []
+    for tag_list in [content.hashtags_niche, content.hashtags_medium, content.hashtags_large]:
+        if tag_list:
+            hashtags.extend(tag_list[:5])
+    return hashtags

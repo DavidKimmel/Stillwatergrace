@@ -38,7 +38,6 @@ def health_check():
         "services": {
             "anthropic": settings.has_anthropic,
             "instagram": settings.has_instagram,
-            "leonardo": settings.has_leonardo,
             "reddit": settings.has_reddit,
         },
     }

@@ -1,7 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 
 class Settings(BaseSettings):
@@ -13,9 +13,6 @@ class Settings(BaseSettings):
 
     # Anthropic (Claude API)
     anthropic_api_key: str = ""
-
-    # Leonardo.ai
-    leonardo_api_key: str = ""
 
     # Canva
     canva_client_id: str = ""
@@ -52,6 +49,13 @@ class Settings(BaseSettings):
     # Unsplash
     unsplash_access_key: str = ""
 
+    # ElevenLabs (TTS narration + music generation)
+    elevenlabs_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("elevenlabs_api_key", "ellevenlabs_api_key"),
+    )
+    reel_narration_enabled: bool = True
+
     # ConvertKit
     convertkit_api_key: str = ""
 
@@ -63,8 +67,11 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_secret_key: str = "change-me-to-a-random-string"
     timezone: str = "America/New_York"
+    auto_approve_content: bool = False
+    reel_music_enabled: bool = True
+    reel_motion_style: str = "ken_burns"  # ken_burns or static
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @property
     def is_production(self) -> bool:
@@ -75,16 +82,21 @@ class Settings(BaseSettings):
         return bool(self.instagram_access_token and self.instagram_business_account_id)
 
     @property
-    def has_leonardo(self) -> bool:
-        return bool(self.leonardo_api_key)
-
-    @property
     def has_anthropic(self) -> bool:
         return bool(self.anthropic_api_key)
 
     @property
     def has_r2(self) -> bool:
-        return bool(self.cloudflare_r2_access_key and self.cloudflare_r2_secret_key)
+        return bool(
+            self.cloudflare_r2_access_key
+            and self.cloudflare_r2_secret_key
+            and self.cloudflare_r2_endpoint
+            and self.cloudflare_r2_public_url
+        )
+
+    @property
+    def has_elevenlabs(self) -> bool:
+        return bool(self.elevenlabs_api_key)
 
     @property
     def has_reddit(self) -> bool:

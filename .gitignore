@@ -15,6 +15,10 @@ venv/
 images/raw/
 images/processed/
 
+# Audio tracks (royalty-free, not tracked in git)
+audio/*.mp3
+audio/*.m4a
+
 # Reports
 reports/
 

@@ -102,11 +102,21 @@ class ContentCalendar:
             if config is None:
                 continue
 
+            # Calculate scheduled_at from today's date + posting time
+            posting_time = POSTING_TIMES[time_slot]
+            scheduled_at = today.replace(
+                hour=posting_time.hour,
+                minute=posting_time.minute,
+                second=0,
+                microsecond=0,
+            )
+
             slot = {
                 "date": today.date().isoformat(),
                 "time_slot": time_slot,
                 "content_type": config["type"].value,
                 "emotional_tone": config["tone"].value,
+                "scheduled_at": scheduled_at,
                 "theme": "",
                 "age_group": "general",
             }

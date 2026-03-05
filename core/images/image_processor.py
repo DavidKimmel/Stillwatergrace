@@ -144,36 +144,20 @@ class ImagePipeline:
     def generate_images_for_content(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Generate all image formats for a content piece.
 
-        Tries Leonardo.ai first, falls back to Unsplash, then PIL-only.
+        Uses Unsplash for background photos, falls back to PIL-only branded images.
         """
         images = []
         raw_path = None
         provider = ImageProvider.pil_fallback
 
-        # Try Leonardo.ai
-        if settings.has_leonardo and content.image_prompt:
-            try:
-                from core.images.leonardo_client import LeonardoClient
-                leo = LeonardoClient()
-                result = leo.generate_image(
-                    prompt=content.image_prompt,
-                    style="photorealistic",
-                    aspect_ratio="feed_4x5",
-                )
-                if result and result.get("local_path"):
-                    raw_path = result["local_path"]
-                    provider = ImageProvider.leonardo
-                    logger.info(f"Leonardo image generated for content #{content.id}")
-            except Exception as e:
-                logger.warning(f"Leonardo generation failed, trying fallback: {e}")
-
-        # Fallback: Unsplash
+        # Unsplash
         if not raw_path and settings.unsplash_access_key:
             try:
                 from core.images.unsplash_client import UnsplashClient
                 unsplash = UnsplashClient()
                 result = unsplash.search_and_download(
                     content_type=content.content_type.value,
+                    high_res=True,  # Full-res for reel zoompan headroom
                 )
                 if result and result.get("local_path"):
                     raw_path = result["local_path"]
@@ -230,6 +214,7 @@ class ImagePipeline:
                     verse_ref=content.verse.reference,
                     content_id=content.id,
                     translation=content.verse.translation or "WEB",
+                    content_type=content.content_type.value,
                 )
                 if reel_path:
                     final_url = self._upload_to_storage(
@@ -279,19 +264,26 @@ class ImagePipeline:
         if img_format == ImageFormat.story_9x16 and content.story_text:
             img = self._add_text_overlay(img, content.story_text)
         elif img_format in (ImageFormat.feed_4x5, ImageFormat.feed_1x1):
-            text = content.hook or content.caption_short or ""
-            if text:
-                content_type = content.content_type.value if content.content_type else "encouragement"
-                # Extract verse data for bible_page overlay
-                verse_text = ""
-                verse_ref = ""
-                verse_translation = ""
-                if content.verse:
-                    verse_text = content.verse.text or ""
-                    verse_ref = content.verse.reference or ""
-                    verse_translation = content.verse.translation or "WEB"
+            content_type = content.content_type.value if content.content_type else "encouragement"
+            # Hook-on-image: use short hook for overlays, full verse in caption
+            hook_text = content.hook or content.caption_short or ""
+            # Truncate long hooks to ~15 words for image readability
+            words = hook_text.split()
+            if len(words) > 15:
+                hook_text = " ".join(words[:15]) + "..."
+
+            # Extract verse data for bible_page overlay
+            verse_text = ""
+            verse_ref = ""
+            verse_translation = ""
+            if content.verse:
+                verse_text = content.verse.text or ""
+                verse_ref = content.verse.reference or ""
+                verse_translation = content.verse.translation or "WEB"
+
+            if hook_text or verse_text:
                 img = _apply_feed_overlay(
-                    img, text, content.id, content_type,
+                    img, hook_text, content.id, content_type,
                     verse_text=verse_text,
                     verse_ref=verse_ref,
                     verse_translation=verse_translation,
@@ -451,7 +443,10 @@ class ImagePipeline:
             # Public URL via R2 public dev URL or custom domain
             public_base = settings.cloudflare_r2_public_url.rstrip("/")
             url = f"{public_base}/{key}"
-            logger.info(f"Uploaded to R2: {key}")
+            if not url.startswith("https://"):
+                logger.warning(f"R2 URL missing https: {url}")
+                url = f"https://{url.lstrip('http://')}"
+            logger.info(f"Uploaded to R2: {url}")
             return url
 
         except Exception as e:
@@ -800,7 +795,7 @@ def _layout_bold_statement(w: int, h: int, text: str) -> Image.Image:
 
 
 # ── Feed Overlay Functions ──────────────────────────────────────────────────
-# These composite bold text on top of existing photos (Leonardo/Unsplash).
+# These composite bold text on top of existing photos (Unsplash).
 # Designed for scroll-stopping readability at Instagram grid thumbnail size.
 
 
@@ -822,10 +817,12 @@ def _select_overlay_style(content_id: int, content_type: str, has_verse: bool = 
         return "bible_page"
     if content_type in ("viral_format", "reel_hook", "bold_statement"):
         return "dark_hero"
+    if content_type in ("encouragement", "conviction_quote", "gratitude"):
+        return "bold_text"
     if content_type in ("marriage_monday", "parenting_wednesday", "faith_friday"):
         return "bottom_band"
-    styles = ["dark_hero", "bottom_band", "center_box"]
-    return styles[content_id % 3]
+    styles = ["dark_hero", "bottom_band", "center_box", "bold_text"]
+    return styles[content_id % 4]
 
 
 def _apply_feed_overlay(
@@ -846,6 +843,8 @@ def _apply_feed_overlay(
         return _overlay_dark_hero(img, text)
     elif style == "bottom_band":
         return _overlay_bottom_band(img, text)
+    elif style == "bold_text":
+        return _overlay_bold_text(img, text)
     else:
         return _overlay_center_box(img, text)
 
@@ -1230,6 +1229,74 @@ def _overlay_bible_page(
     draw.text(
         (card_x + card_w - card_padding_x - wm_w, card_y + card_h - 35),
         wm_text, fill=(180, 170, 160), font=wm_font,
+    )
+
+    return img.convert("RGB")
+
+
+def _overlay_bold_text(img: Image.Image, text: str) -> Image.Image:
+    """Massive text filling 70-80% of the frame on a lightly washed photo.
+
+    Inspired by @bible_verses365_ style — ALL CAPS bold serif text directly
+    on the photo with a subtle dark wash. Thumb-stopping at grid level.
+    """
+    img = img.convert("RGBA")
+    w, h = img.size
+
+    # Light dark wash — lighter than dark_hero (alpha ~100)
+    wash = Image.new("RGBA", (w, h), (0, 0, 0, 110))
+    img = Image.alpha_composite(img, wash)
+
+    draw = ImageDraw.Draw(img)
+    margin = 60
+    max_text_width = w - margin * 2
+
+    # ALL CAPS for maximum impact
+    display_text = text.upper()
+
+    # Use larger start size for bold impact — 96pt down to 56pt
+    font, lines, font_size = _get_adaptive_font(
+        display_text, max_text_width, start_size=96, min_size=56, max_lines=6
+    )
+    line_spacing = max(14, font_size // 4)
+
+    # Measure total text height
+    sample_bbox = draw.textbbox((0, 0), "AY", font=font)
+    line_h = (sample_bbox[3] - sample_bbox[1]) + line_spacing
+    total_text_h = len(lines) * line_h
+
+    # Center vertically, offset slightly upward
+    text_y = (h - total_text_h) // 2 - 40
+
+    # Draw text with slight shadow for depth
+    shadow_offset = max(2, font_size // 30)
+    _draw_text_block(
+        draw, display_text, font, margin + shadow_offset, text_y + shadow_offset,
+        max_width=max_text_width,
+        color=(0, 0, 0, 80),
+        align="center",
+        canvas_width=w,
+        line_spacing=line_spacing,
+    )
+
+    # Main text — bright white
+    _draw_text_block(
+        draw, display_text, font, margin, text_y,
+        max_width=max_text_width,
+        color=BRAND_COLORS["white_text"],
+        align="center",
+        canvas_width=w,
+        line_spacing=line_spacing,
+    )
+
+    # Small gold watermark at bottom
+    ref_font = get_body_font(22)
+    _draw_text_block(
+        draw, "@stillwatergrace", ref_font, 0, h - 60,
+        max_width=w,
+        color=BRAND_COLORS["gold"],
+        align="center",
+        canvas_width=w,
     )
 
     return img.convert("RGB")

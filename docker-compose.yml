@@ -40,6 +40,7 @@ services:
     environment:
       DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
       REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
     depends_on:
       db:
         condition: service_healthy
@@ -57,6 +58,7 @@ services:
     environment:
       DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
       REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
     depends_on:
       db:
         condition: service_healthy
@@ -74,6 +76,7 @@ services:
     environment:
       DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
       REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app
     depends_on:
       db:
         condition: service_healthy

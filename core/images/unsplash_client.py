@@ -1,10 +1,10 @@
-"""Unsplash API client for fallback stock photos.
+"""Unsplash API client for stock background photos.
 
-Used when Leonardo.ai quota is low or generation fails.
 Free tier: 50 requests/hour.
 """
 
 import logging
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -17,21 +17,99 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://api.unsplash.com"
 IMAGES_RAW_DIR = Path(__file__).parent.parent.parent / "images" / "raw"
 
-# Search term mapping from content type to Unsplash keywords
-CONTENT_TYPE_KEYWORDS = {
-    "daily_verse": "bible open book morning light",
-    "marriage_monday": "couple hands wedding rings love",
-    "parenting_wednesday": "parent child family hands",
-    "faith_friday": "sunrise hope light clouds storm",
-    "encouragement": "nature sunrise peaceful golden hour",
-    "prayer_prompt": "candle prayer hands peaceful",
-    "gratitude": "sunset nature golden light thankful",
-    "fill_in_blank": "nature sky clouds scenic",
-    "this_or_that": "coffee morning nature calm",
-    "conviction_quote": "mountain landscape powerful nature",
-    "reel": "cinematic landscape golden hour",
-    "carousel": "nature collage scenic peaceful",
+# Search term mapping — multiple varied queries per content type to avoid repetition
+CONTENT_TYPE_KEYWORDS: dict[str, list[str]] = {
+    "daily_verse": [
+        "bible open book morning light",
+        "sunlit pages journal wooden table",
+        "sunrise meadow peaceful golden light",
+        "calm lake reflection dawn",
+        "old bible leather desk warm",
+    ],
+    "marriage_monday": [
+        "couple hands wedding rings love",
+        "romantic sunset silhouette couple",
+        "two coffee cups cozy morning",
+        "couple walking beach golden hour",
+        "intertwined hands gentle embrace",
+    ],
+    "parenting_wednesday": [
+        "parent child family hands",
+        "mother child garden sunlight",
+        "father daughter walking park",
+        "family hands together unity",
+        "child playing field golden hour",
+    ],
+    "faith_friday": [
+        "sunrise hope light clouds storm",
+        "mountain summit sunrise inspiring",
+        "light breaking through dark clouds",
+        "cross silhouette sunset dramatic sky",
+        "path through forest morning light",
+    ],
+    "encouragement": [
+        "nature sunrise peaceful golden hour",
+        "wildflowers meadow soft sunlight",
+        "ocean waves gentle sunset calm",
+        "bird soaring blue sky freedom",
+        "mountain vista panoramic golden light",
+    ],
+    "prayer_prompt": [
+        "candle prayer hands peaceful",
+        "quiet chapel soft window light",
+        "folded hands warm glow",
+        "morning mist serene landscape",
+        "candlelight reflection still water",
+    ],
+    "gratitude": [
+        "sunset nature golden light thankful",
+        "harvest table warm autumn glow",
+        "blooming garden morning dew",
+        "golden wheat field sunset",
+        "starry night clear sky wonder",
+    ],
+    "fill_in_blank": [
+        "nature sky clouds scenic",
+        "minimalist landscape soft tones",
+        "abstract nature light bokeh",
+        "rolling hills green peaceful",
+        "desert landscape vast open sky",
+    ],
+    "this_or_that": [
+        "coffee morning nature calm",
+        "two paths fork road nature",
+        "contrasting colors nature vibrant",
+        "sunrise versus sunset sky",
+        "mountain versus ocean landscape",
+    ],
+    "conviction_quote": [
+        "mountain landscape powerful nature",
+        "stormy sky dramatic lightning",
+        "lone tree standing strong wind",
+        "rocky coastline crashing waves",
+        "deep forest towering ancient trees",
+    ],
+    "reel": [
+        "cinematic landscape golden hour",
+        "dramatic sky clouds colorful sunset",
+        "aerial view nature scenic sweeping",
+        "misty mountain valley morning",
+        "ocean horizon sunset cinematic",
+    ],
+    "carousel": [
+        "nature collage scenic peaceful",
+        "botanical garden flowers colorful",
+        "seasonal landscape beautiful nature",
+        "waterfall forest lush green",
+        "autumn leaves colorful pathway",
+    ],
 }
+
+_DEFAULT_QUERIES = [
+    "nature peaceful golden hour",
+    "scenic landscape calm serene",
+    "beautiful sky clouds sunlight",
+]
 
 
 class UnsplashClient:
@@ -55,6 +133,7 @@ class UnsplashClient:
         content_type: str,
         custom_query: Optional[str] = None,
         orientation: str = "portrait",
+        high_res: bool = False,
     ) -> Optional[dict]:
         """Search for a relevant photo and download it.
 
@@ -62,11 +141,16 @@ class UnsplashClient:
             content_type: Content type for keyword mapping
             custom_query: Override search query
             orientation: 'portrait', 'landscape', or 'squarish'
+            high_res: If True, use full-res URL (for reel backgrounds needing zoompan headroom)
 
         Returns:
             Dict with photo metadata and local path, or None.
         """
-        query = custom_query or CONTENT_TYPE_KEYWORDS.get(content_type, "nature peaceful")
+        if custom_query:
+            query = custom_query
+        else:
+            queries = CONTENT_TYPE_KEYWORDS.get(content_type, _DEFAULT_QUERIES)
+            query = random.choice(queries)
 
         # Search
         try:
@@ -74,7 +158,7 @@ class UnsplashClient:
                 f"{BASE_URL}/search/photos",
                 params={
                     "query": query,
-                    "per_page": 5,
+                    "per_page": 15,
                     "orientation": orientation,
                     "content_filter": "high",  # Safe content only
                 },
@@ -90,12 +174,13 @@ class UnsplashClient:
             logger.warning(f"No Unsplash results for query: {query}")
             return None
 
-        # Pick the first result
-        photo = results[0]
+        # Pick a random result instead of always the first
+        photo = random.choice(results)
         photo_id = photo["id"]
 
-        # Download the regular size (good quality without being huge)
-        download_url = photo["urls"].get("regular")
+        # Use full-res for reel backgrounds (zoompan needs headroom), regular otherwise
+        url_key = "full" if high_res else "regular"
+        download_url = photo["urls"].get(url_key) or photo["urls"].get("regular")
         if not download_url:
             return None
 

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace - Daily Workflow Guide</title>
+<style>
+  body { font-family: Calibri, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #FFF8F0; color: #2D4A3E; line-height: 1.6; }
+  h1 { font-family: Georgia, serif; color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 10px; }
+  h2 { font-family: Georgia, serif; color: #D4A853; margin-top: 30px; }
+  h3 { color: #2D4A3E; }
+  code { background: #e8e0d6; padding: 2px 6px; border-radius: 3px; font-size: 0.95em; }
+  pre { background: #2D4A3E; color: #FFF8F0; padding: 16px; border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; color: #FFF8F0; }
+  .card { background: #FAFAFA; border-left: 4px solid #D4A853; padding: 16px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+  .warning { border-left-color: #c0392b; }
+  .success { border-left-color: #27ae60; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #2D4A3E; color: #FFF8F0; }
+</style>
+</head>
+<body>
+
+<h1>StillWaterGrace - Daily Workflow Guide</h1>
+
+<h2>Prerequisites</h2>
+<ul>
+  <li><strong>Docker Desktop</strong> must be installed and running</li>
+  <li>Project folder: <code>C:\stillwatergrace</code></li>
+  <li><code>.env</code> file configured with API keys</li>
+</ul>
+
+<h2>Startup (Once Per Session)</h2>
+<div class="card">
+  <ol>
+    <li>Open <strong>Docker Desktop</strong> (just let it boot, no clicks needed)</li>
+    <li>Open a terminal in <code>C:\stillwatergrace</code></li>
+    <li>Run: <pre><code>docker compose up -d</code></pre></li>
+    <li>Open your dashboard: <a href="http://localhost:5175">http://localhost:5175</a></li>
+  </ol>
+</div>
+
+<h2>What Runs Automatically</h2>
+<p>When Docker is running, these services handle everything:</p>
+<table>
+  <tr><th>Service</th><th>What It Does</th><th>Port</th></tr>
+  <tr><td>db</td><td>PostgreSQL database (stores all content, images, logs)</td><td>5432</td></tr>
+  <tr><td>redis</td><td>Message broker for Celery task queue</td><td>6379</td></tr>
+  <tr><td>api</td><td>FastAPI backend (REST API for dashboard)</td><td>8000</td></tr>
+  <tr><td>celery-worker</td><td>Executes tasks (content generation, image processing, posting)</td><td>-</td></tr>
+  <tr><td>celery-beat</td><td>Scheduler (triggers daily generation + posting at set times)</td><td>-</td></tr>
+  <tr><td>dashboard</td><td>React web UI for reviewing and managing content</td><td>5175</td></tr>
+</table>
+
+<h2>Daily Flow</h2>
+<div class="card">
+  <ol>
+    <li><strong>Celery Beat</strong> triggers content generation each morning</li>
+    <li><strong>Celery Worker</strong> calls Claude API to generate content, creates images, uploads to R2</li>
+    <li>Content appears in dashboard as <strong>"pending"</strong></li>
+    <li>You review and <strong>approve</strong> (or auto-approve is enabled)</li>
+    <li>At scheduled posting times (6:30 AM, 12:00 PM, 7:30 PM EST), the posting task picks up <strong>approved</strong> content and publishes to Instagram</li>
+  </ol>
+</div>
+
+<h2>Content Approval</h2>
+<p>Two modes:</p>
+<ul>
+  <li><strong>Manual (default):</strong> Content generates as "pending". Review in dashboard, approve what you like.</li>
+  <li><strong>Auto-approve:</strong> Add <code>AUTO_APPROVE_CONTENT=true</code> to your <code>.env</code> file. All generated content is immediately approved and will post at its scheduled time.</li>
+</ul>
+<div class="card warning">
+  <strong>Important:</strong> After changing <code>.env</code>, you must restart the affected services:
+  <pre><code>docker compose down api celery-worker celery-beat
+docker compose up -d api celery-worker celery-beat</code></pre>
+  Note: <code>docker compose restart</code> does NOT reload .env changes.
+</div>
+
+<h2>Common Commands</h2>
+<pre><code># Start everything
+docker compose up -d
+
+# Stop everything
+docker compose down
+
+# Stop and wipe database (fresh start)
+docker compose down -v
+
+# View logs
+docker compose logs api -f          # API logs
+docker compose logs celery-worker -f # Worker logs
+docker compose logs celery-beat -f   # Scheduler logs
+
+# Check service status
+docker compose ps
+
+# Manually trigger content generation
+docker compose exec api python manage.py generate-content
+
+# View the content calendar
+docker compose exec api python manage.py show-calendar
+
+# Run tests
+docker compose exec api python -m pytest tests/</code></pre>
+
+<h2>Key URLs</h2>
+<table>
+  <tr><th>What</th><th>URL</th></tr>
+  <tr><td>Dashboard</td><td><a href="http://localhost:5175">http://localhost:5175</a></td></tr>
+  <tr><td>API docs</td><td><a href="http://localhost:8000/docs">http://localhost:8000/docs</a></td></tr>
+  <tr><td>API health</td><td><a href="http://localhost:8000/api/health">http://localhost:8000/api/health</a></td></tr>
+</table>
+
+<h2>Posting Schedule (EST)</h2>
+<table>
+  <tr><th>Day</th><th>Morning (6:30 AM)</th><th>Noon (12:00 PM)</th><th>Evening (7:30 PM)</th></tr>
+  <tr><td>Monday</td><td>Marriage Monday</td><td>Encouragement</td><td>Daily Verse (Reel)</td></tr>
+  <tr><td>Tuesday</td><td>Daily Verse</td><td>This or That</td><td>-</td></tr>
+  <tr><td>Wednesday</td><td>Parenting Wednesday</td><td>Daily Verse</td><td>Daily Verse (Reel)</td></tr>
+  <tr><td>Thursday</td><td>Fill in Blank</td><td>Encouragement</td><td>-</td></tr>
+  <tr><td>Friday</td><td>Faith Friday</td><td>Daily Verse</td><td>Daily Verse (Reel)</td></tr>
+  <tr><td>Saturday</td><td>Carousel</td><td>Conviction Quote</td><td>Daily Verse (Reel)</td></tr>
+  <tr><td>Sunday</td><td>Gratitude</td><td>Prayer Prompt</td><td>-</td></tr>
+</table>
+
+<h2>Troubleshooting</h2>
+<div class="card warning">
+  <h3>Docker Desktop must stay running</h3>
+  <p>If you close Docker Desktop, all services stop. No content generates, no posts go out. Reopen Docker Desktop and run <code>docker compose up -d</code> to restart.</p>
+</div>
+
+<div class="card">
+  <h3>Container won't start?</h3>
+  <pre><code>docker compose down
+docker compose up -d --build</code></pre>
+  <p>The <code>--build</code> flag rebuilds containers if code changed.</p>
+</div>
+
+<div class="card">
+  <h3>.env changes not taking effect?</h3>
+  <p>Must do <code>docker compose down [service] && docker compose up -d [service]</code>. Plain <code>restart</code> does not reload environment variables.</p>
+</div>
+
+</body>
+</html>

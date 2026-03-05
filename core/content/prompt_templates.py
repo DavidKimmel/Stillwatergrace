@@ -122,7 +122,7 @@ class PromptTemplateEngine:
         hook: str,
         verse_reference: str = "",
     ) -> str:
-        """Render the image prompt guidelines for Leonardo.ai."""
+        """Render the image prompt guidelines for background image search."""
         return self.render(
             "image_prompt_guidelines",
             content_type=content_type,

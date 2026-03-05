@@ -5,10 +5,13 @@ Usage:
     python manage.py seed             Seed hashtags and brand prospects
     python manage.py generate-verse   Test: fetch a daily Bible verse
     python manage.py generate-content Test: generate content for today
+    python manage.py generate-week    Generate content for the full week (Mon-Sun)
     python manage.py show-calendar    Show this week's content calendar
-    python manage.py test-leonardo    Test Leonardo.ai API connection
+    python manage.py test-render      Render 1 test reel + feed images (no posting/DB)
+    python manage.py generate-audio   Generate background music tracks (ElevenLabs or FFmpeg)
     python manage.py weekly-report    Generate weekly report
     python manage.py rate-card        Show sponsorship rate card
+    python manage.py clear-content    Clear all generated content from database
 """
 
 import sys
@@ -72,6 +75,78 @@ def generate_content():
         print(f"\nGenerated {count} content pieces")
 
 
+def generate_week():
+    """Generate content for all 7 days of the current week."""
+    from datetime import datetime, timedelta
+    from database.session import get_db
+    from core.content.generator import ContentGenerator
+    from core.content.calendar_logic import ContentCalendar, WEEKLY_SCHEDULE, POSTING_TIMES
+
+    with get_db() as db:
+        gen = ContentGenerator(db)
+        cal = ContentCalendar(db)
+
+        # Start from Monday of this week
+        today = datetime.utcnow()
+        monday = today - timedelta(days=today.weekday())
+        monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        total = 0
+        for day_offset in range(7):
+            day = monday + timedelta(days=day_offset)
+            day_of_week = day.weekday()
+            day_name = day.strftime("%A")
+            day_schedule = WEEKLY_SCHEDULE.get(day_of_week, {})
+
+            day_count = 0
+            for time_slot, config in day_schedule.items():
+                if config is None:
+                    continue
+
+                posting_time = POSTING_TIMES[time_slot]
+                scheduled_at = day.replace(
+                    hour=posting_time.hour,
+                    minute=posting_time.minute,
+                )
+
+                slot = {
+                    "date": day.date().isoformat(),
+                    "time_slot": time_slot,
+                    "content_type": config["type"].value,
+                    "emotional_tone": config["tone"].value,
+                    "scheduled_at": scheduled_at,
+                    "theme": "",
+                    "age_group": "general",
+                }
+
+                # Add themes
+                from database.models import ContentType
+                content_type = config["type"]
+                if content_type == ContentType.marriage_monday:
+                    slot["theme"] = cal.series.get_marriage_theme()
+                elif content_type == ContentType.parenting_wednesday:
+                    age_group, theme = cal.series.get_parenting_theme()
+                    slot["theme"] = theme
+                    slot["age_group"] = age_group
+                elif content_type == ContentType.faith_friday:
+                    slot["theme"] = cal.series.get_hardship_topic()
+
+                try:
+                    content = gen._generate_for_slot(slot)
+                    if content:
+                        day_count += 1
+                        total += 1
+                        print(f"  {day_name} {time_slot:8s} | {slot['content_type']:25s} | #{content.id}")
+                except Exception as e:
+                    print(f"  {day_name} {time_slot:8s} | {slot['content_type']:25s} | FAILED: {e}")
+                    continue
+
+            if day_count:
+                print(f"  --- {day_name}: {day_count} pieces ---")
+
+        print(f"\nTotal: {total} content pieces generated for the week")
+
+
 def show_calendar():
     """Show this week's content calendar."""
     from database.session import get_db
@@ -93,20 +168,153 @@ def show_calendar():
             print(f"    {slot['time_slot']:8s} | {slot['content_type']:25s} | {slot['emotional_tone']}")
 
 
-def test_leonardo():
-    """Test Leonardo.ai API connection."""
-    from core.images.leonardo_client import LeonardoClient
+def test_render():
+    """Render 1 test reel + feed images from a fresh verse. No posting, no approval."""
+    import time
+    from pathlib import Path
+    from database.session import get_db
+    from core.scraper.bible_api import BibleAPIClient
+    from core.config import settings
 
-    try:
-        client = LeonardoClient()
-        info = client.get_user_info()
-        if info:
-            print(f"\nLeonardo.ai connected successfully")
-            print(json.dumps(info, indent=2))
+    # Use timestamp-based ID so each test render gets unique files
+    test_id = int(time.time()) % 100000
+
+    with get_db() as db:
+        # 1. Fetch a verse
+        print("\n== Test Render ==\n")
+        print("1. Fetching verse...")
+        bible = BibleAPIClient(db)
+        verse = bible.fetch_daily_verse()
+        if not verse:
+            print("   FAILED: Could not fetch verse")
+            return
+        print(f"   {verse.reference}: {verse.text[:80]}...")
+
+        # 2. Download background image
+        print("\n2. Downloading background image...")
+        raw_path = None
+
+        if settings.unsplash_access_key:
+            from core.images.unsplash_client import UnsplashClient
+            try:
+                unsplash = UnsplashClient()
+                result = unsplash.search_and_download(
+                    content_type="daily_verse",
+                    high_res=True,
+                )
+                if result and result.get("local_path"):
+                    raw_path = result["local_path"]
+                    print(f"   Unsplash: {raw_path}")
+                    print(f"   Photo: {result.get('attribution', 'N/A')}")
+            except Exception as e:
+                print(f"   Unsplash failed: {e}")
+
+        if not raw_path:
+            print("   FAILED: No background image available")
+            return
+
+        # 3. Generate feed overlay images
+        print("\n3. Generating feed overlays...")
+        from core.images.image_processor import (
+            TARGET_SIZES,
+            IMAGES_PROCESSED_DIR,
+            ImagePipeline,
+            _apply_feed_overlay,
+        )
+
+        IMAGES_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+        feed_paths = []
+
+        from PIL import Image as PILImage
+
+        hook_text = verse.text[:60] + "..."
+
+        for img_format, target_size in TARGET_SIZES.items():
+            try:
+                img = PILImage.open(raw_path)
+                img = ImagePipeline._resize_and_crop(img, target_size)
+                img = _apply_feed_overlay(
+                    img=img,
+                    text=hook_text,
+                    content_id=0,
+                    content_type="daily_verse",
+                    verse_text=verse.text,
+                    verse_ref=verse.reference,
+                    verse_translation=verse.translation or "WEB",
+                )
+                out_path = IMAGES_PROCESSED_DIR / f"test_{img_format.value}.jpg"
+                img.save(str(out_path), "JPEG", quality=92)
+                feed_paths.append(str(out_path))
+                print(f"   {img_format.value}: {out_path}")
+            except Exception as e:
+                print(f"   {img_format.value}: FAILED — {e}")
+
+        # 4. Generate reel
+        print(f"\n4. Generating reel (motion: {settings.reel_motion_style})...")
+        from core.images.reel_generator import generate_reel
+
+        reel_path = generate_reel(
+            background_path=raw_path,
+            verse_text=verse.text,
+            verse_ref=verse.reference,
+            content_id=test_id,
+            translation=verse.translation or "WEB",
+            content_type="daily_verse",
+        )
+
+        if reel_path:
+            reel_size_mb = Path(reel_path).stat().st_size / (1024 * 1024)
+            print(f"   Reel: {reel_path} ({reel_size_mb:.1f} MB)")
         else:
-            print("Failed to connect")
-    except ValueError as e:
-        print(f"Error: {e}")
+            print("   Reel: FAILED")
+
+        # Summary
+        print("\n== Output Files ==\n")
+        for p in feed_paths:
+            print(f"  {p}")
+        if reel_path:
+            print(f"  {reel_path}")
+        print(f"\nOpen these files in Explorer to inspect quality.")
+
+
+def generate_audio():
+    """Download/generate background music tracks.
+
+    Sources (auto-selected, best available):
+      1. ElevenLabs Music API (paid plan)
+      2. Mixkit free stock music (default — real royalty-free tracks)
+      3. FFmpeg sine waves (last resort)
+
+    Pass --source=mixkit|elevenlabs|sine to force a specific source.
+    Pass --overwrite to re-download existing tracks.
+    """
+    from core.audio.elevenlabs_music import generate_tracks
+
+    # Parse optional flags
+    source = None
+    overwrite = False
+    for arg in sys.argv[2:]:
+        if arg.startswith("--source="):
+            source = arg.split("=", 1)[1]
+        elif arg == "--overwrite":
+            overwrite = True
+
+    print("\n== Generate Background Audio ==\n")
+
+    if source:
+        print(f"Source: {source}")
+    else:
+        print("Auto-selecting best available source (Mixkit free tracks)")
+
+    tracks = generate_tracks(source=source, overwrite=overwrite)
+
+    if tracks:
+        print(f"\nDownloaded/generated {len(tracks)} audio tracks:")
+        for t in tracks:
+            size_kb = t.stat().st_size / 1024
+            print(f"  {t.name} ({size_kb:.0f} KB)")
+    else:
+        print("\nNo tracks generated. Check logs for errors.")
 
 
 def weekly_report():
@@ -142,15 +350,36 @@ def rate_card():
         print()
 
 
+def clear_content():
+    """Clear all generated content, images, posting logs, and verses."""
+    from database.session import get_db
+    from database.models import (
+        GeneratedContent, GeneratedImage, PostingLog,
+        BibleVerse, ContentCalendarSlot,
+    )
+
+    with get_db() as db:
+        logs = db.query(PostingLog).delete()
+        images = db.query(GeneratedImage).delete()
+        content = db.query(GeneratedContent).delete()
+        verses = db.query(BibleVerse).delete()
+        slots = db.query(ContentCalendarSlot).delete()
+
+        print(f"Cleared: {content} content, {images} images, {logs} posting logs, {verses} verses, {slots} calendar slots")
+
+
 COMMANDS = {
     "init-db": init_db,
     "seed": seed,
     "generate-verse": generate_verse,
     "generate-content": generate_content,
+    "generate-week": generate_week,
     "show-calendar": show_calendar,
-    "test-leonardo": test_leonardo,
+    "test-render": test_render,
+    "generate-audio": generate_audio,
     "weekly-report": weekly_report,
     "rate-card": rate_card,
+    "clear-content": clear_content,
 }
 
 

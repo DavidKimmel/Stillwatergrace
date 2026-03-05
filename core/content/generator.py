@@ -39,7 +39,7 @@ REQUIRED_KEYS = {
     "story_text", "reel_script_15", "reel_script_30",
     "hashtags_large", "hashtags_medium", "hashtags_niche",
     "pinterest_description", "facebook_variation",
-    "image_prompt_leonardo", "alt_text",
+    "image_prompt", "alt_text",
     "emotional_tone",
 }
 
@@ -110,6 +110,7 @@ class ContentGenerator:
             trending_topic=trending_topic,
             theme=theme,
             usage=usage,
+            scheduled_at=kwargs.get("scheduled_at"),
         )
 
         return content
@@ -138,6 +139,7 @@ class ContentGenerator:
             trending_topic=trending_topic,
             theme=theme,
             age_group=slot.get("age_group", "general"),
+            scheduled_at=slot.get("scheduled_at"),
         )
 
     def _build_prompt(
@@ -253,6 +255,7 @@ class ContentGenerator:
         trending_topic: str,
         theme: str,
         usage: Optional[dict],
+        scheduled_at: Optional[datetime] = None,
     ) -> GeneratedContent:
         """Validate and store generated content in the database."""
         # Handle viral format (returns array)
@@ -298,7 +301,8 @@ class ContentGenerator:
             hashtags_large=data.get("hashtags_large", []),
             hashtags_medium=data.get("hashtags_medium", []),
             hashtags_niche=data.get("hashtags_niche", []),
-            image_prompt=data.get("image_prompt_leonardo", ""),
+            image_prompt=data.get("image_prompt", ""),
+            scheduled_at=scheduled_at,
             status=ContentStatus.pending,
             model_used=usage.get("model", MODEL) if usage else MODEL,
             prompt_template_version=self.templates.version,
@@ -309,6 +313,13 @@ class ContentGenerator:
 
         self.db.add(content)
         self.db.flush()
+
+        # Auto-approve if enabled
+        if settings.auto_approve_content:
+            content.status = ContentStatus.approved
+            content.approved_at = datetime.utcnow()
+            self.db.flush()
+            logger.info(f"Auto-approved content #{content.id}")
 
         logger.info(
             f"Stored content #{content.id} ({content_type.value}) "

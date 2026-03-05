@@ -187,7 +187,7 @@ class GeneratedContent(Base):
     hashtags_niche = Column(JSON)  # 10 hashtags <100K
 
     # Image generation
-    image_prompt = Column(Text)  # Leonardo.ai prompt
+    image_prompt = Column(Text)  # Image search/description prompt
 
     # Workflow
     status = Column(SAEnum(ContentStatus), default=ContentStatus.pending, index=True)
