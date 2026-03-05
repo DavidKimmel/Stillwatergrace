@@ -170,3 +170,42 @@ def generate_weekly_report():
         except Exception as e:
             logger.error(f"Report generation error: {e}")
             return {"status": "error", "error": str(e)}
+
+
+@app.task
+def refresh_instagram_token_task():
+    """Check Instagram token health and refresh if needed.
+
+    Runs weekly. Refreshes if token has < 14 days remaining.
+    """
+    from core.config import settings
+
+    if not settings.has_instagram:
+        return {"status": "skipped", "reason": "Instagram not configured"}
+
+    logger.info("Checking Instagram token health...")
+
+    try:
+        from core.posting.instagram_client import check_token_health, refresh_instagram_token
+
+        health = check_token_health()
+        if not health.get("valid"):
+            logger.error("Instagram token is invalid!")
+            return {"status": "error", "health": health}
+
+        days = health.get("days_remaining", -1)
+
+        if days < 14:
+            logger.info(f"Token expires in {days} days, refreshing...")
+            new_token = refresh_instagram_token()
+            if new_token:
+                return {"status": "refreshed", "days_remaining_before": days}
+            else:
+                return {"status": "refresh_failed", "days_remaining": days}
+        else:
+            logger.info(f"Token healthy ({days} days remaining), no refresh needed")
+            return {"status": "healthy", "days_remaining": days}
+
+    except Exception as e:
+        logger.error(f"Token refresh task error: {e}")
+        return {"status": "error", "error": str(e)}

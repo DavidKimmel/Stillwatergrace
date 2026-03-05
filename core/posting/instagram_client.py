@@ -1,14 +1,16 @@
 """Instagram Graph API client for publishing content.
 
 Handles photo posts, carousel posts, and reels via the Instagram Graph API.
-Includes rate limiting, token management, and retry logic.
+Includes rate limiting, token management, retry logic, and token auto-refresh.
 
 Requires: instagram_content_publish, instagram_basic permissions.
 """
 
 import logging
+import re
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -18,6 +20,7 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 GRAPH_API_BASE = "https://graph.facebook.com/v19.0"
+ENV_FILE = Path(__file__).parent.parent.parent / ".env"
 
 # Rate limits
 MAX_POSTS_PER_DAY = 25
@@ -67,7 +70,10 @@ class InstagramClient:
         creation_id = container.get("id")
         logger.info(f"Created media container: {creation_id}")
 
-        # Step 2: Publish
+        # Step 2: Wait for processing (photos usually instant, but can take a few seconds)
+        self._wait_for_processing(creation_id, max_wait=60)
+
+        # Step 3: Publish
         result = self._publish_container(creation_id)
         self._daily_post_count += 1
 
@@ -123,13 +129,24 @@ class InstagramClient:
 
         return {"id": creation_id, "media_id": result.get("id")}
 
-    def publish_reel(self, video_url: str, caption: str, thumbnail_url: Optional[str] = None) -> dict:
+    def publish_reel(
+        self,
+        video_url: str,
+        caption: str,
+        thumb_offset_ms: Optional[int] = None,
+    ) -> dict:
         """Publish a reel (short video).
 
         Three-step process:
         1. Create video container
         2. Wait for video processing
         3. Publish
+
+        Args:
+            video_url: Public URL of the video.
+            caption: Post caption.
+            thumb_offset_ms: Thumbnail offset in milliseconds from start.
+                             If set, Instagram uses this frame as the cover image.
         """
         self._check_rate_limit()
 
@@ -139,8 +156,8 @@ class InstagramClient:
             "video_url": video_url,
             "caption": caption,
         }
-        if thumbnail_url:
-            params["thumb_offset"] = "0"
+        if thumb_offset_ms is not None:
+            params["thumb_offset"] = str(thumb_offset_ms)
 
         container = self._api_post(f"{self.account_id}/media", params=params)
         if not container:
@@ -286,3 +303,122 @@ class InstagramClient:
         except Exception as e:
             logger.error(f"Graph API GET failed: {e}")
             return None
+
+
+def refresh_instagram_token() -> Optional[str]:
+    """Exchange the current long-lived token for a new 60-day token.
+
+    Updates the .env file with the new token so it persists across restarts.
+    Returns the new token on success, None on failure.
+    """
+    if not settings.instagram_access_token:
+        logger.error("No Instagram access token to refresh")
+        return None
+
+    # Step 1: Exchange token via Graph API
+    url = f"{GRAPH_API_BASE}/oauth/access_token"
+    params = {
+        "grant_type": "fb_exchange_token",
+        "client_id": settings.meta_app_id,
+        "client_secret": settings.meta_app_secret,
+        "fb_exchange_token": settings.instagram_access_token,
+    }
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, params=params)
+            data = response.json()
+    except Exception as e:
+        logger.error(f"Token refresh request failed: {e}")
+        return None
+
+    if "error" in data:
+        logger.error(f"Token refresh error: {data['error'].get('message')}")
+        return None
+
+    new_token = data.get("access_token")
+    expires_in = data.get("expires_in", 0)  # seconds
+
+    if not new_token:
+        logger.error("No access_token in refresh response")
+        return None
+
+    expires_days = expires_in // 86400
+    logger.info(f"Got new Instagram token (expires in {expires_days} days)")
+
+    # Step 2: Update .env file
+    if _update_env_token(new_token):
+        logger.info("Updated .env with new Instagram token")
+    else:
+        logger.warning("Failed to update .env — token will be lost on restart")
+
+    # Step 3: Update the live settings object so the running process uses the new token
+    settings.instagram_access_token = new_token
+
+    return new_token
+
+
+def _update_env_token(new_token: str) -> bool:
+    """Replace INSTAGRAM_ACCESS_TOKEN in the .env file."""
+    try:
+        content = ENV_FILE.read_text(encoding="utf-8")
+        updated = re.sub(
+            r"^INSTAGRAM_ACCESS_TOKEN=.*$",
+            f"INSTAGRAM_ACCESS_TOKEN={new_token}",
+            content,
+            flags=re.MULTILINE,
+        )
+        if updated == content:
+            logger.warning("INSTAGRAM_ACCESS_TOKEN line not found in .env")
+            return False
+        ENV_FILE.write_text(updated, encoding="utf-8")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update .env file: {e}")
+        return False
+
+
+def check_token_health() -> dict:
+    """Check the current token's validity and expiration.
+
+    Returns dict with 'valid', 'expires_at', 'days_remaining'.
+    """
+    url = f"{GRAPH_API_BASE}/debug_token"
+    params = {
+        "input_token": settings.instagram_access_token,
+        "access_token": f"{settings.meta_app_id}|{settings.meta_app_secret}",
+    }
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            response = client.get(url, params=params)
+            data = response.json()
+    except Exception as e:
+        logger.error(f"Token health check failed: {e}")
+        return {"valid": False, "error": str(e)}
+
+    token_data = data.get("data", {})
+    is_valid = token_data.get("is_valid", False)
+    expires_at = token_data.get("expires_at", 0)
+
+    if expires_at:
+        expires_dt = datetime.utcfromtimestamp(expires_at)
+        days_remaining = (expires_dt - datetime.utcnow()).days
+    else:
+        expires_dt = None
+        days_remaining = -1
+
+    result = {
+        "valid": is_valid,
+        "expires_at": expires_dt.isoformat() if expires_dt else None,
+        "days_remaining": days_remaining,
+        "app_id": token_data.get("app_id"),
+        "scopes": token_data.get("scopes", []),
+    }
+
+    if days_remaining <= 7:
+        logger.warning(f"Instagram token expires in {days_remaining} days!")
+    else:
+        logger.info(f"Instagram token valid, {days_remaining} days remaining")
+
+    return result

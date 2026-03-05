@@ -8,10 +8,11 @@ Usage:
     python manage.py generate-week    Generate content for the full week (Mon-Sun)
     python manage.py show-calendar    Show this week's content calendar
     python manage.py test-render      Render 1 test reel + feed images (no posting/DB)
-    python manage.py generate-audio   Generate background music tracks (ElevenLabs or FFmpeg)
+    python manage.py generate-audio   Generate background music tracks (--ambient for sound effects)
     python manage.py weekly-report    Generate weekly report
     python manage.py rate-card        Show sponsorship rate card
     python manage.py clear-content    Clear all generated content from database
+    python manage.py purge-local      Delete local media files already uploaded to R2
 """
 
 import sys
@@ -296,17 +297,21 @@ def generate_audio():
 
     Pass --source=mixkit|elevenlabs|sine to force a specific source.
     Pass --overwrite to re-download existing tracks.
+    Pass --ambient to also generate ambient sound effects.
     """
     from core.audio.elevenlabs_music import generate_tracks
 
     # Parse optional flags
     source = None
     overwrite = False
+    gen_ambient = False
     for arg in sys.argv[2:]:
         if arg.startswith("--source="):
             source = arg.split("=", 1)[1]
         elif arg == "--overwrite":
             overwrite = True
+        elif arg == "--ambient":
+            gen_ambient = True
 
     print("\n== Generate Background Audio ==\n")
 
@@ -324,6 +329,18 @@ def generate_audio():
             print(f"  {t.name} ({size_kb:.0f} KB)")
     else:
         print("\nNo tracks generated. Check logs for errors.")
+
+    if gen_ambient:
+        from core.audio.elevenlabs_music import generate_ambient_sounds
+        print("\n== Generate Ambient Sound Effects ==\n")
+        ambient = generate_ambient_sounds(overwrite=overwrite)
+        if ambient:
+            print(f"\nGenerated {len(ambient)} ambient sounds:")
+            for a in ambient:
+                size_kb = a.stat().st_size / 1024
+                print(f"  {a.name} ({size_kb:.0f} KB)")
+        else:
+            print("No ambient sounds generated (requires ElevenLabs API key).")
 
 
 def weekly_report():
@@ -377,6 +394,93 @@ def clear_content():
         print(f"Cleared: {content} content, {images} images, {logs} posting logs, {verses} verses, {slots} calendar slots")
 
 
+def token_status():
+    """Check Instagram token health and optionally refresh."""
+    from core.posting.instagram_client import check_token_health, refresh_instagram_token
+
+    print("\nChecking Instagram token...")
+    health = check_token_health()
+
+    print(f"  Valid:          {health.get('valid')}")
+    print(f"  Expires at:     {health.get('expires_at', 'unknown')}")
+    print(f"  Days remaining: {health.get('days_remaining', 'unknown')}")
+    print(f"  Scopes:         {', '.join(health.get('scopes', []))}")
+
+    if len(sys.argv) > 2 and sys.argv[2] == "--refresh":
+        print("\nRefreshing token...")
+        new_token = refresh_instagram_token()
+        if new_token:
+            print(f"  New token: {new_token[:20]}...")
+            print("  .env updated successfully")
+        else:
+            print("  Refresh FAILED")
+    elif health.get("days_remaining", 0) < 14:
+        print(f"\n  Token expiring soon! Run: python manage.py token-status --refresh")
+
+
+def purge_local_media():
+    """Delete local image/video/narration files that have been uploaded to R2.
+
+    Keeps: audio music tracks (reused), test renders, files not yet on R2.
+    """
+    from pathlib import Path
+    from database.session import get_db
+    from database.models import GeneratedImage
+
+    raw_dir = Path("images/raw")
+    processed_dir = Path("images/processed")
+    narration_dir = Path("audio/narration")
+
+    deleted = 0
+    freed_bytes = 0
+
+    # Delete processed files that have R2 URLs (not file:// URLs)
+    with get_db() as db:
+        uploaded = (
+            db.query(GeneratedImage)
+            .filter(GeneratedImage.final_url.like("https://%"))
+            .all()
+        )
+        r2_content_ids = {img.content_id for img in uploaded}
+        print(f"Found {len(uploaded)} images/reels on R2 across {len(r2_content_ids)} content pieces")
+
+    # Clean processed files
+    if processed_dir.exists():
+        for f in processed_dir.iterdir():
+            if f.name.startswith("test_"):
+                continue  # Keep test renders
+            try:
+                # Extract content_id from filename like "29_feed_4x5.jpg"
+                content_id = int(f.stem.split("_")[0])
+                if content_id in r2_content_ids:
+                    size = f.stat().st_size
+                    f.unlink()
+                    deleted += 1
+                    freed_bytes += size
+            except (ValueError, IndexError):
+                continue
+
+    # Clean raw Unsplash downloads
+    if raw_dir.exists():
+        for f in raw_dir.iterdir():
+            size = f.stat().st_size
+            f.unlink()
+            deleted += 1
+            freed_bytes += size
+
+    # Clean narration cache
+    if narration_dir.exists():
+        for f in narration_dir.iterdir():
+            if f.suffix == ".mp3":
+                size = f.stat().st_size
+                f.unlink()
+                deleted += 1
+                freed_bytes += size
+
+    freed_mb = freed_bytes / (1024 * 1024)
+    print(f"\nDeleted {deleted} files, freed {freed_mb:.1f} MB")
+
+
 COMMANDS = {
     "init-db": init_db,
     "seed": seed,
@@ -389,6 +493,8 @@ COMMANDS = {
     "weekly-report": weekly_report,
     "rate-card": rate_card,
     "clear-content": clear_content,
+    "token-status": token_status,
+    "purge-local": purge_local_media,
 }
 
 

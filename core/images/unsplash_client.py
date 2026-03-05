@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://api.unsplash.com"
 IMAGES_RAW_DIR = Path(__file__).parent.parent.parent / "images" / "raw"
 
-# Search term mapping — multiple varied queries per content type to avoid repetition
+# Search term mapping — varied queries per content type for background variety
+# Multiple varied queries per content type + shared pool for maximum variety
 CONTENT_TYPE_KEYWORDS: dict[str, list[str]] = {
     "daily_verse": [
         "bible open book morning light",
@@ -25,20 +26,29 @@ CONTENT_TYPE_KEYWORDS: dict[str, list[str]] = {
         "sunrise meadow peaceful golden light",
         "calm lake reflection dawn",
         "old bible leather desk warm",
+        "autumn leaves open notebook",
+        "coffee cup bible morning window",
+        "vintage book candlelight warm",
     ],
     "marriage_monday": [
-        "couple hands wedding rings love",
-        "romantic sunset silhouette couple",
-        "two coffee cups cozy morning",
         "couple walking beach golden hour",
-        "intertwined hands gentle embrace",
+        "couple hands sunset romantic",
+        "two coffee cups cozy morning",
+        "sunset beach warm golden hour",
+        "cozy fireplace warm blanket evening",
+        "couple silhouette sunset",
+        "vintage love letters desk roses",
+        "romantic dinner candles evening",
     ],
     "parenting_wednesday": [
-        "parent child family hands",
+        "parent child walking nature sunset",
+        "family silhouette golden hour",
         "mother child garden sunlight",
         "father daughter walking park",
-        "family hands together unity",
-        "child playing field golden hour",
+        "tree growing strong sunlight",
+        "child running field golden hour",
+        "family beach sunset walking",
+        "seeds sprouting soil spring",
     ],
     "faith_friday": [
         "sunrise hope light clouds storm",
@@ -46,27 +56,39 @@ CONTENT_TYPE_KEYWORDS: dict[str, list[str]] = {
         "light breaking through dark clouds",
         "cross silhouette sunset dramatic sky",
         "path through forest morning light",
+        "lighthouse rocky coast stormy sea",
+        "rainbow after storm landscape",
+        "ancient stone church countryside",
     ],
     "encouragement": [
         "nature sunrise peaceful golden hour",
         "wildflowers meadow soft sunlight",
         "ocean waves gentle sunset calm",
-        "bird soaring blue sky freedom",
         "mountain vista panoramic golden light",
+        "river flowing through autumn forest",
+        "warm sunset clouds orange purple",
+        "lavender field soft golden light",
+        "misty morning forest rays",
     ],
     "prayer_prompt": [
-        "candle prayer hands peaceful",
+        "candle warm glow dark background",
         "quiet chapel soft window light",
-        "folded hands warm glow",
         "morning mist serene landscape",
         "candlelight reflection still water",
+        "incense smoke dark peaceful",
+        "old church stained glass window",
+        "sunrise through trees forest",
+        "still pond morning reflection",
     ],
     "gratitude": [
-        "sunset nature golden light thankful",
+        "sunset nature golden light",
         "harvest table warm autumn glow",
         "blooming garden morning dew",
         "golden wheat field sunset",
         "starry night clear sky wonder",
+        "autumn maple tree vibrant colors",
+        "sunflower field golden hour",
+        "fruit basket wooden table warm",
     ],
     "fill_in_blank": [
         "nature sky clouds scenic",
@@ -74,34 +96,49 @@ CONTENT_TYPE_KEYWORDS: dict[str, list[str]] = {
         "abstract nature light bokeh",
         "rolling hills green peaceful",
         "desert landscape vast open sky",
+        "sand dunes soft light",
+        "calm sea horizon pastel sky",
+        "simple stone texture natural",
     ],
     "this_or_that": [
         "coffee morning nature calm",
         "two paths fork road nature",
-        "contrasting colors nature vibrant",
-        "sunrise versus sunset sky",
-        "mountain versus ocean landscape",
+        "sunrise sky colorful dramatic",
+        "mountain ocean landscape scenic",
+        "forest trail morning light",
+        "tea cup rainy window cozy",
+        "desert oasis contrast landscape",
+        "winter frost morning ice",
     ],
     "conviction_quote": [
         "mountain landscape powerful nature",
-        "stormy sky dramatic lightning",
+        "stormy sky dramatic clouds",
         "lone tree standing strong wind",
         "rocky coastline crashing waves",
         "deep forest towering ancient trees",
+        "volcano dramatic sky powerful",
+        "thunderstorm dark sky dramatic",
+        "canyon deep dramatic landscape",
     ],
     "reel": [
         "cinematic landscape golden hour",
         "dramatic sky clouds colorful sunset",
-        "aerial view nature scenic sweeping",
         "misty mountain valley morning",
         "ocean horizon sunset cinematic",
+        "northern lights aurora landscape",
+        "waterfall forest dramatic scenic",
+        "desert sunset dramatic colors",
+        "snow mountain sunrise golden",
     ],
     "carousel": [
-        "nature collage scenic peaceful",
         "botanical garden flowers colorful",
         "seasonal landscape beautiful nature",
         "waterfall forest lush green",
         "autumn leaves colorful pathway",
+        "cherry blossom spring garden",
+        "tropical plants lush green",
+        "coastal cliff ocean view",
+        "meadow wildflowers summer",
     ],
 }
 
@@ -152,13 +189,15 @@ class UnsplashClient:
             queries = CONTENT_TYPE_KEYWORDS.get(content_type, _DEFAULT_QUERIES)
             query = random.choice(queries)
 
-        # Search
+        # Search — randomize page to get different results across runs
+        page = random.randint(1, 5)
         try:
             response = self.client.get(
                 f"{BASE_URL}/search/photos",
                 params={
                     "query": query,
                     "per_page": 15,
+                    "page": page,
                     "orientation": orientation,
                     "content_filter": "high",  # Safe content only
                 },
@@ -174,8 +213,18 @@ class UnsplashClient:
             logger.warning(f"No Unsplash results for query: {query}")
             return None
 
-        # Pick a random result instead of always the first
-        photo = random.choice(results)
+        # Filter out photos we've already downloaded to avoid repetition
+        used_ids = {
+            p.stem.replace("unsplash_", "")
+            for p in IMAGES_RAW_DIR.glob("unsplash_*.jpg")
+        }
+        fresh = [r for r in results if r["id"] not in used_ids]
+        pool = fresh if fresh else results  # fall back to all if everything used
+
+        # Pick a random result from the fresh pool
+        photo = random.choice(pool)
+        if photo["id"] in used_ids:
+            logger.info(f"All {len(results)} Unsplash results already used, reusing one")
         photo_id = photo["id"]
 
         # Use full-res for reel backgrounds (zoompan needs headroom), regular otherwise

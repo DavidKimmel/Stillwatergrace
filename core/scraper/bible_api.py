@@ -122,6 +122,15 @@ class BibleAPIClient:
         # Extract book/chapter/verse from reference
         book, chapter, verse_start, verse_end = self._parse_reference(ref)
 
+        # Check if canonical reference already exists (API may return different format)
+        existing = (
+            self.db.query(BibleVerse)
+            .filter(BibleVerse.reference == ref)
+            .first()
+        )
+        if existing:
+            return existing
+
         verse = BibleVerse(
             reference=ref,
             text=text,

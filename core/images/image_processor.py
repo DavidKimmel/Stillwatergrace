@@ -236,8 +236,35 @@ class ImagePipeline:
             except Exception as e:
                 logger.error(f"Reel generation failed for content #{content.id}: {e}")
 
+        # Clean up raw source image after all processing is done
+        if raw_path and settings.has_r2:
+            try:
+                Path(raw_path).unlink(missing_ok=True)
+                logger.info(f"Cleaned up raw image: {raw_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete raw image {raw_path}: {e}")
+
+        # Clean up narration cache for this content
+        if content.verse and content.verse.text:
+            self._cleanup_narration(content.id)
+
         self.db.flush()
         return images
+
+    @staticmethod
+    def _cleanup_narration(content_id: int) -> None:
+        """Delete narration MP3 cache files for a content piece after reel is rendered."""
+        narration_dir = Path(__file__).parent.parent.parent / "audio" / "narration"
+        if not narration_dir.exists():
+            return
+        for pattern in [f"narration_{content_id}.mp3", f"narration_{content_id}.fast.mp3"]:
+            path = narration_dir / pattern
+            if path.exists():
+                try:
+                    path.unlink()
+                    logger.info(f"Cleaned up narration: {path.name}")
+                except Exception as e:
+                    logger.warning(f"Could not delete {path}: {e}")
 
     def _process_image(
         self,
@@ -447,6 +474,14 @@ class ImagePipeline:
                 logger.warning(f"R2 URL missing https: {url}")
                 url = f"https://{url.lstrip('http://')}"
             logger.info(f"Uploaded to R2: {url}")
+
+            # Clean up local processed file after successful upload
+            try:
+                Path(local_path).unlink(missing_ok=True)
+                logger.info(f"Cleaned up local file: {local_path}")
+            except Exception as cleanup_err:
+                logger.warning(f"Could not delete local file {local_path}: {cleanup_err}")
+
             return url
 
         except Exception as e:
@@ -812,17 +847,19 @@ def _get_adaptive_font(text: str, max_width: int, start_size: int, min_size: int
 
 
 def _select_overlay_style(content_id: int, content_type: str, has_verse: bool = False) -> str:
-    """Select overlay style based on content type for feed variety."""
+    """Select overlay style based on content type for feed variety.
+
+    Primary style is bold_text (big ALL CAPS on dark wash) — most readable
+    and scroll-stopping at grid size. bible_page reserved for daily_verse
+    with full scripture text. dark_hero used as alternate for variety.
+    """
     if content_type == "daily_verse" and has_verse:
         return "bible_page"
     if content_type in ("viral_format", "reel_hook", "bold_statement"):
-        return "dark_hero"
-    if content_type in ("encouragement", "conviction_quote", "gratitude"):
         return "bold_text"
-    if content_type in ("marriage_monday", "parenting_wednesday", "faith_friday"):
-        return "bottom_band"
-    styles = ["dark_hero", "bottom_band", "center_box", "bold_text"]
-    return styles[content_id % 4]
+    # Alternate between bold_text and dark_hero for variety
+    styles = ["bold_text", "bold_text", "dark_hero"]
+    return styles[content_id % len(styles)]
 
 
 def _apply_feed_overlay(
@@ -885,10 +922,6 @@ def _overlay_dark_hero(img: Image.Image, text: str) -> Image.Image:
         canvas_width=w,
         line_spacing=line_spacing,
     )
-
-    # Gold ornament line below text
-    ornament_y = text_y + text_height + 30
-    _draw_ornament_line(draw, ornament_y, w, BRAND_COLORS["gold"], style="simple")
 
     # Watermark
     wm_font = get_body_font(18)

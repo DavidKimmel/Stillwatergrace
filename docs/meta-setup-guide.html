@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Meta Platform Setup Guide — StillWaterGrace</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
+h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 10px; }
+h2 { color: #2D4A3E; margin-top: 40px; }
+h3 { color: #555; }
+code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 6px; overflow-x: auto; }
+pre code { background: none; color: inherit; }
+.warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+.danger { background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+.success { background: #d4edda; border-left: 4px solid #28a745; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+th, td { border: 1px solid #ddd; padding: 10px 12px; text-align: left; }
+th { background: #2D4A3E; color: white; }
+tr:nth-child(even) { background: #f9f9f9; }
+ol li, ul li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+<h1>Meta Platform Setup Guide (Instagram + Facebook)</h1>
+<p>Step-by-step guide for connecting a new niche page to the StillWaterGrace platform.
+Covers Meta Developer App, Instagram API, Facebook Page API, and token generation.</p>
+
+<h2>Prerequisites</h2>
+<ul>
+<li>A Facebook account that owns/admins the page</li>
+<li>A Facebook Page (New Pages Experience is fine)</li>
+<li>An Instagram Professional account linked to the Facebook Page</li>
+<li>A Meta Business Portfolio containing the page</li>
+</ul>
+
+<h2>Critical Gotchas (Read First!)</h2>
+
+<div class="danger">
+<strong>1. Facebook Page IDs — TWO different IDs exist:</strong><br>
+New Pages Experience pages have a <strong>Profile ID</strong> (visible in the URL, e.g.,
+<code>facebook.com/profile.php?id=61552254632726</code>) and an <strong>API Page ID</strong>
+(found in Business Manager &gt; Settings &gt; Pages, e.g., <code>1071328066057500</code>).<br><br>
+<strong>These are completely different numbers.</strong> The profile ID will return
+"object does not exist" errors from the Graph API. Always use the API Page ID from Business Manager.
+</div>
+
+<div class="danger">
+<strong>2. Business Portfolio requirement:</strong><br>
+The page MUST be in a Meta Business Portfolio for the API to see it.
+Without this, <code>me/accounts</code> returns empty even with correct permissions.
+Go to <a href="https://business.facebook.com">business.facebook.com</a> and add the page
+to a Business Portfolio under Settings &gt; Accounts &gt; Pages.
+</div>
+
+<div class="warning">
+<strong>3. Token + Page selection:</strong><br>
+When generating tokens in Graph API Explorer, the Facebook authorization popup has a step
+to select which Pages to grant access to. Don't click through it quickly — make sure your page is checked.
+</div>
+
+<div class="warning">
+<strong>4. <code>me/accounts</code> returns empty — this almost always means:</strong><br>
+<ul>
+<li>Wrong token (missing <code>pages_show_list</code> permission)</li>
+<li>Page not in a Business Portfolio</li>
+<li>Page not selected during the authorization popup flow</li>
+</ul>
+</div>
+
+<h2>Step 1: Create the Meta Developer App</h2>
+<ol>
+<li>Go to <a href="https://developers.facebook.com/apps/">developers.facebook.com/apps</a></li>
+<li>Click "Create App" &gt; Business type</li>
+<li>Name it (e.g., "Still Water Grace")</li>
+<li>Link it to your Business Portfolio</li>
+</ol>
+
+<h2>Step 2: Add Use Cases &amp; Permissions</h2>
+
+<h3>Instagram API (for posting to Instagram)</h3>
+<p>This should be added by default. Customize the use case and ensure these permissions are added:</p>
+<ul>
+<li><code>instagram_basic</code></li>
+<li><code>instagram_content_publish</code></li>
+<li><code>instagram_manage_comments</code></li>
+<li><code>pages_show_list</code></li>
+<li><code>pages_read_engagement</code></li>
+</ul>
+
+<h3>Manage Everything on Your Page (for Facebook posting)</h3>
+<ol>
+<li>From Dashboard, click <strong>"Add use cases"</strong></li>
+<li>Filter by <strong>"Content management"</strong></li>
+<li>Select <strong>"Manage everything on your Page"</strong></li>
+<li>Click Save</li>
+<li>Then customize that use case and click <strong>+ Add</strong> on:
+  <ul><li><code>pages_manage_posts</code> — required for publishing to the page</li></ul>
+</li>
+</ol>
+
+<h2>Step 3: Find the Correct Facebook Page ID</h2>
+
+<div class="danger">
+<strong>THIS IS THE #1 SETUP MISTAKE. Do not skip this.</strong>
+</div>
+
+<ol>
+<li>Go to <a href="https://business.facebook.com">business.facebook.com</a></li>
+<li>Select your Business Portfolio</li>
+<li>Go to <strong>Settings</strong> (gear icon) &gt; Accounts &gt; <strong>Pages</strong></li>
+<li>Click your page</li>
+<li>The <strong>ID number shown next to the page name</strong> is the correct API Page ID</li>
+<li>It will be different from the number in your facebook.com/profile.php URL</li>
+</ol>
+
+<div class="warning">
+<strong>Example:</strong><br>
+URL shows: <code>facebook.com/profile.php?id=61552254632726</code> &larr; WRONG for API<br>
+Business Manager shows: <code>ID: 1071328066057500</code> &larr; CORRECT for API
+</div>
+
+<h2>Step 4: Find the Instagram Business Account ID</h2>
+<ol>
+<li>In the <a href="https://developers.facebook.com/tools/explorer/">Graph API Explorer</a></li>
+<li>Select your app, User Token</li>
+<li>Query: <code>GET /me/accounts?fields=id,name,instagram_business_account</code></li>
+<li>Find your page in the results</li>
+<li>The <code>instagram_business_account.id</code> is your <code>INSTAGRAM_BUSINESS_ACCOUNT_ID</code></li>
+</ol>
+
+<h2>Step 5: Generate Access Token</h2>
+<ol>
+<li>Go to <a href="https://developers.facebook.com/tools/explorer/">Graph API Explorer</a></li>
+<li>Select your app under "Meta App"</li>
+<li>Select "User Token" under "User or Page"</li>
+<li>Add all permissions from Step 2 in the Permissions section</li>
+<li>Click <strong>"Generate Access Token"</strong></li>
+<li><strong>In the popup</strong>: make sure to select your Page when asked</li>
+<li>Copy the short-lived token</li>
+</ol>
+
+<h2>Step 6: Exchange for Long-Lived Token</h2>
+<p>Short-lived tokens expire in ~1 hour. Exchange it:</p>
+<pre><code>curl "https://graph.facebook.com/v19.0/oauth/access_token?\
+grant_type=fb_exchange_token&amp;\
+client_id=YOUR_APP_ID&amp;\
+client_secret=YOUR_APP_SECRET&amp;\
+fb_exchange_token=YOUR_SHORT_LIVED_TOKEN"</code></pre>
+<p>The response contains a long-lived token (60 days or non-expiring).</p>
+<p>Or use the CLI if you already have a valid token: <code>python manage.py token-status --refresh</code></p>
+
+<h2>Step 7: Update .env</h2>
+<pre><code>META_APP_ID=your_app_id
+META_APP_SECRET=your_app_secret
+INSTAGRAM_ACCESS_TOKEN=your_long_lived_token
+INSTAGRAM_BUSINESS_ACCOUNT_ID=your_ig_business_account_id
+FACEBOOK_PAGE_ID=your_correct_api_page_id  # FROM BUSINESS MANAGER, NOT THE URL!</code></pre>
+
+<h2>Step 8: Verify</h2>
+<pre><code># Check token health
+docker compose exec api python manage.py token-status
+
+# Test Facebook connectivity
+docker compose exec api python -c "
+from core.posting.facebook_client import FacebookClient
+client = FacebookClient()
+print('Page token:', 'OK' if client.page_token != client.user_token else 'FAILED')
+"
+
+# Test Instagram connectivity
+docker compose exec api python -c "
+from core.posting.instagram_client import InstagramClient
+client = InstagramClient()
+print('Instagram client: OK')
+"</code></pre>
+
+<h2>Token Auto-Refresh</h2>
+<ul>
+<li>Celery beat task runs every Wednesday at 3 AM EST</li>
+<li>Refreshes if token has &lt; 14 days remaining</li>
+<li>Updates <code>.env</code> file automatically</li>
+<li>Manual check: <code>python manage.py token-status</code></li>
+<li>Manual refresh: <code>python manage.py token-status --refresh</code></li>
+</ul>
+
+<h2>Troubleshooting</h2>
+<table>
+<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td><code>me/accounts</code> returns empty</td><td>Page not in Business Portfolio</td><td>Add page in business.facebook.com &gt; Settings &gt; Pages</td></tr>
+<tr><td>"Object does not exist" on Page ID</td><td>Using profile ID instead of API Page ID</td><td>Get correct ID from Business Manager &gt; Pages</td></tr>
+<tr><td>Token missing permissions</td><td>Didn't select page in auth popup</td><td>Re-generate token, watch for page selection step</td></tr>
+<tr><td>"Unsupported get request"</td><td>Wrong Page ID or missing permissions</td><td>Verify Page ID from Business Manager</td></tr>
+<tr><td>Facebook post fails, Instagram works</td><td>Missing <code>pages_manage_posts</code></td><td>Add "Manage everything on your Page" use case</td></tr>
+<tr><td>Page token falls back to user token</td><td>Page not linked in Business Portfolio</td><td>Add page to Business Portfolio, re-authorize token</td></tr>
+</table>
+
+<h2>Full Permission Checklist</h2>
+<table>
+<tr><th>Permission</th><th>Use Case</th><th>Required For</th></tr>
+<tr><td><code>instagram_basic</code></td><td>Instagram API</td><td>Read IG account info</td></tr>
+<tr><td><code>instagram_content_publish</code></td><td>Instagram API</td><td>Post photos, reels, carousels</td></tr>
+<tr><td><code>instagram_manage_comments</code></td><td>Instagram API</td><td>Read/reply to comments</td></tr>
+<tr><td><code>instagram_manage_messages</code></td><td>Instagram API</td><td>DM management (optional)</td></tr>
+<tr><td><code>pages_show_list</code></td><td>Instagram API</td><td>List pages for token exchange</td></tr>
+<tr><td><code>pages_read_engagement</code></td><td>Instagram API</td><td>Read page insights</td></tr>
+<tr><td><code>pages_manage_posts</code></td><td>Manage Pages</td><td>Publish to Facebook Page</td></tr>
+<tr><td><code>public_profile</code></td><td>Auto-granted</td><td>Basic profile access</td></tr>
+</table>
+
+</body>
+</html>

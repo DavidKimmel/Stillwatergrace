@@ -1,29 +1,38 @@
-Generate 5 high-engagement post concepts for the StillWaterGrace Instagram page.
+Generate a high-engagement {{ format_name }} post for the StillWaterGrace Instagram page (faith & family audience).
 
 {% if trending_topic %}Current trending topic: {{ trending_topic }}{% endif %}
 
-Create one of each format:
+{% if format_name == "fill_in_blank" %}
+FORMAT: Fill-in-the-blank — a statement like "I know God is faithful when ___" that drives comments.
+{% elif format_name == "this_or_that" %}
+FORMAT: This-or-That — a simple faith/family choice that sparks friendly debate (e.g., "Morning devotions or evening devotions?").
+{% elif format_name == "conviction_quote" %}
+FORMAT: Conviction Quote — a bold, shareable one-liner that makes believers nod.
+{% elif format_name == "parenting_list" %}
+FORMAT: Parenting List — "5 things Christian parents can say instead of..." or similar list format.
+{% elif format_name == "marriage_challenge" %}
+FORMAT: Marriage Challenge — a 7-day marriage challenge with daily micro-actions.
+{% endif %}
 
-1. FILL_IN_THE_BLANK: A statement like "I know God is faithful when ___" that drives comments
-2. THIS_OR_THAT: A simple faith/family choice that sparks friendly debate (e.g., "Morning devotions or evening devotions?")
-3. CONVICTION_QUOTE: A bold, shareable one-liner that makes believers nod
-4. PARENTING_LIST: "5 things Christian parents can say instead of..." or similar list format
-5. MARRIAGE_CHALLENGE: A 7-day marriage challenge with daily micro-actions
+Generate a JSON object with these fields:
 
-For each, generate a JSON object in an array:
+{
+  "hook": "First line of caption — must stop the scroll, max 10 words, no emoji at start",
+  "caption_short": "Under 150 characters, punchy, shareable",
+  "caption_medium": "150-300 characters, adds one practical insight",
+  "caption_long": "300-500 characters, mini devotional connecting to real family/marriage life. End with an engagement CTA like: Type 'Amen' / Share with someone who needs this / Save for later / Drop your answer below",
+  "story_text": "Overlay text for Instagram story, max 3 lines, large font friendly",
+  "reel_script_15": "15-second spoken script, warm and direct",
+  "reel_script_30": "30-second spoken script with a hook, point, and call to action",
+  "hashtags_large": ["10 hashtags over 1M posts"],
+  "hashtags_medium": ["10 hashtags 100K-1M posts"],
+  "hashtags_niche": ["10 hashtags under 100K posts"],
+  "pinterest_description": "150 words, keyword rich, search optimized",
+  "facebook_variation": "Conversational, slightly longer, ends with a question to drive comments",
+  "image_prompt": "Detailed image description prompt following the image style guidelines",
+  "alt_text": "Accessibility description of the ideal image",
+  "content_series_fit": "Does this fit into a weekly series? Suggest which one and why",
+  "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
+}
 
-[
-  {
-    "format": "fill_in_blank",
-    "hook": "Max 10 words, scroll-stopping",
-    "caption_medium": "150-300 characters",
-    "caption_long": "300-500 characters with context. End with an engagement CTA like: Type 'Amen' / Share with someone who needs this / Save for later / Drop your answer below",
-    "hashtags_large": ["10 hashtags"],
-    "hashtags_medium": ["10 hashtags"],
-    "hashtags_niche": ["10 hashtags"],
-    "image_prompt": "Image prompt for this specific post",
-    "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
-  }
-]
-
-Output ONLY a valid JSON array of 5 objects.
+Output ONLY valid JSON. No explanation text before or after.

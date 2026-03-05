@@ -69,7 +69,6 @@ def post_scheduled_content(self, time_slot: str):
                 result = _post_to_instagram(db, content)
                 results.append(result)
             else:
-                # Log as mock post in development
                 log = PostingLog(
                     content_id=content.id,
                     platform=Platform.instagram,
@@ -81,6 +80,11 @@ def post_scheduled_content(self, time_slot: str):
                 db.add(log)
                 logger.info(f"[MOCK] Would post content #{content.id} to Instagram")
                 results.append({"content_id": content.id, "platform": "instagram", "status": "mock"})
+
+            # Cross-post to Facebook
+            if settings.has_facebook:
+                fb_result = _post_to_facebook(db, content)
+                results.append(fb_result)
 
             # Mark content as posted
             content.status = ContentStatus.posted
@@ -166,15 +170,60 @@ def _post_to_instagram(db, content):
         return {"content_id": content.id, "platform": "instagram", "status": "failed", "error": str(e)}
 
 
+def _get_reel_thumb_offset(video_url: str) -> int:
+    """Calculate thumb_offset_ms to show the full-verse frame as thumbnail.
+
+    The full verse is displayed near the end of the reel, during the "final hold"
+    phase where all lines are visible. We probe the video duration and target
+    4 seconds before the end.
+
+    Returns offset in milliseconds.
+    """
+    import subprocess
+    import shutil
+
+    duration_s = None
+
+    # Try ffprobe on the URL (works for both local and R2 URLs)
+    if shutil.which("ffprobe"):
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    video_url,
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            duration_s = float(result.stdout.strip())
+        except Exception:
+            pass
+
+    if duration_s and duration_s > 6:
+        # Target 4 seconds before end (in the "full verse" final hold phase)
+        offset_s = max(1.0, duration_s - 4.0)
+        return int(offset_s * 1000)
+
+    # Fallback: 10 seconds (works for typical 14-25s reels)
+    return 10_000
+
+
 def _publish_reel(db, client, content, reel):
     """Publish a reel to Instagram."""
     from database.models import PostingLog, PostingStatus, Platform
 
     caption = _build_caption(content)
 
+    # Set thumbnail to the full-verse frame (near end of reel)
+    # Reels are typically 15-25s; the full verse is visible ~4s before end.
+    # thumb_offset in ms — we aim for 75% through the video.
+    thumb_offset_ms = _get_reel_thumb_offset(reel.final_url)
+
     result = client.publish_reel(
         video_url=reel.final_url,
         caption=caption,
+        thumb_offset_ms=thumb_offset_ms,
     )
 
     log = PostingLog(
@@ -192,6 +241,83 @@ def _publish_reel(db, client, content, reel):
 
     logger.info(f"Successfully posted content #{content.id} as reel to Instagram")
     return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "reel"}
+
+
+def _post_to_facebook(db, content):
+    """Cross-post a content piece to Facebook Page."""
+    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
+
+    logger.info(f"Cross-posting content #{content.id} to Facebook...")
+
+    try:
+        from core.posting.facebook_client import FacebookClient
+        client = FacebookClient()
+
+        # Use Facebook-adapted caption (more conversational)
+        caption = _build_facebook_caption(content)
+
+        # Check for reel/video first
+        reel = (
+            db.query(GeneratedImage)
+            .filter(
+                GeneratedImage.content_id == content.id,
+                GeneratedImage.format == ImageFormat.reel_9x16,
+            )
+            .first()
+        )
+
+        if reel and reel.final_url:
+            result = client.publish_video(
+                video_url=reel.final_url,
+                caption=caption,
+            )
+        else:
+            # Fall back to photo
+            image = (
+                db.query(GeneratedImage)
+                .filter(
+                    GeneratedImage.content_id == content.id,
+                    GeneratedImage.format == ImageFormat.feed_4x5,
+                )
+                .first()
+            )
+            if not image or not image.final_url:
+                raise ValueError(f"No image found for content #{content.id}")
+            result = client.publish_photo(
+                image_url=image.final_url,
+                caption=caption,
+            )
+
+        if not result:
+            raise RuntimeError("Facebook API returned no result")
+
+        log = PostingLog(
+            content_id=content.id,
+            platform=Platform.facebook,
+            platform_post_id=str(result.get("id", "")),
+            status=PostingStatus.success,
+            caption_used=caption,
+            posted_at=datetime.utcnow(),
+            scheduled_for=content.scheduled_at,
+        )
+        db.add(log)
+
+        logger.info(f"Successfully cross-posted content #{content.id} to Facebook")
+        return {"content_id": content.id, "platform": "facebook", "status": "success"}
+
+    except Exception as e:
+        logger.error(f"Facebook cross-post failed for #{content.id}: {e}")
+
+        log = PostingLog(
+            content_id=content.id,
+            platform=Platform.facebook,
+            status=PostingStatus.failed,
+            error_message=str(e),
+            scheduled_for=content.scheduled_at,
+        )
+        db.add(log)
+
+        return {"content_id": content.id, "platform": "facebook", "status": "failed", "error": str(e)}
 
 
 # Engagement CTAs — appended to captions that don't already contain one
@@ -249,3 +375,30 @@ def _get_hashtags(content) -> list[str]:
         if tag_list:
             hashtags.extend(tag_list[:5])
     return hashtags
+
+
+def _build_facebook_caption(content) -> str:
+    """Build a Facebook-optimized caption.
+
+    Uses the facebook_variation field (more conversational, ends with a question).
+    Fewer hashtags than Instagram — Facebook penalizes hashtag spam.
+    """
+    # Prefer Facebook-specific variation, fall back to regular caption
+    caption = content.facebook_variation or content.caption_long or content.caption_medium or ""
+
+    # Include verse if available
+    if content.verse and content.verse.text:
+        verse_ref = content.verse.reference or ""
+        if verse_ref not in caption:
+            caption += f'\n\n"{content.verse.text}" — {verse_ref}'
+
+    # Facebook: only 3-5 hashtags max (algorithm prefers fewer)
+    hashtags = []
+    if content.hashtags_large:
+        hashtags.extend(content.hashtags_large[:2])
+    if content.hashtags_niche:
+        hashtags.extend(content.hashtags_niche[:2])
+    if hashtags:
+        caption += "\n\n" + " ".join(hashtags)
+
+    return caption

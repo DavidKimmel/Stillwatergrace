@@ -104,10 +104,15 @@ class PromptTemplateEngine:
             trending_topic=trending_topic,
         )
 
-    def render_viral_formats(self, trending_topic: str = "") -> str:
-        """Render the viral formats generation prompt."""
+    def render_viral_formats(
+        self,
+        format_name: str = "fill_in_blank",
+        trending_topic: str = "",
+    ) -> str:
+        """Render the viral formats generation prompt for a single format."""
         return self.render(
             "viral_formats",
+            format_name=format_name,
             trending_topic=trending_topic,
         )
 

@@ -41,12 +41,45 @@ REEL_H = 1920
 FPS = 30
 
 # Timing (in seconds) — targeting 12-15s total reel length
+# These are defaults; actual values come from the selected reel style
 INTRO_HOLD = 1.8        # Show background only (let viewer settle in)
 CARD_FADE_FRAMES = 10    # Card fade-in frames
 LINE_REVEAL_HOLD = 1.6   # How long each line stays before next appears
 FINAL_HOLD = 3.5         # Hold full verse at end (time to read/absorb)
 OUTRO_HOLD = 1.0         # Brief hold before end
 MAX_REEL_SECONDS = 30.0  # Hard cap — Instagram reels should stay concise
+
+# Reel presentation styles — rotated by content_id for feed variety
+REEL_STYLES = {
+    "classic": {
+        # Original: intro hold → card fade → line-by-line reveal
+        "intro_hold": 1.8,
+        "card_fade_frames": 10,
+        "line_reveal_hold": 1.6,
+        "final_hold": 3.5,
+        "outro_hold": 1.0,
+        "reveal_mode": "line_by_line",
+    },
+    "quick": {
+        # Fast start: short intro → quick fade → all text at once
+        "intro_hold": 0.6,
+        "card_fade_frames": 6,
+        "line_reveal_hold": 0.0,  # all lines appear together
+        "final_hold": 5.0,
+        "outro_hold": 1.0,
+        "reveal_mode": "all_at_once",
+    },
+    "cinematic": {
+        # Slow build: long scenic intro → gradual card → line-by-line
+        "intro_hold": 3.0,
+        "card_fade_frames": 15,
+        "line_reveal_hold": 1.4,
+        "final_hold": 3.0,
+        "outro_hold": 1.5,
+        "reveal_mode": "line_by_line",
+    },
+}
+REEL_STYLE_ORDER = ["classic", "quick", "cinematic"]
 
 # Ken Burns minimum source image size (zoompan needs headroom)
 KEN_BURNS_MIN_WIDTH = 1728
@@ -82,6 +115,11 @@ def generate_reel(
     except Exception as e:
         logger.error(f"Failed to open background image: {e}")
         return None
+
+    # Select reel presentation style based on content_id for variety
+    style_name = REEL_STYLE_ORDER[content_id % len(REEL_STYLE_ORDER)]
+    style = REEL_STYLES[style_name]
+    logger.info(f"Reel style: {style_name} for content #{content_id}")
 
     # Normalize verse text
     verse_text = " ".join(verse_text.split())
@@ -157,12 +195,22 @@ def generate_reel(
     if total_verse_h < remaining:
         text_y_offset += (remaining - total_verse_h) // 2
 
-    # Calculate total frame count for motion background duration
-    intro_frames = int(INTRO_HOLD * FPS)
-    line_reveal_frames = len(verse_lines) * int(LINE_REVEAL_HOLD * FPS)
-    final_frames = int(FINAL_HOLD * FPS)
-    outro_frames = int(OUTRO_HOLD * FPS)
-    total_frames = intro_frames + CARD_FADE_FRAMES + line_reveal_frames + final_frames + outro_frames
+    # Calculate total frame count using selected style's timing
+    s_intro = style["intro_hold"]
+    s_card_fade = style["card_fade_frames"]
+    s_line_reveal = style["line_reveal_hold"]
+    s_final = style["final_hold"]
+    s_outro = style["outro_hold"]
+    reveal_mode = style["reveal_mode"]
+
+    intro_frames = int(s_intro * FPS)
+    if reveal_mode == "all_at_once":
+        line_reveal_frames = 0  # all lines shown together during final_hold
+    else:
+        line_reveal_frames = len(verse_lines) * int(s_line_reveal * FPS)
+    final_frames = int(s_final * FPS)
+    outro_frames = int(s_outro * FPS)
+    total_frames = intro_frames + s_card_fade + line_reveal_frames + final_frames + outro_frames
     total_seconds = total_frames / FPS
 
     # Determine motion style
@@ -182,9 +230,9 @@ def generate_reel(
         logger.warning(f"Narration generation failed: {e}")
 
     # Extend video if narration is longer than visual timing (capped at MAX_REEL_SECONDS)
-    # If narration still doesn't fit after extension, speed it up with atempo
+    # If narration still doesn't fit after extension, drop it (no speedup — sounds unnatural)
     if narration_path and narration_path.exists():
-        narration_delay = INTRO_HOLD + (CARD_FADE_FRAMES / FPS) + 0.3
+        narration_delay = s_intro + (s_card_fade / FPS) + 0.3
         narration_dur = _get_audio_duration(narration_path)
         if narration_dur:
             narration_end = narration_delay + narration_dur + 1.5  # 1.5s breathing room
@@ -201,23 +249,47 @@ def generate_reel(
                     total_seconds = total_frames / FPS
 
             # After extension, check if narration still overruns the video
-            available_time = total_seconds - narration_delay - 1.5  # leave 1.5s tail room
-            if narration_dur > available_time and available_time > 0:
-                speed = narration_dur / available_time
-                if speed <= 1.02:  # within 2% — close enough, no speedup needed
-                    pass
-                elif speed <= 2.0:  # cap at 2x — beyond that sounds unnatural
-                    logger.info(
-                        f"Speeding up narration {speed:.2f}x to fit "
-                        f"({narration_dur:.1f}s -> {available_time:.1f}s)"
-                    )
-                    narration_path = _speed_up_audio(narration_path, speed)
-                else:
+            available_time = total_seconds - narration_delay - 1.5
+            if narration_dur > available_time + 0.5:  # 0.5s tolerance
+                # Try regenerating narration at higher speed (native ElevenLabs, sounds natural)
+                needed_speed = narration_dur / max(available_time, 1.0)
+                if needed_speed <= 1.8:  # Only speed up moderately
+                    try:
+                        from core.audio.elevenlabs_music import generate_narration_at_speed
+                        fast_path = generate_narration_at_speed(
+                            verse_text=verse_text,
+                            verse_ref=verse_ref,
+                            content_id=content_id,
+                            speed=needed_speed,
+                        )
+                        if fast_path and fast_path.exists():
+                            fast_dur = _get_audio_duration(fast_path)
+                            if fast_dur and fast_dur <= available_time + 0.5:
+                                narration_path = fast_path
+                                narration_dur = fast_dur
+                                logger.info(
+                                    f"Using {needed_speed:.2f}x speed narration "
+                                    f"({fast_dur:.1f}s fits in {available_time:.1f}s)"
+                                )
+                            else:
+                                logger.warning("Speed-adjusted narration still too long")
+                    except Exception as e:
+                        logger.warning(f"Native speed narration failed: {e}")
+
+                # If still too long after speed attempt, drop narration
+                if narration_dur > available_time + 0.5:
                     logger.warning(
                         f"Narration too long ({narration_dur:.1f}s) for {available_time:.1f}s "
-                        f"available — would need {speed:.1f}x speedup, skipping narration"
+                        f"available — dropping narration, shortening reel to ~15s"
                     )
                     narration_path = None
+                    target_seconds = 15.0
+                    target_frames = int(target_seconds * FPS)
+                    if total_frames > target_frames:
+                        overshoot = total_frames - target_frames
+                        final_frames = max(int(2.0 * FPS), final_frames - overshoot)
+                        total_frames = intro_frames + CARD_FADE_FRAMES + line_reveal_frames + final_frames + outro_frames
+                        total_seconds = total_frames / FPS
 
     # ── Render to temp directory ──
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -248,9 +320,14 @@ def generate_reel(
                 text_y_offset=text_y_offset,
                 line_h=line_h,
                 intro_frames=intro_frames,
+                card_fade_frames=s_card_fade,
+                line_reveal_hold=s_line_reveal,
                 final_frames=final_frames,
                 outro_frames=outro_frames,
+                reveal_mode=reveal_mode,
                 narration_path=narration_path,
+                content_type=content_type,
+                content_id=content_id,
             )
         else:
             result = _generate_static(
@@ -273,14 +350,22 @@ def generate_reel(
                 text_x=text_x,
                 text_y_offset=text_y_offset,
                 line_h=line_h,
+                intro_hold=s_intro,
+                card_fade_frames=s_card_fade,
+                line_reveal_hold=s_line_reveal,
+                final_hold=s_final,
+                outro_hold=s_outro,
+                reveal_mode=reveal_mode,
                 narration_path=narration_path,
+                content_type=content_type,
+                content_id=content_id,
             )
 
         if result:
             logger.info(
                 f"Reel generated: {output_path} "
                 f"({total_frames} frames, {total_seconds:.1f}s, {len(verse_lines)} lines, "
-                f"motion={'ken_burns' if use_ken_burns else 'static'})"
+                f"style={style_name}, motion={'ken_burns' if use_ken_burns else 'static'})"
             )
         return result
 
@@ -307,9 +392,14 @@ def _generate_two_pass(
     text_y_offset: int,
     line_h: int,
     intro_frames: int,
-    final_frames: int,
-    outro_frames: int,
+    card_fade_frames: int = CARD_FADE_FRAMES,
+    line_reveal_hold: float = LINE_REVEAL_HOLD,
+    final_frames: int = int(FINAL_HOLD * FPS),
+    outro_frames: int = int(OUTRO_HOLD * FPS),
+    reveal_mode: str = "line_by_line",
     narration_path: Optional[Path] = None,
+    content_type: str = "",
+    content_id: int = 0,
 ) -> Optional[str]:
     """Two-pass Ken Burns approach: zoompan background + transparent card overlay."""
 
@@ -365,9 +455,11 @@ def _generate_two_pass(
         dark_overlay.save(str(path), "PNG")
         frame_num += 1
 
-    # Phase 2: Card fade-in (8 frames)
-    for fade_i in range(CARD_FADE_FRAMES):
-        alpha = int((fade_i + 1) / CARD_FADE_FRAMES * 248)
+    # Phase 2: Card fade-in
+    for fade_i in range(card_fade_frames):
+        alpha = int((fade_i + 1) / card_fade_frames * 248)
+        # For "all_at_once" show all lines as card fades in
+        vis = len(verse_lines) if reveal_mode == "all_at_once" else 0
         frame = _render_card_frame(
             bg=None, transparent_bg=True,
             card_alpha=alpha,
@@ -379,7 +471,7 @@ def _generate_two_pass(
             sep_y_offset=sep_y_offset,
             card_padding_x=card_padding_x,
             wm_font=wm_font,
-            visible_lines=0,
+            visible_lines=vis,
             verse_lines=verse_lines,
             verse_font=verse_font,
             verse_num_font=verse_num_font,
@@ -392,49 +484,71 @@ def _generate_two_pass(
         frame.save(str(path), "PNG")
         frame_num += 1
 
-    # Phase 3: Line-by-line reveal
-    for line_idx in range(1, len(verse_lines) + 1):
-        hold_frames = int(LINE_REVEAL_HOLD * FPS)
-        frame = _render_card_frame(
-            bg=None, transparent_bg=True,
-            card_alpha=248,
-            card_x=card_x, card_y=card_y,
-            card_w=card_w, card_h=card_h,
-            header_text=header_text,
-            header_font=header_font,
-            header_y_offset=header_y_offset,
-            sep_y_offset=sep_y_offset,
-            card_padding_x=card_padding_x,
-            wm_font=wm_font,
-            visible_lines=line_idx,
-            verse_lines=verse_lines,
-            verse_font=verse_font,
-            verse_num_font=verse_num_font,
-            verse_num_text=verse_num_text,
-            text_x=text_x,
-            text_y_offset=text_y_offset,
-            line_h=line_h,
-        )
-        for _ in range(hold_frames):
-            path = tmpdir / f"overlay_{frame_num:05d}.png"
-            frame.save(str(path), "PNG")
-            frame_num += 1
+    # Phase 3: Line-by-line reveal (skipped for "all_at_once")
+    if reveal_mode == "line_by_line":
+        for line_idx in range(1, len(verse_lines) + 1):
+            hold_frames = int(line_reveal_hold * FPS)
+            frame = _render_card_frame(
+                bg=None, transparent_bg=True,
+                card_alpha=248,
+                card_x=card_x, card_y=card_y,
+                card_w=card_w, card_h=card_h,
+                header_text=header_text,
+                header_font=header_font,
+                header_y_offset=header_y_offset,
+                sep_y_offset=sep_y_offset,
+                card_padding_x=card_padding_x,
+                wm_font=wm_font,
+                visible_lines=line_idx,
+                verse_lines=verse_lines,
+                verse_font=verse_font,
+                verse_num_font=verse_num_font,
+                verse_num_text=verse_num_text,
+                text_x=text_x,
+                text_y_offset=text_y_offset,
+                line_h=line_h,
+            )
+            for _ in range(hold_frames):
+                path = tmpdir / f"overlay_{frame_num:05d}.png"
+                frame.save(str(path), "PNG")
+                frame_num += 1
 
     # Phase 4: Final hold — all lines visible
+    full_card = _render_card_frame(
+        bg=None, transparent_bg=True,
+        card_alpha=248,
+        card_x=card_x, card_y=card_y,
+        card_w=card_w, card_h=card_h,
+        header_text=header_text,
+        header_font=header_font,
+        header_y_offset=header_y_offset,
+        sep_y_offset=sep_y_offset,
+        card_padding_x=card_padding_x,
+        wm_font=wm_font,
+        visible_lines=len(verse_lines),
+        verse_lines=verse_lines,
+        verse_font=verse_font,
+        verse_num_font=verse_num_font,
+        verse_num_text=verse_num_text,
+        text_x=text_x,
+        text_y_offset=text_y_offset,
+        line_h=line_h,
+    )
     for _ in range(final_frames):
         path = tmpdir / f"overlay_{frame_num:05d}.png"
-        frame.save(str(path), "PNG")
+        full_card.save(str(path), "PNG")
         frame_num += 1
 
     # Phase 5: Brief outro
     for _ in range(outro_frames):
         path = tmpdir / f"overlay_{frame_num:05d}.png"
-        frame.save(str(path), "PNG")
+        full_card.save(str(path), "PNG")
         frame_num += 1
 
     # ── Pass 2: Composite overlay onto motion background + audio ──
-    audio_track, audio_start = _select_audio_track()
-    narration_delay = INTRO_HOLD + (CARD_FADE_FRAMES / FPS) + 0.3  # Start after card appears
+    audio_track, audio_start = _select_audio_track(content_type, content_id)
+    ambient_sound = _select_ambient_sound(content_type, content_id)
+    narration_delay = (intro_frames / FPS) + (card_fade_frames / FPS) + 0.3  # Start after card appears
 
     cmd = _build_composite_cmd(
         video_path=str(bg_motion_path),
@@ -446,12 +560,15 @@ def _generate_two_pass(
         narration_path=narration_path,
         narration_delay=narration_delay,
         use_shortest=True,
+        ambient_path=ambient_sound,
     )
     audio_desc = []
     if audio_track:
         audio_desc.append(f"music: {audio_track.name} (seek {audio_start:.1f}s)")
     if narration_path:
         audio_desc.append(f"narration: {narration_path.name} (delay {narration_delay:.1f}s)")
+    if ambient_sound:
+        audio_desc.append(f"ambient: {ambient_sound.name}")
     logger.info(f"Compositing Ken Burns + overlay + {', '.join(audio_desc) or 'no audio'}")
 
     try:
@@ -489,7 +606,15 @@ def _generate_static(
     text_x: int,
     text_y_offset: int,
     line_h: int,
+    intro_hold: float = INTRO_HOLD,
+    card_fade_frames: int = CARD_FADE_FRAMES,
+    line_reveal_hold: float = LINE_REVEAL_HOLD,
+    final_hold: float = FINAL_HOLD,
+    outro_hold: float = OUTRO_HOLD,
+    reveal_mode: str = "line_by_line",
     narration_path: Optional[Path] = None,
+    content_type: str = "",
+    content_id: int = 0,
 ) -> Optional[str]:
     """Original static-background approach: PIL renders full frames as JPGs."""
 
@@ -499,16 +624,17 @@ def _generate_static(
     frame_num = 0
 
     # Phase 1: Intro — background only with slight darken
-    intro_frames = int(INTRO_HOLD * FPS)
+    intro_frames = int(intro_hold * FPS)
     darkened_bg = _darken_bg(bg)
     for _ in range(intro_frames):
         path = tmpdir / f"frame_{frame_num:05d}.jpg"
         darkened_bg.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
-    # Phase 2: Card fade-in (8 frames)
-    for fade_i in range(CARD_FADE_FRAMES):
-        alpha = int((fade_i + 1) / CARD_FADE_FRAMES * 248)
+    # Phase 2: Card fade-in
+    for fade_i in range(card_fade_frames):
+        alpha = int((fade_i + 1) / card_fade_frames * 248)
+        vis = len(verse_lines) if reveal_mode == "all_at_once" else 0
         frame = _render_card_frame(
             bg=bg, transparent_bg=False,
             card_alpha=alpha,
@@ -520,7 +646,7 @@ def _generate_static(
             sep_y_offset=sep_y_offset,
             card_padding_x=card_padding_x,
             wm_font=wm_font,
-            visible_lines=0,
+            visible_lines=vis,
             verse_lines=verse_lines,
             verse_font=verse_font,
             verse_num_font=verse_num_font,
@@ -533,51 +659,73 @@ def _generate_static(
         frame.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
-    # Phase 3: Line-by-line reveal
-    for line_idx in range(1, len(verse_lines) + 1):
-        hold_frames = int(LINE_REVEAL_HOLD * FPS)
-        frame = _render_card_frame(
-            bg=bg, transparent_bg=False,
-            card_alpha=248,
-            card_x=card_x, card_y=card_y,
-            card_w=card_w, card_h=card_h,
-            header_text=header_text,
-            header_font=header_font,
-            header_y_offset=header_y_offset,
-            sep_y_offset=sep_y_offset,
-            card_padding_x=card_padding_x,
-            wm_font=wm_font,
-            visible_lines=line_idx,
-            verse_lines=verse_lines,
-            verse_font=verse_font,
-            verse_num_font=verse_num_font,
-            verse_num_text=verse_num_text,
-            text_x=text_x,
-            text_y_offset=text_y_offset,
-            line_h=line_h,
-        )
-        for _ in range(hold_frames):
-            path = tmpdir / f"frame_{frame_num:05d}.jpg"
-            frame.save(str(path), "JPEG", quality=88)
-            frame_num += 1
+    # Phase 3: Line-by-line reveal (skipped for "all_at_once")
+    if reveal_mode == "line_by_line":
+        for line_idx in range(1, len(verse_lines) + 1):
+            hold_frames = int(line_reveal_hold * FPS)
+            frame = _render_card_frame(
+                bg=bg, transparent_bg=False,
+                card_alpha=248,
+                card_x=card_x, card_y=card_y,
+                card_w=card_w, card_h=card_h,
+                header_text=header_text,
+                header_font=header_font,
+                header_y_offset=header_y_offset,
+                sep_y_offset=sep_y_offset,
+                card_padding_x=card_padding_x,
+                wm_font=wm_font,
+                visible_lines=line_idx,
+                verse_lines=verse_lines,
+                verse_font=verse_font,
+                verse_num_font=verse_num_font,
+                verse_num_text=verse_num_text,
+                text_x=text_x,
+                text_y_offset=text_y_offset,
+                line_h=line_h,
+            )
+            for _ in range(hold_frames):
+                path = tmpdir / f"frame_{frame_num:05d}.jpg"
+                frame.save(str(path), "JPEG", quality=88)
+                frame_num += 1
 
     # Phase 4: Final hold — all lines visible
-    final_frames = int(FINAL_HOLD * FPS)
-    for _ in range(final_frames):
+    full_frame = _render_card_frame(
+        bg=bg, transparent_bg=False,
+        card_alpha=248,
+        card_x=card_x, card_y=card_y,
+        card_w=card_w, card_h=card_h,
+        header_text=header_text,
+        header_font=header_font,
+        header_y_offset=header_y_offset,
+        sep_y_offset=sep_y_offset,
+        card_padding_x=card_padding_x,
+        wm_font=wm_font,
+        visible_lines=len(verse_lines),
+        verse_lines=verse_lines,
+        verse_font=verse_font,
+        verse_num_font=verse_num_font,
+        verse_num_text=verse_num_text,
+        text_x=text_x,
+        text_y_offset=text_y_offset,
+        line_h=line_h,
+    )
+    f_final_frames = int(final_hold * FPS)
+    for _ in range(f_final_frames):
         path = tmpdir / f"frame_{frame_num:05d}.jpg"
-        frame.save(str(path), "JPEG", quality=88)
+        full_frame.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
     # Phase 5: Brief outro
-    outro_frames = int(OUTRO_HOLD * FPS)
-    for _ in range(outro_frames):
+    f_outro_frames = int(outro_hold * FPS)
+    for _ in range(f_outro_frames):
         path = tmpdir / f"frame_{frame_num:05d}.jpg"
-        frame.save(str(path), "JPEG", quality=88)
+        full_frame.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
     # ── Assemble with FFmpeg ──
-    audio_track, audio_start = _select_audio_track()
-    narration_delay = INTRO_HOLD + (CARD_FADE_FRAMES / FPS) + 0.3
+    audio_track, audio_start = _select_audio_track(content_type, content_id)
+    ambient_sound = _select_ambient_sound(content_type, content_id)
+    narration_delay = intro_hold + (card_fade_frames / FPS) + 0.3
 
     # For static, frames are JPGs (no overlay composite needed)
     cmd = _build_static_cmd(
@@ -588,6 +736,7 @@ def _generate_static(
         audio_start=audio_start,
         narration_path=narration_path,
         narration_delay=narration_delay,
+        ambient_path=ambient_sound,
     )
     if audio_track:
         logger.info(f"Mixing audio: {audio_track.name} (seek {audio_start:.1f}s)")
@@ -619,20 +768,21 @@ def _build_composite_cmd(
     narration_path: Optional[Path] = None,
     narration_delay: float = 2.0,
     use_shortest: bool = True,
+    ambient_path: Optional[Path] = None,
 ) -> list[str]:
-    """Build FFmpeg command for Ken Burns composite with optional narration + music.
+    """Build FFmpeg command for Ken Burns composite with optional narration + music + ambient.
 
     Audio mixing strategy:
-      - Narration only: narration at full volume, delayed to start after card appears
-      - Music only: music at 30% volume with fade in/out
-      - Both: narration at full volume, music ducked to 15% while narration plays
-      - Neither: video-only output
+      - Narration: full volume, delayed to start after card appears
+      - Music: ducked low behind narration (8%), or 20% standalone
+      - Ambient: very subtle layer (5%) for immersive nature atmosphere
+      - All layers fade out at end
     """
     music_fade_start = max(0, total_seconds - 2.5)
-    # Narration fades later than music — keep voice audible until very end
     narr_fade_start = max(0, total_seconds - 0.5)
     has_music = audio_track is not None
     has_narration = narration_path is not None
+    has_ambient = ambient_path is not None
 
     cmd = ["ffmpeg", "-y"]
 
@@ -644,50 +794,70 @@ def _build_composite_cmd(
     input_idx = 2
 
     if has_narration:
-        # Input 2: narration audio
         cmd += ["-i", str(narration_path)]
         narr_idx = input_idx
         input_idx += 1
 
     if has_music:
-        # Input 2 or 3: background music
         cmd += ["-ss", str(audio_start), "-i", str(audio_track)]
         music_idx = input_idx
+        input_idx += 1
+
+    if has_ambient:
+        cmd += ["-stream_loop", "-1", "-i", str(ambient_path)]
+        ambient_idx = input_idx
 
     # Build filter complex
-    # Use eof_action=repeat so overlay keeps last frame if it runs short
     filters = ["[0:v][1:v]overlay=0:0:eof_action=repeat[v]"]
 
-    if has_narration and has_music:
-        # Narration: delay to sync with card, full volume, quick fade at very end
+    # Build audio mix labels
+    mix_labels = []
+    mix_count = 0
+
+    if has_narration:
         filters.append(
             f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
             f"afade=t=out:st={narr_fade_start}:d=0.8[narr]"
         )
-        # Music: duck low behind narration, fade out earlier
+        mix_labels.append("[narr]")
+        mix_count += 1
+
+    if has_music:
+        music_vol = "0.08" if has_narration else "0.20"
         filters.append(
-            f"[{music_idx}:a]volume=0.08,"
+            f"[{music_idx}:a]volume={music_vol},"
             f"afade=t=in:st=0:d=1.5,"
             f"afade=t=out:st={music_fade_start}:d=2.5[music]"
         )
-        # Mix — use longest so narration isn't cut short by music ending
-        filters.append("[narr][music]amix=inputs=2:duration=longest:normalize=0[a]")
-    elif has_narration:
+        mix_labels.append("[music]")
+        mix_count += 1
+
+    if has_ambient:
         filters.append(
-            f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
-            f"afade=t=out:st={narr_fade_start}:d=0.8[a]"
+            f"[{ambient_idx}:a]volume=0.05,"
+            f"afade=t=in:st=0:d=2.0,"
+            f"afade=t=out:st={music_fade_start}:d=2.5[amb]"
         )
-    elif has_music:
+        mix_labels.append("[amb]")
+        mix_count += 1
+
+    if mix_count > 1:
         filters.append(
-            f"[{music_idx}:a]volume=0.20,"
-            f"afade=t=in:st=0:d=1.5,"
-            f"afade=t=out:st={music_fade_start}:d=2.5[a]"
+            f"{''.join(mix_labels)}amix=inputs={mix_count}:duration=longest:normalize=0[a]"
         )
+    elif mix_count == 1:
+        # Single audio stream — rename to [a]
+        last_filter = filters[-1]
+        # Replace the label at the end with [a]
+        for label in ["[narr]", "[music]", "[amb]"]:
+            if last_filter.endswith(label):
+                filters[-1] = last_filter[:-len(label)] + "[a]"
+                break
 
     cmd += ["-filter_complex", ";".join(filters)]
     cmd += ["-map", "[v]"]
 
-    if has_narration or has_music:
+    if mix_count > 0:
         cmd += ["-map", "[a]"]
         cmd += ["-c:a", "aac", "-b:a", "128k"]
 
@@ -714,12 +884,14 @@ def _build_static_cmd(
     audio_start: float = 0.0,
     narration_path: Optional[Path] = None,
     narration_delay: float = 2.0,
+    ambient_path: Optional[Path] = None,
 ) -> list[str]:
-    """Build FFmpeg command for static frame assembly with optional narration + music."""
+    """Build FFmpeg command for static frame assembly with optional narration + music + ambient."""
     music_fade_start = max(0, total_seconds - 2.5)
     narr_fade_start = max(0, total_seconds - 0.5)
     has_music = audio_track is not None
     has_narration = narration_path is not None
+    has_ambient = ambient_path is not None
 
     cmd = ["ffmpeg", "-y"]
 
@@ -736,33 +908,57 @@ def _build_static_cmd(
     if has_music:
         cmd += ["-ss", str(audio_start), "-i", str(audio_track)]
         music_idx = input_idx
+        input_idx += 1
 
-    if has_narration and has_music:
-        filter_complex = (
+    if has_ambient:
+        cmd += ["-stream_loop", "-1", "-i", str(ambient_path)]
+        ambient_idx = input_idx
+
+    # Build audio filters
+    mix_labels = []
+    mix_count = 0
+    filters = []
+
+    if has_narration:
+        filters.append(
             f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
-            f"afade=t=out:st={narr_fade_start}:d=0.8[narr];"
-            f"[{music_idx}:a]volume=0.08,"
+            f"afade=t=out:st={narr_fade_start}:d=0.8[narr]"
+        )
+        mix_labels.append("[narr]")
+        mix_count += 1
+
+    if has_music:
+        music_vol = "0.08" if has_narration else "0.20"
+        filters.append(
+            f"[{music_idx}:a]volume={music_vol},"
             f"afade=t=in:st=0:d=1.5,"
-            f"afade=t=out:st={music_fade_start}:d=2.5[music];"
-            f"[narr][music]amix=inputs=2:duration=longest:normalize=0[a]"
+            f"afade=t=out:st={music_fade_start}:d=2.5[music]"
         )
-        cmd += ["-filter_complex", filter_complex, "-map", "0:v", "-map", "[a]"]
-        cmd += ["-c:a", "aac", "-b:a", "128k"]
-    elif has_narration:
-        filter_complex = (
-            f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
-            f"afade=t=out:st={narr_fade_start}:d=0.8[a]"
+        mix_labels.append("[music]")
+        mix_count += 1
+
+    if has_ambient:
+        filters.append(
+            f"[{ambient_idx}:a]volume=0.05,"
+            f"afade=t=in:st=0:d=2.0,"
+            f"afade=t=out:st={music_fade_start}:d=2.5[amb]"
         )
-        cmd += ["-filter_complex", filter_complex, "-map", "0:v", "-map", "[a]"]
+        mix_labels.append("[amb]")
+        mix_count += 1
+
+    if mix_count > 1:
+        filters.append(
+            f"{''.join(mix_labels)}amix=inputs={mix_count}:duration=longest:normalize=0[a]"
+        )
+        cmd += ["-filter_complex", ";".join(filters), "-map", "0:v", "-map", "[a]"]
         cmd += ["-c:a", "aac", "-b:a", "128k"]
-    elif has_music:
-        cmd += [
-            "-af", (
-                f"volume=0.20,"
-                f"afade=t=in:st=0:d=1.5,"
-                f"afade=t=out:st={music_fade_start}:d=2.5"
-            ),
-        ]
+    elif mix_count == 1:
+        last_filter = filters[-1]
+        for label in ["[narr]", "[music]", "[amb]"]:
+            if last_filter.endswith(label):
+                filters[-1] = last_filter[:-len(label)] + "[a]"
+                break
+        cmd += ["-filter_complex", ";".join(filters), "-map", "0:v", "-map", "[a]"]
         cmd += ["-c:a", "aac", "-b:a", "128k"]
 
     cmd += [
@@ -780,8 +976,25 @@ def _build_static_cmd(
     return cmd
 
 
-def _select_audio_track() -> tuple[Optional[Path], float]:
-    """Pick a random audio track and find a good start offset.
+def _select_ambient_sound(content_type: str = "", content_id: int = 0) -> Optional[Path]:
+    """Select a content-matched ambient sound effect, if available."""
+    try:
+        from core.audio.elevenlabs_music import select_ambient_sound
+        path = select_ambient_sound(content_type, content_id)
+        if path:
+            logger.info(f"Selected ambient: {path.name} for {content_type}")
+        return path
+    except Exception:
+        return None
+
+
+def _select_audio_track(
+    content_type: str = "",
+    content_id: int = 0,
+) -> tuple[Optional[Path], float]:
+    """Pick a mood-matched audio track and find a good start offset.
+
+    Uses content-type-aware selection when available, falls back to random.
 
     Returns:
         (track_path, start_seconds) — start_seconds skips past any quiet intro
@@ -791,13 +1004,28 @@ def _select_audio_track() -> tuple[Optional[Path], float]:
         return None, 0.0
     if not AUDIO_DIR.exists():
         return None, 0.0
-    tracks = [
-        t for t in (list(AUDIO_DIR.glob("*.mp3")) + list(AUDIO_DIR.glob("*.m4a")))
-        if t.stat().st_size > 1000  # Skip empty/corrupt files
-    ]
-    if not tracks:
-        return None, 0.0
-    track = random.choice(tracks)
+
+    # Try mood-matched selection first
+    track = None
+    if content_type:
+        try:
+            from core.audio.elevenlabs_music import select_music_for_content
+            track = select_music_for_content(content_type, content_id)
+            if track:
+                logger.info(f"Mood-matched music for {content_type}: {track.name}")
+        except Exception:
+            pass
+
+    # Fall back to random selection
+    if not track:
+        tracks = [
+            t for t in (list(AUDIO_DIR.glob("*.mp3")) + list(AUDIO_DIR.glob("*.m4a")))
+            if t.stat().st_size > 1000
+        ]
+        if not tracks:
+            return None, 0.0
+        track = random.choice(tracks)
+
     start = _find_audio_start(track)
     logger.debug(f"Selected audio track: {track.name} (start at {start:.1f}s)")
     return track, start

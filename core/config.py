@@ -82,6 +82,10 @@ class Settings(BaseSettings):
         return bool(self.instagram_access_token and self.instagram_business_account_id)
 
     @property
+    def has_facebook(self) -> bool:
+        return bool(self.instagram_access_token and self.facebook_page_id)
+
+    @property
     def has_anthropic(self) -> bool:
         return bool(self.anthropic_api_key)
 

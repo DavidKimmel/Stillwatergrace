@@ -62,10 +62,11 @@ class TestPromptTemplateEngine:
         assert "honest" in prompt.lower() or "pain" in prompt.lower()
 
     def test_viral_formats_renders(self):
-        prompt = self.engine.render_viral_formats()
-        assert "FILL_IN_THE_BLANK" in prompt
-        assert "THIS_OR_THAT" in prompt
-        assert "CONVICTION_QUOTE" in prompt
+        prompt = self.engine.render_viral_formats(format_name="fill_in_blank")
+        assert "fill_in_blank" in prompt
+        assert "Fill-in-the-blank" in prompt
+        prompt2 = self.engine.render_viral_formats(format_name="this_or_that")
+        assert "This-or-That" in prompt2
 
     def test_devotional_book_renders(self):
         prompt = self.engine.render_devotional_book()

@@ -122,7 +122,7 @@ class ContentGenerator:
 
         # Get a verse for verse-based content
         verse = None
-        if content_type in {ContentType.daily_verse, ContentType.encouragement, ContentType.gratitude, ContentType.prayer_prompt}:
+        if content_type in {ContentType.daily_verse, ContentType.encouragement, ContentType.gratitude, ContentType.prayer_prompt, ContentType.carousel}:
             from core.scraper.bible_api import BibleAPIClient
             bible = BibleAPIClient(self.db)
             verse = bible.fetch_daily_verse()
@@ -188,7 +188,10 @@ class ContentGenerator:
             ContentType.conviction_quote, ContentType.parenting_list,
             ContentType.marriage_challenge,
         }:
-            return self.templates.render_viral_formats(trending_topic=trending_topic)
+            return self.templates.render_viral_formats(
+                format_name=content_type.value,
+                trending_topic=trending_topic,
+            )
 
         else:
             # Default: use daily verse prompt
@@ -258,13 +261,9 @@ class ContentGenerator:
         scheduled_at: Optional[datetime] = None,
     ) -> GeneratedContent:
         """Validate and store generated content in the database."""
-        # Handle viral format (returns array)
+        # Handle legacy array response (viral formats used to return arrays)
         if isinstance(data, list):
-            # Store first item, queue rest
-            if data:
-                data = data[0]
-            else:
-                data = {}
+            data = data[0] if data else {}
 
         # Map emotional tone
         tone_str = data.get("emotional_tone", "hopeful")

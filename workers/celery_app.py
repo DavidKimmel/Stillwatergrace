@@ -93,5 +93,11 @@ app.conf.update(
             "task": "workers.daily_tasks.generate_weekly_report",
             "schedule": crontab(hour=7, minute=0, day_of_week="monday"),
         },
+
+        # ── Token Maintenance ──
+        "weekly-instagram-token-refresh": {
+            "task": "workers.daily_tasks.refresh_instagram_token_task",
+            "schedule": crontab(hour=3, minute=0, day_of_week="wednesday"),
+        },
     },
 )
