@@ -340,14 +340,29 @@ NARRATION_VOICES: list[dict[str, str]] = [
         "description": "Narration voice — warm and grounded",
     },
     {
-        "id": "jvcMcno3QtjOzGtfpjoI",
-        "name": "David",
-        "description": "Narration voice — clear and composed",
-    },
-    {
         "id": "kBag1HOZlaVBH7ICPE8x",
         "name": "Sakky Ford",
         "description": "Narration voice — expressive and distinctive",
+    },
+    {
+        "id": "66y97vsfcmXgLh93gcal",
+        "name": "Connery",
+        "description": "Narration voice — commanding and distinctive",
+    },
+    {
+        "id": "4QLC5fepxZkYmdD2IGRU",
+        "name": "Matthew",
+        "description": "Narration voice — clear and expressive",
+    },
+    {
+        "id": "jfIS2w2yJi0grJZPyEsk",
+        "name": "Oliver Silk",
+        "description": "Narration voice — smooth and refined",
+    },
+    {
+        "id": "B5jEZPqk2OJ2vkPw3wBM",
+        "name": "Cillian",
+        "description": "Narration voice — intense and captivating",
     },
 ]
 

@@ -46,6 +46,7 @@ CARD_FADE_FRAMES = 10    # Card fade-in frames
 LINE_REVEAL_HOLD = 1.6   # How long each line stays before next appears
 FINAL_HOLD = 3.5         # Hold full verse at end (time to read/absorb)
 OUTRO_HOLD = 1.0         # Brief hold before end
+MAX_REEL_SECONDS = 30.0  # Hard cap — Instagram reels should stay concise
 
 # Ken Burns minimum source image size (zoompan needs headroom)
 KEN_BURNS_MIN_WIDTH = 1728
@@ -179,6 +180,44 @@ def generate_reel(
         )
     except Exception as e:
         logger.warning(f"Narration generation failed: {e}")
+
+    # Extend video if narration is longer than visual timing (capped at MAX_REEL_SECONDS)
+    # If narration still doesn't fit after extension, speed it up with atempo
+    if narration_path and narration_path.exists():
+        narration_delay = INTRO_HOLD + (CARD_FADE_FRAMES / FPS) + 0.3
+        narration_dur = _get_audio_duration(narration_path)
+        if narration_dur:
+            narration_end = narration_delay + narration_dur + 1.5  # 1.5s breathing room
+            if narration_end > total_seconds:
+                extra = min(narration_end - total_seconds, MAX_REEL_SECONDS - total_seconds)
+                if extra > 0:
+                    logger.info(
+                        f"Extending reel by {extra:.1f}s for narration "
+                        f"(narration={narration_dur:.1f}s, video was {total_seconds:.1f}s)"
+                    )
+                    extra_frames = int(extra * FPS)
+                    final_frames += extra_frames
+                    total_frames += extra_frames
+                    total_seconds = total_frames / FPS
+
+            # After extension, check if narration still overruns the video
+            available_time = total_seconds - narration_delay - 1.5  # leave 1.5s tail room
+            if narration_dur > available_time and available_time > 0:
+                speed = narration_dur / available_time
+                if speed <= 1.02:  # within 2% — close enough, no speedup needed
+                    pass
+                elif speed <= 2.0:  # cap at 2x — beyond that sounds unnatural
+                    logger.info(
+                        f"Speeding up narration {speed:.2f}x to fit "
+                        f"({narration_dur:.1f}s -> {available_time:.1f}s)"
+                    )
+                    narration_path = _speed_up_audio(narration_path, speed)
+                else:
+                    logger.warning(
+                        f"Narration too long ({narration_dur:.1f}s) for {available_time:.1f}s "
+                        f"available — would need {speed:.1f}x speedup, skipping narration"
+                    )
+                    narration_path = None
 
     # ── Render to temp directory ──
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -590,8 +629,8 @@ def _build_composite_cmd(
       - Neither: video-only output
     """
     music_fade_start = max(0, total_seconds - 2.5)
-    # Narration fades later than music — keep voice audible until near the end
-    narr_fade_start = max(0, total_seconds - 1.0)
+    # Narration fades later than music — keep voice audible until very end
+    narr_fade_start = max(0, total_seconds - 0.5)
     has_music = audio_track is not None
     has_narration = narration_path is not None
 
@@ -616,7 +655,8 @@ def _build_composite_cmd(
         music_idx = input_idx
 
     # Build filter complex
-    filters = ["[0:v][1:v]overlay=0:0:shortest=1[v]"]
+    # Use eof_action=repeat so overlay keeps last frame if it runs short
+    filters = ["[0:v][1:v]overlay=0:0:eof_action=repeat[v]"]
 
     if has_narration and has_music:
         # Narration: delay to sync with card, full volume, quick fade at very end
@@ -624,14 +664,14 @@ def _build_composite_cmd(
             f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
             f"afade=t=out:st={narr_fade_start}:d=0.8[narr]"
         )
-        # Music: lower volume when narration is playing, fade out earlier
+        # Music: duck low behind narration, fade out earlier
         filters.append(
-            f"[{music_idx}:a]volume=0.15,"
+            f"[{music_idx}:a]volume=0.08,"
             f"afade=t=in:st=0:d=1.5,"
             f"afade=t=out:st={music_fade_start}:d=2.5[music]"
         )
-        # Mix narration + music
-        filters.append("[narr][music]amix=inputs=2:duration=shortest:normalize=0[a]")
+        # Mix — use longest so narration isn't cut short by music ending
+        filters.append("[narr][music]amix=inputs=2:duration=longest:normalize=0[a]")
     elif has_narration:
         filters.append(
             f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
@@ -639,7 +679,7 @@ def _build_composite_cmd(
         )
     elif has_music:
         filters.append(
-            f"[{music_idx}:a]volume=0.3,"
+            f"[{music_idx}:a]volume=0.20,"
             f"afade=t=in:st=0:d=1.5,"
             f"afade=t=out:st={music_fade_start}:d=2.5[a]"
         )
@@ -677,7 +717,7 @@ def _build_static_cmd(
 ) -> list[str]:
     """Build FFmpeg command for static frame assembly with optional narration + music."""
     music_fade_start = max(0, total_seconds - 2.5)
-    narr_fade_start = max(0, total_seconds - 1.0)
+    narr_fade_start = max(0, total_seconds - 0.5)
     has_music = audio_track is not None
     has_narration = narration_path is not None
 
@@ -701,10 +741,10 @@ def _build_static_cmd(
         filter_complex = (
             f"[{narr_idx}:a]adelay={int(narration_delay * 1000)}|{int(narration_delay * 1000)},"
             f"afade=t=out:st={narr_fade_start}:d=0.8[narr];"
-            f"[{music_idx}:a]volume=0.15,"
+            f"[{music_idx}:a]volume=0.08,"
             f"afade=t=in:st=0:d=1.5,"
             f"afade=t=out:st={music_fade_start}:d=2.5[music];"
-            f"[narr][music]amix=inputs=2:duration=shortest:normalize=0[a]"
+            f"[narr][music]amix=inputs=2:duration=longest:normalize=0[a]"
         )
         cmd += ["-filter_complex", filter_complex, "-map", "0:v", "-map", "[a]"]
         cmd += ["-c:a", "aac", "-b:a", "128k"]
@@ -718,7 +758,7 @@ def _build_static_cmd(
     elif has_music:
         cmd += [
             "-af", (
-                f"volume=0.3,"
+                f"volume=0.20,"
                 f"afade=t=in:st=0:d=1.5,"
                 f"afade=t=out:st={music_fade_start}:d=2.5"
             ),
@@ -761,6 +801,42 @@ def _select_audio_track() -> tuple[Optional[Path], float]:
     start = _find_audio_start(track)
     logger.debug(f"Selected audio track: {track.name} (start at {start:.1f}s)")
     return track, start
+
+
+def _get_audio_duration(audio_path: Path) -> Optional[float]:
+    """Get duration of an audio file in seconds using ffprobe."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ],
+            capture_output=True, text=True, timeout=10,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return None
+
+
+def _speed_up_audio(audio_path: Path, speed: float) -> Path:
+    """Speed up an audio file using FFmpeg atempo filter. Returns path to sped-up file."""
+    sped_path = audio_path.with_suffix(".fast.mp3")
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", str(audio_path),
+                "-filter:a", f"atempo={speed:.4f}",
+                "-vn", str(sped_path),
+            ],
+            capture_output=True, timeout=30,
+        )
+        if sped_path.exists() and sped_path.stat().st_size > 500:
+            return sped_path
+    except Exception:
+        pass
+    return audio_path
 
 
 def _find_audio_start(track_path: Path, min_reel_seconds: float = 15.0) -> float:

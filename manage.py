@@ -81,9 +81,11 @@ def generate_week():
     from database.session import get_db
     from core.content.generator import ContentGenerator
     from core.content.calendar_logic import ContentCalendar, WEEKLY_SCHEDULE, POSTING_TIMES
+    from core.images.image_processor import ImagePipeline
 
     with get_db() as db:
         gen = ContentGenerator(db)
+        img_pipeline = ImagePipeline(db)
         cal = ContentCalendar(db)
 
         # Start from Monday of this week
@@ -136,7 +138,14 @@ def generate_week():
                     if content:
                         day_count += 1
                         total += 1
-                        print(f"  {day_name} {time_slot:8s} | {slot['content_type']:25s} | #{content.id}")
+                        # Generate images + reel for this content
+                        try:
+                            imgs = img_pipeline.generate_images_for_content(content)
+                            img_count = len(imgs)
+                        except Exception as img_e:
+                            print(f"    (image generation failed: {img_e})")
+                            img_count = 0
+                        print(f"  {day_name} {time_slot:8s} | {slot['content_type']:25s} | #{content.id} ({img_count} images)")
                 except Exception as e:
                     print(f"  {day_name} {time_slot:8s} | {slot['content_type']:25s} | FAILED: {e}")
                     continue
