@@ -670,7 +670,7 @@ def generate_narration_at_speed(
         return output_path
 
     try:
-        from elevenlabs import VoiceSettings
+        from elevenlabs import ElevenLabs, VoiceSettings
 
         client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         voice = _select_narration_voice(content_id)
