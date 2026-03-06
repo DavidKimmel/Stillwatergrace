@@ -12,6 +12,7 @@ from database.models import (
     PostingLog,
     ContentStatus,
     PostingStatus,
+    Platform,
     AnalyticsSnapshot,
     RevenueLog,
 )
@@ -65,6 +66,32 @@ def get_dashboard_overview(db: Session = Depends(get_db_dependency)):
         .scalar()
     )
 
+    # Per-platform posting stats
+    platform_stats = {}
+    for platform in [Platform.instagram, Platform.facebook, Platform.tiktok]:
+        success_count = (
+            db.query(func.count(PostingLog.id))
+            .filter(
+                PostingLog.posted_at >= week_ago,
+                PostingLog.platform == platform,
+                PostingLog.status == PostingStatus.success,
+            )
+            .scalar()
+        )
+        failed_count = (
+            db.query(func.count(PostingLog.id))
+            .filter(
+                PostingLog.posted_at >= week_ago,
+                PostingLog.platform == platform,
+                PostingLog.status == PostingStatus.failed,
+            )
+            .scalar()
+        )
+        platform_stats[platform.value] = {
+            "successful": success_count,
+            "failed": failed_count,
+        }
+
     # Revenue this month
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     monthly_revenue = (
@@ -83,6 +110,7 @@ def get_dashboard_overview(db: Session = Depends(get_db_dependency)):
             "successful": posts_this_week,
             "failed": failed_this_week,
         },
+        "posting_by_platform": platform_stats,
         "revenue_this_month": round(monthly_revenue, 2),
         "generated_at": now.isoformat(),
     }

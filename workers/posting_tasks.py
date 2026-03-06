@@ -164,6 +164,53 @@ def post_missed_content(self):
         return {"status": "caught_up", "posted": results}
 
 
+def post_content_immediately(content_id: int) -> dict:
+    """Post a single content piece to all platforms right now.
+
+    Called directly from the API endpoint (not as a Celery task).
+    Returns dict with per-platform results.
+    """
+    from database.session import get_db
+    from database.models import (
+        GeneratedContent,
+        ContentStatus,
+    )
+    from core.config import settings
+
+    with get_db() as db:
+        content = db.query(GeneratedContent).filter(
+            GeneratedContent.id == content_id
+        ).first()
+
+        if not content:
+            return {"error": f"Content #{content_id} not found"}
+
+        if content.status == ContentStatus.posted:
+            return {"error": f"Content #{content_id} already posted"}
+
+        if content.status == ContentStatus.pending:
+            content.status = ContentStatus.approved
+            content.approved_at = datetime.utcnow()
+
+        results = []
+
+        if settings.has_instagram:
+            results.append(_post_to_instagram(db, content))
+
+        if settings.has_facebook:
+            results.append(_post_to_facebook(db, content))
+
+        if settings.has_tiktok:
+            results.append(_post_to_tiktok(db, content))
+
+        # Mark as posted if at least one platform succeeded
+        any_success = any(r.get("status") == "success" for r in results)
+        if any_success:
+            content.status = ContentStatus.posted
+
+        return {"content_id": content_id, "platforms": results}
+
+
 def _post_to_instagram(db, content):
     """Post a single content piece to Instagram (photo or reel)."""
     from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat

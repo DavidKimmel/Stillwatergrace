@@ -82,6 +82,14 @@ export const bulkApprove = (contentIds) => {
   });
 };
 
+export const postNow = (id) => {
+  return request(`/content/${id}/post-now`, { method: 'POST' });
+};
+
+export const rescheduleContent = (id, scheduledAt) => {
+  return request(`/content/${id}/reschedule?scheduled_at=${scheduledAt}`, { method: 'POST' });
+};
+
 export const fetchWeeklyCalendar = withMock(
   (startDate) => {
     const query = startDate ? `?start_date=${startDate}` : '';
@@ -106,6 +114,20 @@ export const fetchTopPosts = withMock(
 export const fetchContentTypePerformance = withMock(
   (days = 30) => request(`/analytics/content-type-performance?days=${days}`),
   () => mock.contentTypePerformance(),
+);
+
+export const fetchPostingHistory = withMock(
+  (days = 30, platform) => {
+    const params = new URLSearchParams({ days });
+    if (platform) params.set('platform', platform);
+    return request(`/analytics/posting-history?${params}`);
+  },
+  () => [],
+);
+
+export const fetchPlatformBreakdown = withMock(
+  (days = 30) => request(`/analytics/platform-breakdown?days=${days}`),
+  () => ({}),
 );
 
 export const fetchCompetitors = withMock(

@@ -178,3 +178,67 @@ def get_competitor_data(
         }
         for s in snapshots
     ]
+
+
+@router.get("/posting-history")
+def get_posting_history(
+    days: int = Query(default=30, le=90),
+    platform: Optional[str] = None,
+    db: Session = Depends(get_db_dependency),
+):
+    """Get recent posting history with per-platform status."""
+    since = datetime.utcnow() - timedelta(days=days)
+
+    query = (
+        db.query(PostingLog)
+        .filter(PostingLog.created_at >= since)
+        .order_by(PostingLog.created_at.desc())
+    )
+
+    if platform:
+        query = query.filter(PostingLog.platform == platform)
+
+    logs = query.limit(100).all()
+
+    return [
+        {
+            "id": log.id,
+            "content_id": log.content_id,
+            "platform": log.platform.value,
+            "status": log.status.value,
+            "error_message": log.error_message,
+            "posted_at": log.posted_at.isoformat() if log.posted_at else None,
+            "scheduled_for": log.scheduled_for.isoformat() if log.scheduled_for else None,
+        }
+        for log in logs
+    ]
+
+
+@router.get("/platform-breakdown")
+def get_platform_breakdown(
+    days: int = Query(default=30, le=90),
+    db: Session = Depends(get_db_dependency),
+):
+    """Get posting success/failure counts by platform."""
+    since = datetime.utcnow() - timedelta(days=days)
+
+    results = (
+        db.query(
+            PostingLog.platform,
+            PostingLog.status,
+            func.count(PostingLog.id).label("count"),
+        )
+        .filter(PostingLog.created_at >= since)
+        .group_by(PostingLog.platform, PostingLog.status)
+        .all()
+    )
+
+    breakdown = {}
+    for r in results:
+        platform = r.platform.value
+        if platform not in breakdown:
+            breakdown[platform] = {"success": 0, "failed": 0, "skipped": 0}
+        status_key = r.status.value if r.status.value in ("success", "failed", "skipped") else "failed"
+        breakdown[platform][status_key] = r.count
+
+    return breakdown

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Check, X, Copy, ChevronDown, ChevronUp, Clock, Image as ImageIcon, ChevronLeft, ChevronRight, ZoomIn, Play } from 'lucide-react';
+import { Check, X, Copy, ChevronDown, ChevronUp, Clock, Image as ImageIcon, ChevronLeft, ChevronRight, ZoomIn, Play, Send } from 'lucide-react';
 import { format } from 'date-fns';
 
 const STATUS_BADGE = {
@@ -32,8 +32,10 @@ export default function ContentCard({
   onToggleSelect,
   onApprove,
   onReject,
+  onPostNow,
   isApproving,
   isRejecting,
+  isPosting,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
@@ -98,6 +100,23 @@ export default function ContentCard({
               </span>
             )}
           </div>
+
+          {/* Platform Status */}
+          {content.posting_status && Object.keys(content.posting_status).length > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              {['instagram', 'facebook', 'tiktok'].map((p) => {
+                const ps = content.posting_status?.[p];
+                if (!ps) return null;
+                const icon = ps.status === 'success' ? '\u2713' : ps.status === 'failed' ? '\u2717' : '\u2013';
+                const color = ps.status === 'success' ? 'text-green-600' : ps.status === 'failed' ? 'text-red-600' : 'text-gray-400';
+                return (
+                  <span key={p} className={`text-xs font-medium ${color}`} title={`${p}: ${ps.status}`}>
+                    {p.charAt(0).toUpperCase()}{icon}
+                  </span>
+                );
+              })}
+            </div>
+          )}
 
           {/* Hook */}
           <p className="font-semibold text-brand-green text-lg leading-snug">
@@ -256,6 +275,16 @@ export default function ContentCard({
                 <Check size={14} /> Approve
               </button>
             </>
+          )}
+          {(content.status === 'pending' || content.status === 'approved') && (
+            <button
+              onClick={onPostNow}
+              disabled={isPosting}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-brand-gold text-white rounded-lg hover:bg-brand-gold/90 disabled:opacity-50 transition-colors"
+            >
+              <Send size={14} />
+              {isPosting ? 'Posting...' : 'Post Now'}
+            </button>
           )}
         </div>
       </div>

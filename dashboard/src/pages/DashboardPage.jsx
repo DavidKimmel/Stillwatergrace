@@ -48,6 +48,25 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Platform Breakdown */}
+      <div className="card mb-6">
+        <h3 className="font-semibold text-lg mb-4">This Week by Platform</h3>
+        <div className="grid grid-cols-3 gap-4">
+          {['instagram', 'facebook', 'tiktok'].map((p) => {
+            const stats = (data?.posting_by_platform || {})[p] || { successful: 0, failed: 0 };
+            return (
+              <div key={p} className="text-center p-3 rounded-lg bg-gray-50">
+                <div className="text-xs text-gray-500 uppercase mb-1">{p}</div>
+                <div className="text-xl font-bold text-brand-green">{stats.successful}</div>
+                {stats.failed > 0 && (
+                  <div className="text-xs text-red-500 mt-1">{stats.failed} failed</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Quick Actions */}
       <div className="card">
         <h3 className="font-semibold text-lg mb-4">Quick Actions</h3>

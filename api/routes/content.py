@@ -116,6 +116,50 @@ def bulk_approve(
     return {"approved": updated}
 
 
+@router.post("/{content_id}/post-now")
+def post_content_now(
+    content_id: int,
+    db: Session = Depends(get_db_dependency),
+):
+    """Immediately post content to all configured platforms."""
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    if content.status == ContentStatus.posted:
+        raise HTTPException(status_code=400, detail="Content already posted")
+
+    from workers.posting_tasks import post_content_immediately
+    result = post_content_immediately(content_id)
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    return result
+
+
+@router.post("/{content_id}/reschedule")
+def reschedule_content(
+    content_id: int,
+    scheduled_at: datetime = Query(...),
+    db: Session = Depends(get_db_dependency),
+):
+    """Reschedule approved content to a new time."""
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    if content.status == ContentStatus.posted:
+        raise HTTPException(status_code=400, detail="Cannot reschedule posted content")
+
+    content.scheduled_at = scheduled_at
+
+    return {
+        "id": content_id,
+        "scheduled_at": content.scheduled_at.isoformat(),
+    }
+
+
 @router.get("/calendar/week")
 def get_weekly_calendar(
     start_date: Optional[str] = None,
@@ -143,7 +187,7 @@ def get_weekly_calendar(
     return {
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
-        "items": [_serialize_content(item) for item in items],
+        "items": [_serialize_calendar_item(item, db) for item in items],
     }
 
 
@@ -178,6 +222,36 @@ def _serialize_content(content: GeneratedContent, include_images: bool = False) 
         result["images"] = [
             _serialize_image(img) for img in content.images
         ] if content.images else []
+        # Include posting status per platform
+        result["posting_status"] = {}
+        for log in (content.posting_logs or []):
+            result["posting_status"][log.platform.value] = {
+                "status": log.status.value,
+                "posted_at": log.posted_at.isoformat() if log.posted_at else None,
+                "error": log.error_message,
+            }
+
+    return result
+
+
+def _serialize_calendar_item(content: GeneratedContent, db: Session) -> dict:
+    """Serialize content for calendar view with images and posting status."""
+    result = _serialize_content(content, include_images=True)
+
+    from database.models import PostingLog
+    logs = (
+        db.query(PostingLog)
+        .filter(PostingLog.content_id == content.id)
+        .all()
+    )
+    result["posting_status"] = {
+        log.platform.value: {
+            "status": log.status.value,
+            "posted_at": log.posted_at.isoformat() if log.posted_at else None,
+            "error": log.error_message,
+        }
+        for log in logs
+    }
 
     return result
 

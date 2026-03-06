@@ -4,10 +4,13 @@ import {
   fetchAnalyticsOverview,
   fetchTopPosts,
   fetchContentTypePerformance,
+  fetchPostingHistory,
+  fetchPlatformBreakdown,
 } from '../lib/api';
 import MetricCard from '../components/MetricCard';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Heart, Bookmark, Share2, Eye, TrendingUp } from 'lucide-react';
+import { format } from 'date-fns';
 
 export default function AnalyticsPage() {
   const [days, setDays] = useState(30);
@@ -26,6 +29,24 @@ export default function AnalyticsPage() {
     queryKey: ['type-performance', days],
     queryFn: () => fetchContentTypePerformance(days),
   });
+
+  const { data: postingHistory } = useQuery({
+    queryKey: ['posting-history', days],
+    queryFn: () => fetchPostingHistory(days),
+  });
+
+  const { data: platformBreakdown } = useQuery({
+    queryKey: ['platform-breakdown', days],
+    queryFn: () => fetchPlatformBreakdown(days),
+  });
+
+  const platformData = platformBreakdown
+    ? Object.entries(platformBreakdown).map(([name, stats]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        success: stats.success || 0,
+        failed: stats.failed || 0,
+      }))
+    : [];
 
   const o = overview || {};
 
@@ -73,6 +94,22 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {/* Platform Breakdown */}
+      {platformData.length > 0 && (
+        <div className="card mb-6">
+          <h3 className="font-semibold mb-4">Posts by Platform</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={platformData} layout="vertical">
+              <XAxis type="number" tick={{ fontSize: 11 }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 12 }} width={80} />
+              <Tooltip />
+              <Bar dataKey="success" fill="#2D4A3E" name="Success" stackId="a" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="failed" fill="#ef4444" name="Failed" stackId="a" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* Top Posts Table */}
       <div className="card">
         <h3 className="font-semibold mb-4">Top Posts (by Saves)</h3>
@@ -109,6 +146,51 @@ export default function AnalyticsPage() {
           <p className="text-gray-400 text-center py-8">
             No analytics data yet. Data will appear after posts are published.
           </p>
+        )}
+      </div>
+
+      {/* Posting History */}
+      <div className="card mt-6">
+        <h3 className="font-semibold mb-4">Recent Posting Activity</h3>
+        {postingHistory && postingHistory.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th className="pb-2 font-medium">Content</th>
+                  <th className="pb-2 font-medium">Platform</th>
+                  <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Posted</th>
+                  <th className="pb-2 font-medium">Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {postingHistory.map((log) => (
+                  <tr key={log.id} className="border-b border-gray-50">
+                    <td className="py-2">#{log.content_id}</td>
+                    <td className="py-2 capitalize">{log.platform}</td>
+                    <td className="py-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        log.status === 'success' ? 'text-green-600 bg-green-50' :
+                        log.status === 'failed' ? 'text-red-600 bg-red-50' :
+                        'text-gray-400 bg-gray-50'
+                      }`}>
+                        {log.status}
+                      </span>
+                    </td>
+                    <td className="py-2 text-xs text-gray-500">
+                      {log.posted_at ? format(new Date(log.posted_at), 'MMM d, h:mm a') : '--'}
+                    </td>
+                    <td className="py-2 text-xs text-red-500 max-w-[200px] truncate">
+                      {log.error_message || ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-gray-400 text-center py-4">No posting activity yet.</p>
         )}
       </div>
     </div>
