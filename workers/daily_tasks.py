@@ -137,6 +137,28 @@ def collect_analytics(hours_after: int):
 
 
 @app.task
+def backfill_analytics():
+    """One-time backfill of analytics for posts missing snapshots."""
+    from database.session import get_db
+    from core.config import settings
+
+    if not settings.has_instagram:
+        return {"status": "skipped", "reason": "Instagram not configured"}
+
+    logger.info("Running analytics backfill...")
+
+    with get_db() as db:
+        try:
+            from core.analytics.instagram_insights import InsightsCollector
+            collector = InsightsCollector(db)
+            collected = collector.backfill_all()
+            return {"status": "success", "collected": collected}
+        except Exception as e:
+            logger.error(f"Analytics backfill error: {e}")
+            return {"status": "error", "error": str(e)}
+
+
+@app.task
 def run_competitor_scrape():
     """Weekly competitor data collection."""
     from database.session import get_db

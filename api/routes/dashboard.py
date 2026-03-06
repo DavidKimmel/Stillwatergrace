@@ -1,5 +1,6 @@
 """Dashboard overview API routes."""
 
+import os
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from database.session import get_db_dependency
 from database.models import (
     GeneratedContent,
+    GeneratedImage,
     PostingLog,
     ContentStatus,
     PostingStatus,
@@ -100,6 +102,55 @@ def get_dashboard_overview(db: Session = Depends(get_db_dependency)):
         .scalar()
     ) or 0
 
+    # Top performer — most recent successfully posted content
+    top_performer = None
+    recent_posted = (
+        db.query(GeneratedContent)
+        .join(PostingLog, PostingLog.content_id == GeneratedContent.id)
+        .filter(
+            PostingLog.posted_at >= week_ago,
+            PostingLog.status == PostingStatus.success,
+        )
+        .order_by(PostingLog.posted_at.desc())
+        .first()
+    )
+    if recent_posted:
+        # Get posting platforms for this content
+        platforms_posted = (
+            db.query(PostingLog.platform)
+            .filter(
+                PostingLog.content_id == recent_posted.id,
+                PostingLog.status == PostingStatus.success,
+            )
+            .all()
+        )
+        # Get image URL if available
+        image = (
+            db.query(GeneratedImage)
+            .filter(GeneratedImage.content_id == recent_posted.id)
+            .first()
+        )
+        image_url = None
+        if image and image.final_url:
+            url = image.final_url
+            if url and not url.startswith("http"):
+                image_url = f"/static/images/{os.path.basename(url)}"
+            else:
+                image_url = url
+
+        posted_at = max(
+            (log.posted_at for log in recent_posted.posting_logs if log.posted_at),
+            default=None,
+        )
+        top_performer = {
+            "id": recent_posted.id,
+            "content_type": recent_posted.content_type.value if recent_posted.content_type else None,
+            "hook": recent_posted.hook,
+            "posted_at": posted_at.isoformat() if posted_at else None,
+            "platforms": [p[0].value for p in platforms_posted],
+            "image_url": image_url,
+        }
+
     return {
         "content_queue": {
             "pending": pending_count,
@@ -112,5 +163,6 @@ def get_dashboard_overview(db: Session = Depends(get_db_dependency)):
         },
         "posting_by_platform": platform_stats,
         "revenue_this_month": round(monthly_revenue, 2),
+        "top_performer": top_performer,
         "generated_at": now.isoformat(),
     }

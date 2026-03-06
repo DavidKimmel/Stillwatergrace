@@ -25,43 +25,36 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 # Day of week (0=Monday) → content type mapping
-# Mix of static posts (morning/noon) and animated reels (evening).
+# 12 slots/week: morning + noon only. Reels and carousels determined by content type.
 # Reels auto-generate for any verse-backed content via FFmpeg pipeline.
 WEEKLY_SCHEDULE = {
     0: {  # Monday
         "morning": {"type": ContentType.marriage_monday, "tone": EmotionalTone.hopeful},
         "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
-        "evening": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},  # Reel
     },
     1: {  # Tuesday
         "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
         "noon": {"type": ContentType.this_or_that, "tone": EmotionalTone.celebratory},
-        "evening": None,
     },
     2: {  # Wednesday
         "morning": {"type": ContentType.parenting_wednesday, "tone": EmotionalTone.hopeful},
         "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
-        "evening": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},  # Reel
     },
     3: {  # Thursday
         "morning": {"type": ContentType.fill_in_blank, "tone": EmotionalTone.celebratory},
         "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
-        "evening": None,
     },
     4: {  # Friday
         "morning": {"type": ContentType.faith_friday, "tone": EmotionalTone.reflective},
         "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
-        "evening": {"type": ContentType.daily_verse, "tone": EmotionalTone.challenging},  # Reel
     },
     5: {  # Saturday
         "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
         "noon": {"type": ContentType.conviction_quote, "tone": EmotionalTone.challenging},
-        "evening": {"type": ContentType.daily_verse, "tone": EmotionalTone.celebratory},  # Reel
     },
     6: {  # Sunday
         "morning": {"type": ContentType.gratitude, "tone": EmotionalTone.celebratory},
         "noon": {"type": ContentType.prayer_prompt, "tone": EmotionalTone.reflective},
-        "evening": None,
     },
 }
 
@@ -69,7 +62,6 @@ WEEKLY_SCHEDULE = {
 POSTING_TIMES = {
     "morning": time(6, 30),
     "noon": time(12, 0),
-    "evening": time(19, 30),
 }
 
 # Posts per day ramp — increase over time

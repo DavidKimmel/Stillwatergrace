@@ -67,6 +67,45 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Latest Post */}
+      {data?.top_performer && (
+        <div className="card mb-6">
+          <h3 className="font-semibold text-lg mb-3">Latest Post</h3>
+          <div className="flex gap-4">
+            {data.top_performer.image_url && (
+              <img
+                src={data.top_performer.image_url}
+                alt=""
+                className="w-20 h-20 rounded-lg object-cover flex-shrink-0"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-gray-800 truncate">
+                {data.top_performer.hook || 'Untitled'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1 capitalize">
+                {data.top_performer.content_type?.replace(/_/g, ' ')}
+              </p>
+              <div className="flex gap-1.5 mt-2">
+                {data.top_performer.platforms?.map((p) => (
+                  <span
+                    key={p}
+                    className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 capitalize"
+                  >
+                    {p}
+                  </span>
+                ))}
+              </div>
+              {data.top_performer.posted_at && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Posted {new Date(data.top_performer.posted_at).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions */}
       <div className="card">
         <h3 className="font-semibold text-lg mb-4">Quick Actions</h3>

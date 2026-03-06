@@ -545,17 +545,19 @@ def _build_caption(content) -> str:
 
     hashtags = _get_hashtags(content)
     if hashtags:
-        caption += "\n.\n.\n.\n" + " ".join(hashtags[:30])
+        caption += "\n\n" + " ".join(hashtags)
 
     return caption
 
 
 def _get_hashtags(content) -> list[str]:
-    """Extract hashtags from content, 5 from each tier."""
+    """Extract hashtags — 5 max (2 large + 2 niche + 1 branded)."""
     hashtags = []
-    for tag_list in [content.hashtags_niche, content.hashtags_medium, content.hashtags_large]:
-        if tag_list:
-            hashtags.extend(tag_list[:5])
+    if content.hashtags_large:
+        hashtags.extend(content.hashtags_large[:2])
+    if content.hashtags_niche:
+        hashtags.extend(content.hashtags_niche[:2])
+    hashtags.append("#stillwatergrace")
     return hashtags
 
 
@@ -574,14 +576,13 @@ def _build_facebook_caption(content) -> str:
         if verse_ref not in caption:
             caption += f'\n\n"{content.verse.text}" — {verse_ref}'
 
-    # Facebook: only 3-5 hashtags max (algorithm prefers fewer)
-    hashtags = []
+    # Facebook: 3 hashtags max (algorithm prefers fewer)
+    hashtags = ["#stillwatergrace"]
     if content.hashtags_large:
-        hashtags.extend(content.hashtags_large[:2])
+        hashtags.append(content.hashtags_large[0])
     if content.hashtags_niche:
-        hashtags.extend(content.hashtags_niche[:2])
-    if hashtags:
-        caption += "\n\n" + " ".join(hashtags)
+        hashtags.append(content.hashtags_niche[0])
+    caption += "\n\n" + " ".join(hashtags)
 
     return caption
 
@@ -599,10 +600,10 @@ def _build_tiktok_caption(content) -> str:
         if content.verse.reference not in caption:
             caption += f" ({content.verse.reference})"
 
-    # TikTok-style hashtags: fewer, more trending
-    hashtags = ["#faith", "#bible", "#christian"]
-    if content.hashtags_large:
-        hashtags.extend(content.hashtags_large[:2])
+    # TikTok-style hashtags: 4 max
+    hashtags = ["#faith", "#christian", "#stillwatergrace"]
+    if content.hashtags_niche:
+        hashtags.append(content.hashtags_niche[0])
     caption += "\n\n" + " ".join(hashtags)
 
     return caption[:2200]

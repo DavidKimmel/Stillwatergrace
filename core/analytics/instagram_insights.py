@@ -42,10 +42,19 @@ class InsightsCollector:
             logger.warning("Instagram not configured, skipping insights collection")
             return 0
 
-        # Find posts from the target time window (±30 min tolerance)
-        target_time = datetime.utcnow() - timedelta(hours=hours_after)
-        window_start = target_time - timedelta(minutes=30)
-        window_end = target_time + timedelta(minutes=30)
+        # Use EST to match posted_at timestamps (stored as naive EST)
+        try:
+            import zoneinfo
+            tz = zoneinfo.ZoneInfo("America/New_York")
+            now = datetime.now(tz).replace(tzinfo=None)
+        except Exception:
+            now = datetime.utcnow()
+
+        # Widen the window to 2 hours (±60 min) to catch posts that may be
+        # slightly outside the exact N-hour mark
+        target_time = now - timedelta(hours=hours_after)
+        window_start = target_time - timedelta(minutes=60)
+        window_end = target_time + timedelta(minutes=60)
 
         posts = (
             self.db.query(PostingLog)
@@ -118,3 +127,59 @@ class InsightsCollector:
             impressions=impressions,
             engagement_rate=round(engagement_rate, 6),
         )
+
+    def backfill_all(self) -> int:
+        """Collect analytics for all posts that are missing snapshots.
+
+        Useful for initial setup or catching up after downtime.
+        """
+        if not self.client:
+            logger.warning("Instagram not configured, skipping backfill")
+            return 0
+
+        # Find all successful Instagram posts with media IDs that have no snapshots
+        posts_with_snapshots = (
+            self.db.query(AnalyticsSnapshot.content_id)
+            .filter(AnalyticsSnapshot.platform == Platform.instagram)
+            .distinct()
+        )
+
+        posts = (
+            self.db.query(PostingLog)
+            .filter(
+                PostingLog.platform == Platform.instagram,
+                PostingLog.status == PostingStatus.success,
+                PostingLog.platform_media_id.isnot(None),
+                ~PostingLog.content_id.in_(posts_with_snapshots),
+            )
+            .all()
+        )
+
+        collected = 0
+        for post in posts:
+            try:
+                insights = self.client.get_media_insights(post.platform_media_id)
+                if insights:
+                    # Calculate approximate hours since posting
+                    try:
+                        import zoneinfo
+                        tz = zoneinfo.ZoneInfo("America/New_York")
+                        now = datetime.now(tz).replace(tzinfo=None)
+                    except Exception:
+                        now = datetime.utcnow()
+
+                    hours = (
+                        int((now - post.posted_at).total_seconds() / 3600)
+                        if post.posted_at
+                        else 0
+                    )
+                    snapshot = self._create_snapshot(post, insights, hours)
+                    self.db.add(snapshot)
+                    collected += 1
+                    logger.info(f"Backfilled insights for content #{post.content_id}")
+            except Exception as e:
+                logger.error(f"Failed to backfill insights for post {post.id}: {e}")
+
+        self.db.flush()
+        logger.info(f"Backfilled insights for {collected} posts")
+        return collected
