@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     tiktok_access_token: str = ""
     tiktok_client_key: str = ""
     tiktok_client_secret: str = ""
+    tiktok_sandbox: bool = True  # Set to False after app review approval
 
     # Cloudflare R2
     cloudflare_r2_access_key: str = ""

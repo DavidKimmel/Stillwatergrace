@@ -222,12 +222,15 @@ class TikTokClient:
         # Truncate caption — TikTok allows up to 2200 chars but keep it concise
         title = caption[:150]
 
+        # Sandbox apps can only post to private; production can post public
+        privacy = "SELF_ONLY" if settings.tiktok_sandbox else "PUBLIC_TO_EVERYONE"
+
         response = self._api_post(
             "/post/publish/video/init/",
             json={
                 "post_info": {
                     "title": title,
-                    "privacy_level": "PUBLIC_TO_EVERYONE",
+                    "privacy_level": privacy,
                     "disable_comment": disable_comment,
                 },
                 "source_info": {
