@@ -8,6 +8,7 @@ import io
 import logging
 import math
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -235,6 +236,30 @@ class ImagePipeline:
                     logger.info(f"Reel generated for content #{content.id}")
             except Exception as e:
                 logger.error(f"Reel generation failed for content #{content.id}: {e}")
+
+        # Generate carousel slides if content type is carousel
+        if content.content_type and content.content_type.value == "carousel":
+            try:
+                slide_paths = generate_carousel_slides(content, raw_path)
+                for i, slide_path in enumerate(slide_paths):
+                    slide_url = self._upload_to_storage(
+                        slide_path, content.id, ImageFormat.feed_4x5,
+                    )
+                    slide_record = GeneratedImage(
+                        content_id=content.id,
+                        provider=provider,
+                        format=ImageFormat.feed_4x5,
+                        raw_url=raw_path,
+                        final_url=slide_url,
+                        r2_key=f"content/{content.id}/carousel_{i + 1}.jpg",
+                        width=1080,
+                        height=1350,
+                    )
+                    self.db.add(slide_record)
+                    images.append(slide_record)
+                logger.info(f"Generated {len(slide_paths)} carousel slides for content #{content.id}")
+            except Exception as e:
+                logger.error(f"Carousel generation failed for content #{content.id}: {e}")
 
         # Clean up raw source image after all processing is done
         if raw_path and settings.has_r2:
@@ -827,6 +852,361 @@ def _layout_bold_statement(w: int, h: int, text: str) -> Image.Image:
     )
 
     return img
+
+
+# ── Carousel Slide Generation ─────────────────────────────────────────────────
+
+
+def _split_text_into_chunks(text: str, min_chunks: int = 3, max_chunks: int = 5) -> list[str]:
+    """Split text into roughly equal chunks by sentence boundaries.
+
+    Falls back to word-based splitting if sentence splitting yields too few chunks.
+    Returns between min_chunks and max_chunks chunks.
+    """
+    if not text:
+        return [""]
+
+    # Normalize whitespace
+    text = " ".join(text.split())
+
+    # Split on sentence boundaries (period, exclamation, question mark followed by space)
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
+
+    if len(sentences) <= 1:
+        # Fall back to word-based splitting
+        words = text.split()
+        target_chunks = min(max_chunks, max(min_chunks, len(words) // 8))
+        chunk_size = max(1, len(words) // target_chunks)
+        chunks: list[str] = []
+        for i in range(0, len(words), chunk_size):
+            chunk = " ".join(words[i:i + chunk_size])
+            if chunk:
+                chunks.append(chunk)
+        # Merge last chunk if it's very short
+        if len(chunks) > 1 and len(chunks[-1].split()) < 3:
+            chunks[-2] = chunks[-2] + " " + chunks[-1]
+            chunks.pop()
+        return chunks[:max_chunks]
+
+    # Group sentences into target number of chunks
+    target_chunks = min(max_chunks, max(min_chunks, len(sentences)))
+
+    if len(sentences) <= target_chunks:
+        return sentences
+
+    # Distribute sentences across chunks as evenly as possible
+    chunks = []
+    per_chunk = len(sentences) / target_chunks
+    current: list[str] = []
+    boundary = per_chunk
+
+    for i, sentence in enumerate(sentences):
+        current.append(sentence)
+        if i + 1 >= boundary and len(chunks) < target_chunks - 1:
+            chunks.append(" ".join(current))
+            current = []
+            boundary += per_chunk
+
+    # Remaining sentences go into last chunk
+    if current:
+        chunks.append(" ".join(current))
+
+    return chunks[:max_chunks]
+
+
+def _prepare_carousel_background(
+    background_path: Optional[str],
+    width: int,
+    height: int,
+) -> Optional[Image.Image]:
+    """Load and resize background image to target dimensions, or return None."""
+    if not background_path:
+        return None
+    try:
+        bg = Image.open(background_path)
+        if bg.mode != "RGB":
+            bg = bg.convert("RGB")
+        return ImagePipeline._resize_and_crop(bg, (width, height))
+    except Exception as e:
+        logger.warning(f"Could not load carousel background {background_path}: {e}")
+        return None
+
+
+def _render_hook_slide(
+    width: int,
+    height: int,
+    hook_text: str,
+    bg: Optional[Image.Image],
+) -> Image.Image:
+    """Render slide 1 (hook) -- bold text with hook/title."""
+    if bg is not None:
+        img = bg.copy().convert("RGBA")
+        # Dark wash overlay
+        wash = Image.new("RGBA", (width, height), BRAND_COLORS["overlay_dark_heavy"])
+        img = Image.alpha_composite(img, wash)
+    else:
+        img = Image.new("RGBA", (width, height), (*BRAND_COLORS["green"], 255))
+
+    draw = ImageDraw.Draw(img)
+    margin = 80
+    max_text_width = width - margin * 2
+
+    # Large ALL CAPS heading
+    display_text = hook_text.upper()
+    font, lines, font_size = _get_adaptive_font(
+        display_text, max_text_width, start_size=80, min_size=48, max_lines=5,
+    )
+    line_spacing = max(14, font_size // 4)
+
+    sample_bbox = draw.textbbox((0, 0), "AY", font=font)
+    line_h = (sample_bbox[3] - sample_bbox[1]) + line_spacing
+    total_text_h = len(lines) * line_h
+
+    text_y = (height - total_text_h) // 2 - 40
+
+    _draw_text_block(
+        draw, display_text, font, margin, text_y,
+        max_width=max_text_width,
+        color=BRAND_COLORS["white_text"],
+        align="center",
+        canvas_width=width,
+        line_spacing=line_spacing,
+    )
+
+    # Gold accent line below text
+    accent_y = text_y + total_text_h + 30
+    line_margin = width // 4
+    draw.line(
+        [(line_margin, accent_y), (width - line_margin, accent_y)],
+        fill=BRAND_COLORS["gold"], width=3,
+    )
+
+    # Watermark bottom-right
+    wm_font = get_body_font(18)
+    wm_text = "@stillwatergrace"
+    wm_bbox = draw.textbbox((0, 0), wm_text, font=wm_font)
+    wm_w = wm_bbox[2] - wm_bbox[0]
+    draw.text(
+        (width - margin - wm_w, height - 55),
+        wm_text, fill=(255, 248, 240, 150), font=wm_font,
+    )
+
+    return img.convert("RGB")
+
+
+def _render_value_slide(
+    width: int,
+    height: int,
+    chunk_text: str,
+    slide_num: int,
+    total_slides: int,
+    bg: Optional[Image.Image],
+) -> Image.Image:
+    """Render a value slide (slides 2-N-1) -- content text on card overlay."""
+    if bg is not None:
+        img = bg.copy().convert("RGBA")
+        # Lighter wash
+        wash = Image.new("RGBA", (width, height), (0, 0, 0, 80))
+        img = Image.alpha_composite(img, wash)
+    else:
+        img = Image.new("RGBA", (width, height), (*BRAND_COLORS["cream"], 255))
+
+    draw = ImageDraw.Draw(img)
+    margin = 60
+
+    # Slide number indicator top-right
+    num_font = get_body_font(22)
+    num_text = f"{slide_num}/{total_slides}"
+    num_bbox = draw.textbbox((0, 0), num_text, font=num_font)
+    num_w = num_bbox[2] - num_bbox[0]
+    draw.text(
+        (width - margin - num_w, 40),
+        num_text,
+        fill=BRAND_COLORS["gold"] if bg is None else (255, 248, 240, 200),
+        font=num_font,
+    )
+
+    # Content card overlay
+    card_margin_x = 50
+    card_margin_y = 100
+    card_x = card_margin_x
+    card_y = card_margin_y
+    card_w = width - card_margin_x * 2
+    card_h = height - card_margin_y * 2
+
+    if bg is not None:
+        # Semi-transparent card on photo background
+        card_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        card_draw = ImageDraw.Draw(card_layer)
+        card_coords = (card_x, card_y, card_x + card_w, card_y + card_h)
+        try:
+            card_draw.rounded_rectangle(
+                card_coords, radius=20, fill=(255, 248, 240, 230),
+            )
+        except AttributeError:
+            card_draw.rectangle(card_coords, fill=(255, 248, 240, 230))
+        img = Image.alpha_composite(img, card_layer)
+        draw = ImageDraw.Draw(img)
+
+    # Text inside card area
+    text_margin = card_x + 50 if bg is not None else margin + 30
+    max_text_width = width - text_margin * 2
+
+    body_font = get_heading_font(44)
+    wrapped_lines = _wrap_text(chunk_text, body_font, max_text_width)
+
+    # Shrink if too many lines
+    font_size = 44
+    while len(wrapped_lines) > 8 and font_size > 28:
+        font_size -= 4
+        body_font = get_heading_font(font_size)
+        wrapped_lines = _wrap_text(chunk_text, body_font, max_text_width)
+
+    sample_bbox = draw.textbbox((0, 0), "Ay", font=body_font)
+    line_h = (sample_bbox[3] - sample_bbox[1]) + 14
+    total_text_h = len(wrapped_lines) * line_h
+
+    # Center text vertically in card
+    text_y = card_y + (card_h - total_text_h) // 2
+
+    _draw_text_block(
+        draw, chunk_text, body_font, text_margin, text_y,
+        max_width=max_text_width,
+        color=BRAND_COLORS["green"],
+        align="center",
+        canvas_width=width,
+        line_spacing=14,
+    )
+
+    # Gold accent line at bottom of card
+    accent_y = card_y + card_h - 30
+    draw.line(
+        [(card_x + 40, accent_y), (card_x + card_w - 40, accent_y)],
+        fill=BRAND_COLORS["gold_light"], width=2,
+    )
+
+    return img.convert("RGB")
+
+
+def _render_cta_slide(width: int, height: int) -> Image.Image:
+    """Render CTA slide -- call to action with brand colors."""
+    img = Image.new("RGB", (width, height))
+    _draw_gradient(img, BRAND_COLORS["green"], (30, 55, 45))
+    draw = ImageDraw.Draw(img)
+
+    margin = 80
+    max_text_width = width - margin * 2
+
+    # "Save this post" -- large white text
+    save_font = get_heading_font(64)
+    save_text = "SAVE THIS POST"
+    save_y = height // 3 - 40
+    _draw_text_block(
+        draw, save_text, save_font, margin, save_y,
+        max_width=max_text_width,
+        color=BRAND_COLORS["white_text"],
+        align="center",
+        canvas_width=width,
+        line_spacing=16,
+    )
+
+    # Gold ornament line
+    ornament_y = height // 2 - 20
+    _draw_ornament_line(draw, ornament_y, width, BRAND_COLORS["gold"], style="diamond")
+
+    # "Follow @stillwatergrace" -- gold text
+    follow_font = get_heading_font(48)
+    follow_text = "Follow @stillwatergrace"
+    follow_y = height // 2 + 30
+    _draw_text_block(
+        draw, follow_text, follow_font, margin, follow_y,
+        max_width=max_text_width,
+        color=BRAND_COLORS["gold"],
+        align="center",
+        canvas_width=width,
+        line_spacing=12,
+    )
+
+    # "for daily faith & encouragement" -- white text below
+    tagline_font = get_body_font(32)
+    tagline_text = "for daily faith & encouragement"
+    tagline_y = follow_y + 80
+    _draw_text_block(
+        draw, tagline_text, tagline_font, margin, tagline_y,
+        max_width=max_text_width,
+        color=BRAND_COLORS["cream"],
+        align="center",
+        canvas_width=width,
+        line_spacing=10,
+    )
+
+    return img
+
+
+def generate_carousel_slides(
+    content: GeneratedContent,
+    background_path: Optional[str] = None,
+) -> list[str]:
+    """Generate carousel slides (5-7 images at 1080x1350).
+
+    Slide structure:
+    1. Hook slide -- bold text with hook/title
+    2-N. Value slides -- key points from caption_long, split into digestible chunks
+    N+1. CTA slide -- "Follow @stillwatergrace for daily faith"
+
+    Returns list of file paths to generated slides.
+    """
+    IMAGES_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+    width, height = 1080, 1350
+
+    # Prepare background image (if available)
+    bg = _prepare_carousel_background(background_path, width, height)
+
+    # Determine hook text
+    hook_text = content.hook or content.caption_short or "Faith for Today"
+    # Truncate long hooks
+    words = hook_text.split()
+    if len(words) > 10:
+        hook_text = " ".join(words[:10]) + "..."
+
+    # Split content text into value slide chunks
+    body_text = content.caption_long or content.caption_medium or content.caption_short or ""
+    chunks = _split_text_into_chunks(body_text, min_chunks=3, max_chunks=5)
+
+    # Ensure we have at least some content
+    if not chunks or (len(chunks) == 1 and not chunks[0].strip()):
+        chunks = [hook_text]
+
+    total_slides = 1 + len(chunks) + 1  # hook + value slides + CTA
+    slide_paths: list[str] = []
+
+    # Slide 1: Hook
+    hook_img = _render_hook_slide(width, height, hook_text, bg)
+    hook_path = str(IMAGES_PROCESSED_DIR / f"{content.id}_carousel_1.jpg")
+    hook_img.save(hook_path, "JPEG", quality=92, optimize=True)
+    slide_paths.append(hook_path)
+
+    # Slides 2 to N: Value slides
+    for i, chunk in enumerate(chunks):
+        slide_num = i + 2
+        value_img = _render_value_slide(
+            width, height, chunk, slide_num, total_slides, bg,
+        )
+        value_path = str(IMAGES_PROCESSED_DIR / f"{content.id}_carousel_{slide_num}.jpg")
+        value_img.save(value_path, "JPEG", quality=92, optimize=True)
+        slide_paths.append(value_path)
+
+    # Last slide: CTA
+    cta_img = _render_cta_slide(width, height)
+    cta_path = str(IMAGES_PROCESSED_DIR / f"{content.id}_carousel_{total_slides}.jpg")
+    cta_img.save(cta_path, "JPEG", quality=92, optimize=True)
+    slide_paths.append(cta_path)
+
+    logger.info(
+        f"Generated {len(slide_paths)} carousel slides for content #{content.id}"
+    )
+    return slide_paths
 
 
 # ── Feed Overlay Functions ──────────────────────────────────────────────────
