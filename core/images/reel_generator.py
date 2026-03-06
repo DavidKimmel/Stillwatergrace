@@ -7,7 +7,7 @@ Generates text-reveal style reels for Instagram/TikTok:
   4. Each line highlights, then the next appears
   5. Background music mixed in (if audio files available)
 
-Output: 9:16 MP4 (1080x1920) at 30fps, ~12-15 seconds.
+Output: 9:16 MP4 (1080x1920) at 30fps, ~30-60 seconds.
 """
 
 import logging
@@ -40,42 +40,42 @@ REEL_W = 1080
 REEL_H = 1920
 FPS = 30
 
-# Timing (in seconds) — targeting 12-15s total reel length
+# Timing (in seconds) — targeting 30-60s total reel length
 # These are defaults; actual values come from the selected reel style
 INTRO_HOLD = 1.8        # Show background only (let viewer settle in)
 CARD_FADE_FRAMES = 10    # Card fade-in frames
 LINE_REVEAL_HOLD = 1.6   # How long each line stays before next appears
 FINAL_HOLD = 3.5         # Hold full verse at end (time to read/absorb)
 OUTRO_HOLD = 1.0         # Brief hold before end
-MAX_REEL_SECONDS = 30.0  # Hard cap — Instagram reels should stay concise
+MAX_REEL_SECONDS = 60.0  # Hard cap — longer reels for engagement
 
 # Reel presentation styles — rotated by content_id for feed variety
 REEL_STYLES = {
     "classic": {
-        # Original: intro hold → card fade → line-by-line reveal
-        "intro_hold": 1.8,
-        "card_fade_frames": 10,
-        "line_reveal_hold": 1.6,
-        "final_hold": 3.5,
-        "outro_hold": 1.0,
+        # Instant hook → card fade → line-by-line reveal → long hold → CTA
+        "intro_hold": 0.3,
+        "card_fade_frames": 6,
+        "line_reveal_hold": 3.0,
+        "final_hold": 8.0,
+        "outro_hold": 3.0,
         "reveal_mode": "line_by_line",
     },
     "quick": {
-        # Fast start: short intro → quick fade → all text at once
-        "intro_hold": 0.6,
-        "card_fade_frames": 6,
+        # Near-instant → quick fade → all text at once → long read → CTA
+        "intro_hold": 0.2,
+        "card_fade_frames": 4,
         "line_reveal_hold": 0.0,  # all lines appear together
-        "final_hold": 5.0,
-        "outro_hold": 1.0,
+        "final_hold": 12.0,
+        "outro_hold": 3.0,
         "reveal_mode": "all_at_once",
     },
     "cinematic": {
-        # Slow build: long scenic intro → gradual card → line-by-line
-        "intro_hold": 3.0,
-        "card_fade_frames": 15,
-        "line_reveal_hold": 1.4,
-        "final_hold": 3.0,
-        "outro_hold": 1.5,
+        # Brief scenic moment → card fade → line-by-line → long hold → CTA
+        "intro_hold": 0.5,
+        "card_fade_frames": 8,
+        "line_reveal_hold": 2.5,
+        "final_hold": 8.0,
+        "outro_hold": 3.0,
         "reveal_mode": "line_by_line",
     },
 }
@@ -283,7 +283,7 @@ def generate_reel(
                         f"available — dropping narration, shortening reel to ~15s"
                     )
                     narration_path = None
-                    target_seconds = 15.0
+                    target_seconds = 30.0
                     target_frames = int(target_seconds * FPS)
                     if total_frames > target_frames:
                         overshoot = total_frames - target_frames
@@ -539,10 +539,28 @@ def _generate_two_pass(
         full_card.save(str(path), "PNG")
         frame_num += 1
 
-    # Phase 5: Brief outro
+    # Phase 5: CTA end-screen — "Save this | Send to someone who needs this"
+    cta_frame = _render_cta_frame(
+        transparent_bg=True,
+        card_x=card_x, card_y=card_y,
+        card_w=card_w, card_h=card_h,
+        card_padding_x=card_padding_x,
+        header_text=header_text,
+        header_font=header_font,
+        header_y_offset=header_y_offset,
+        sep_y_offset=sep_y_offset,
+        wm_font=wm_font,
+        verse_lines=verse_lines,
+        verse_font=verse_font,
+        verse_num_font=verse_num_font,
+        verse_num_text=verse_num_text,
+        text_x=text_x,
+        text_y_offset=text_y_offset,
+        line_h=line_h,
+    )
     for _ in range(outro_frames):
         path = tmpdir / f"overlay_{frame_num:05d}.png"
-        full_card.save(str(path), "PNG")
+        cta_frame.save(str(path), "PNG")
         frame_num += 1
 
     # ── Pass 2: Composite overlay onto motion background + audio ──
@@ -715,11 +733,30 @@ def _generate_static(
         full_frame.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
-    # Phase 5: Brief outro
+    # Phase 5: CTA end-screen
+    cta_frame = _render_cta_frame(
+        bg=bg,
+        transparent_bg=False,
+        card_x=card_x, card_y=card_y,
+        card_w=card_w, card_h=card_h,
+        card_padding_x=card_padding_x,
+        header_text=header_text,
+        header_font=header_font,
+        header_y_offset=header_y_offset,
+        sep_y_offset=sep_y_offset,
+        wm_font=wm_font,
+        verse_lines=verse_lines,
+        verse_font=verse_font,
+        verse_num_font=verse_num_font,
+        verse_num_text=verse_num_text,
+        text_x=text_x,
+        text_y_offset=text_y_offset,
+        line_h=line_h,
+    )
     f_outro_frames = int(outro_hold * FPS)
     for _ in range(f_outro_frames):
         path = tmpdir / f"frame_{frame_num:05d}.jpg"
-        full_frame.save(str(path), "JPEG", quality=88)
+        cta_frame.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
     # ── Assemble with FFmpeg ──
@@ -1166,6 +1203,91 @@ def _darken_bg(bg: Image.Image) -> Image.Image:
     rgba = bg.convert("RGBA")
     dark = Image.new("RGBA", rgba.size, (0, 0, 0, 50))
     return Image.alpha_composite(rgba, dark).convert("RGB")
+
+
+def _render_cta_frame(
+    card_x: int,
+    card_y: int,
+    card_w: int,
+    card_h: int,
+    card_padding_x: int,
+    header_text: str,
+    header_font: ImageFont.FreeTypeFont,
+    header_y_offset: int,
+    sep_y_offset: int,
+    wm_font: ImageFont.FreeTypeFont,
+    verse_lines: list[str],
+    verse_font: ImageFont.FreeTypeFont,
+    verse_num_font: ImageFont.FreeTypeFont,
+    verse_num_text: str,
+    text_x: int,
+    text_y_offset: int,
+    line_h: int,
+    transparent_bg: bool = False,
+    bg: Optional[Image.Image] = None,
+) -> Image.Image:
+    """Render the full verse card plus a CTA bar at the bottom of the screen."""
+    # Start with the full card (all lines visible)
+    frame = _render_card_frame(
+        bg=bg,
+        transparent_bg=transparent_bg,
+        card_alpha=248,
+        card_x=card_x, card_y=card_y,
+        card_w=card_w, card_h=card_h,
+        header_text=header_text,
+        header_font=header_font,
+        header_y_offset=header_y_offset,
+        sep_y_offset=sep_y_offset,
+        card_padding_x=card_padding_x,
+        wm_font=wm_font,
+        visible_lines=len(verse_lines),
+        verse_lines=verse_lines,
+        verse_font=verse_font,
+        verse_num_font=verse_num_font,
+        verse_num_text=verse_num_text,
+        text_x=text_x,
+        text_y_offset=text_y_offset,
+        line_h=line_h,
+    )
+
+    # Add CTA text below the card
+    if frame.mode != "RGBA":
+        frame = frame.convert("RGBA")
+
+    draw = ImageDraw.Draw(frame)
+    cta_text = "Save this  \u00b7  Send to someone who needs this"
+    cta_font = get_body_font(24)
+
+    # Position CTA below the card, centered
+    cta_bbox = draw.textbbox((0, 0), cta_text, font=cta_font)
+    cta_w = cta_bbox[2] - cta_bbox[0]
+    cta_x = (REEL_W - cta_w) // 2
+    cta_y = card_y + card_h + 40
+
+    # Semi-transparent dark pill behind CTA
+    pill_pad_x = 24
+    pill_pad_y = 12
+    pill_rect = (
+        cta_x - pill_pad_x,
+        cta_y - pill_pad_y,
+        cta_x + cta_w + pill_pad_x,
+        cta_y + (cta_bbox[3] - cta_bbox[1]) + pill_pad_y,
+    )
+    pill_layer = Image.new("RGBA", frame.size, (0, 0, 0, 0))
+    pill_draw = ImageDraw.Draw(pill_layer)
+    try:
+        pill_draw.rounded_rectangle(pill_rect, radius=24, fill=(0, 0, 0, 140))
+    except AttributeError:
+        pill_draw.rectangle(pill_rect, fill=(0, 0, 0, 140))
+    frame = Image.alpha_composite(frame, pill_layer)
+
+    # Draw CTA text in white
+    draw = ImageDraw.Draw(frame)
+    draw.text((cta_x, cta_y), cta_text, fill=(255, 255, 255, 240), font=cta_font)
+
+    if transparent_bg:
+        return frame
+    return frame.convert("RGB")
 
 
 def _render_card_frame(
