@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # TikTok
     tiktok_access_token: str = ""
     tiktok_client_key: str = ""
+    tiktok_client_secret: str = ""
 
     # Cloudflare R2
     cloudflare_r2_access_key: str = ""
@@ -84,6 +85,10 @@ class Settings(BaseSettings):
     @property
     def has_facebook(self) -> bool:
         return bool(self.instagram_access_token and self.facebook_page_id)
+
+    @property
+    def has_tiktok(self) -> bool:
+        return bool(self.tiktok_access_token and self.tiktok_client_key)
 
     @property
     def has_anthropic(self) -> bool:

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Still Water Grace — Authorization</title>
+    <style>
+        body { font-family: Georgia, serif; max-width: 600px; margin: 80px auto; padding: 0 20px; color: #2D4A3E; text-align: center; background: #FFF8F0; }
+        h1 { color: #D4A853; }
+        .code-box { background: #2D4A3E; color: #FFF8F0; padding: 20px; border-radius: 8px; font-family: monospace; font-size: 18px; word-break: break-all; margin: 20px 0; cursor: pointer; }
+        .code-box:hover { background: #3a5e4f; }
+        .instructions { color: #666; font-size: 14px; margin-top: 10px; }
+        .error { color: #c0392b; }
+        .success { color: #27ae60; }
+    </style>
+</head>
+<body>
+    <h1>Still Water Grace</h1>
+    <div id="result"></div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const error = params.get('error');
+        const state = params.get('state');
+        const resultDiv = document.getElementById('result');
+
+        if (error) {
+            resultDiv.innerHTML = `
+                <p class="error">Authorization failed: ${error}</p>
+                <p>${params.get('error_description') || 'Please try again.'}</p>
+            `;
+        } else if (code) {
+            resultDiv.innerHTML = `
+                <p class="success">Authorization successful!</p>
+                <p>Copy this code and paste it into your terminal:</p>
+                <div class="code-box" onclick="navigator.clipboard.writeText('${code}').then(() => this.style.background='#27ae60')" title="Click to copy">${code}</div>
+                <p class="instructions">Click the code to copy it, then paste into the terminal where you ran<br><code>python manage.py tiktok-auth</code></p>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <p>Waiting for authorization...</p>
+                <p class="instructions">If you weren't redirected from TikTok, run <code>python manage.py tiktok-auth</code> first.</p>
+            `;
+        }
+    </script>
+</body>
+</html>

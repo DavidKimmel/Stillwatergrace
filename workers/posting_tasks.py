@@ -86,10 +86,82 @@ def post_scheduled_content(self, time_slot: str):
                 fb_result = _post_to_facebook(db, content)
                 results.append(fb_result)
 
+            # Cross-post to TikTok (reels only)
+            if settings.has_tiktok:
+                tk_result = _post_to_tiktok(db, content)
+                results.append(tk_result)
+
             # Mark content as posted
             content.status = ContentStatus.posted
 
         return {"status": "success", "time_slot": time_slot, "posted": results}
+
+
+@app.task(bind=True, max_retries=2, default_retry_delay=300)
+def post_missed_content(self):
+    """
+    Catch-up task: find approved content whose scheduled_at is in the past
+    but was never posted. Posts them in chronological order.
+    Runs every 30 minutes so missed posts get picked up on next boot.
+    """
+    from database.session import get_db
+    from database.models import (
+        GeneratedContent,
+        ContentStatus,
+        PostingLog,
+        PostingStatus,
+        Platform,
+    )
+    from core.config import settings
+
+    logger.info("Checking for missed posts...")
+
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo(settings.timezone)
+        now = datetime.now(tz).replace(tzinfo=None)
+    except Exception:
+        now = datetime.utcnow()
+
+    # Only catch up posts from the last 7 days (don't post ancient content)
+    cutoff = now - timedelta(days=7)
+
+    with get_db() as db:
+        missed = (
+            db.query(GeneratedContent)
+            .filter(
+                GeneratedContent.status == ContentStatus.approved,
+                GeneratedContent.scheduled_at < now - timedelta(minutes=30),
+                GeneratedContent.scheduled_at >= cutoff,
+            )
+            .order_by(GeneratedContent.scheduled_at.asc())
+            .all()
+        )
+
+        if not missed:
+            logger.info("No missed posts found")
+            return {"status": "no_missed_content"}
+
+        logger.info(f"Found {len(missed)} missed post(s), catching up...")
+
+        results = []
+        for content in missed:
+            logger.info(
+                f"Catching up content #{content.id} "
+                f"(was scheduled for {content.scheduled_at})"
+            )
+
+            if settings.has_instagram:
+                result = _post_to_instagram(db, content)
+                results.append(result)
+
+            if settings.has_facebook:
+                fb_result = _post_to_facebook(db, content)
+                results.append(fb_result)
+
+            content.status = ContentStatus.posted
+
+        return {"status": "caught_up", "posted": results}
 
 
 def _post_to_instagram(db, content):
@@ -320,6 +392,69 @@ def _post_to_facebook(db, content):
         return {"content_id": content.id, "platform": "facebook", "status": "failed", "error": str(e)}
 
 
+def _post_to_tiktok(db, content):
+    """Cross-post a reel to TikTok. Skips non-reel content."""
+    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
+
+    # Only post reels to TikTok
+    reel = (
+        db.query(GeneratedImage)
+        .filter(
+            GeneratedImage.content_id == content.id,
+            GeneratedImage.format == ImageFormat.reel_9x16,
+        )
+        .first()
+    )
+
+    if not reel or not reel.final_url:
+        logger.info(f"No reel for content #{content.id} — skipping TikTok")
+        return {"content_id": content.id, "platform": "tiktok", "status": "skipped", "reason": "no_reel"}
+
+    logger.info(f"Cross-posting content #{content.id} to TikTok...")
+
+    try:
+        from core.posting.tiktok_client import TikTokClient
+        client = TikTokClient()
+
+        caption = _build_tiktok_caption(content)
+
+        result = client.publish_video(
+            video_url=reel.final_url,
+            caption=caption,
+        )
+
+        if not result:
+            raise RuntimeError("TikTok API returned no result")
+
+        log = PostingLog(
+            content_id=content.id,
+            platform=Platform.tiktok,
+            platform_post_id=str(result.get("publish_id", "")),
+            status=PostingStatus.success,
+            caption_used=caption,
+            posted_at=datetime.utcnow(),
+            scheduled_for=content.scheduled_at,
+        )
+        db.add(log)
+
+        logger.info(f"Successfully cross-posted content #{content.id} to TikTok")
+        return {"content_id": content.id, "platform": "tiktok", "status": "success"}
+
+    except Exception as e:
+        logger.error(f"TikTok cross-post failed for #{content.id}: {e}")
+
+        log = PostingLog(
+            content_id=content.id,
+            platform=Platform.tiktok,
+            status=PostingStatus.failed,
+            error_message=str(e),
+            scheduled_for=content.scheduled_at,
+        )
+        db.add(log)
+
+        return {"content_id": content.id, "platform": "tiktok", "status": "failed", "error": str(e)}
+
+
 # Engagement CTAs — appended to captions that don't already contain one
 ENGAGEMENT_CTAS = [
     "Type 'Amen' if you needed this today.",
@@ -402,3 +537,25 @@ def _build_facebook_caption(content) -> str:
         caption += "\n\n" + " ".join(hashtags)
 
     return caption
+
+
+def _build_tiktok_caption(content) -> str:
+    """Build a TikTok-optimized caption.
+
+    TikTok captions max 2200 chars but shorter performs better.
+    Uses 3-5 hashtags, no dot separators. Includes verse reference.
+    """
+    caption = content.caption_short or content.caption_medium or ""
+
+    # Include verse reference
+    if content.verse and content.verse.reference:
+        if content.verse.reference not in caption:
+            caption += f" ({content.verse.reference})"
+
+    # TikTok-style hashtags: fewer, more trending
+    hashtags = ["#faith", "#bible", "#christian"]
+    if content.hashtags_large:
+        hashtags.extend(content.hashtags_large[:2])
+    caption += "\n\n" + " ".join(hashtags)
+
+    return caption[:2200]

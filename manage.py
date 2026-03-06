@@ -13,6 +13,8 @@ Usage:
     python manage.py rate-card        Show sponsorship rate card
     python manage.py clear-content    Clear all generated content from database
     python manage.py purge-local      Delete local media files already uploaded to R2
+    python manage.py token-status     Check Instagram token health (--refresh to renew)
+    python manage.py tiktok-auth      Start TikTok OAuth flow to get access token
 """
 
 import sys
@@ -481,6 +483,56 @@ def purge_local_media():
     print(f"\nDeleted {deleted} files, freed {freed_mb:.1f} MB")
 
 
+def tiktok_auth():
+    """Start TikTok OAuth flow to get an access token.
+
+    Opens the TikTok authorization page in your browser. After authorizing,
+    TikTok redirects to our callback page with an auth code. Paste the code
+    here to exchange it for an access token.
+    """
+    from core.posting.tiktok_client import get_auth_url, exchange_code_for_token
+    from core.config import settings
+
+    if not settings.tiktok_client_key:
+        print("Error: TIKTOK_CLIENT_KEY not set in .env")
+        return
+
+    redirect_uri = "https://davidkimmel.github.io/Stillwatergrace/callback.html"
+    auth_url = get_auth_url(redirect_uri)
+
+    print("\n== TikTok Authorization ==\n")
+    print("1. Open this URL in your browser:\n")
+    print(f"   {auth_url}\n")
+    print("2. Log in to TikTok and authorize the app")
+    print("3. You'll be redirected to a page with an auth code")
+    print("4. Copy the code and paste it below\n")
+
+    # Try to open browser automatically
+    try:
+        import webbrowser
+        webbrowser.open(auth_url)
+        print("(Browser should have opened automatically)\n")
+    except Exception:
+        pass
+
+    code = input("Paste the authorization code: ").strip()
+    if not code:
+        print("No code provided. Aborting.")
+        return
+
+    print("\nExchanging code for access token...")
+    result = exchange_code_for_token(code, redirect_uri)
+
+    if result and result.get("access_token"):
+        print(f"\n  Access token:  {result['access_token'][:20]}...")
+        print(f"  Refresh token: {result.get('refresh_token', 'none')[:20]}...")
+        print(f"  Expires in:    {result.get('expires_in', 'unknown')} seconds")
+        print(f"  Open ID:       {result.get('open_id', 'unknown')}")
+        print("\n  Saved to .env successfully!")
+    else:
+        print("\n  Token exchange FAILED. Check logs for details.")
+
+
 COMMANDS = {
     "init-db": init_db,
     "seed": seed,
@@ -495,6 +547,7 @@ COMMANDS = {
     "clear-content": clear_content,
     "token-status": token_status,
     "purge-local": purge_local_media,
+    "tiktok-auth": tiktok_auth,
 }
 
 
