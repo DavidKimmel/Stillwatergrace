@@ -212,8 +212,8 @@ def post_content_immediately(content_id: int) -> dict:
 
 
 def _post_to_instagram(db, content):
-    """Post a single content piece to Instagram (photo or reel)."""
-    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
+    """Post a single content piece to Instagram (photo, carousel, or reel)."""
+    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat, ContentType
 
     logger.info(f"Posting content #{content.id} to Instagram...")
 
@@ -221,7 +221,11 @@ def _post_to_instagram(db, content):
         from core.posting.instagram_client import InstagramClient
         client = InstagramClient()
 
-        # Check for reel first
+        # Carousel content type → use publish_carousel with slide images
+        if content.content_type == ContentType.carousel:
+            return _publish_carousel(db, client, content)
+
+        # Non-carousel: check for reel first
         reel = (
             db.query(GeneratedImage)
             .filter(
@@ -362,9 +366,87 @@ def _publish_reel(db, client, content, reel):
     return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "reel"}
 
 
+def _publish_carousel(db, client, content):
+    """Publish a carousel post to Instagram using slide images."""
+    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
+
+    caption = _build_caption(content)
+
+    # Find carousel slide images (stored as feed_4x5 with r2_key like carousel_N.jpg)
+    all_feed = (
+        db.query(GeneratedImage)
+        .filter(
+            GeneratedImage.content_id == content.id,
+            GeneratedImage.format == ImageFormat.feed_4x5,
+        )
+        .order_by(GeneratedImage.id)
+        .all()
+    )
+
+    # Separate carousel slides from the main feed image
+    slides = [img for img in all_feed if img.r2_key and "carousel_" in img.r2_key]
+
+    if len(slides) >= 2:
+        image_urls = [s.final_url for s in slides if s.final_url]
+    elif len(all_feed) >= 2:
+        # Fallback: use all feed_4x5 images as carousel items
+        image_urls = [img.final_url for img in all_feed if img.final_url]
+    else:
+        # Not enough slides for carousel — prefer reel if available, else single photo
+        reel = (
+            db.query(GeneratedImage)
+            .filter(
+                GeneratedImage.content_id == content.id,
+                GeneratedImage.format == ImageFormat.reel_9x16,
+            )
+            .first()
+        )
+        if reel and reel.final_url:
+            logger.info(f"Carousel #{content.id} has no slides, falling back to reel")
+            return _publish_reel(db, client, content, reel)
+
+        image = all_feed[0] if all_feed else None
+        if not image or not image.final_url:
+            raise ValueError(f"No images found for carousel content #{content.id}")
+
+        logger.info(f"Only 1 image for carousel #{content.id}, posting as photo instead")
+        result = client.publish_photo(image_url=image.final_url, caption=caption)
+        log = PostingLog(
+            content_id=content.id,
+            platform=Platform.instagram,
+            platform_post_id=result.get("id"),
+            platform_media_id=result.get("media_id"),
+            status=PostingStatus.success,
+            caption_used=caption,
+            hashtags_used=_get_hashtags(content),
+            posted_at=datetime.utcnow(),
+            scheduled_for=content.scheduled_at,
+        )
+        db.add(log)
+        return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "photo"}
+
+    result = client.publish_carousel(image_urls=image_urls, caption=caption)
+
+    log = PostingLog(
+        content_id=content.id,
+        platform=Platform.instagram,
+        platform_post_id=result.get("id"),
+        platform_media_id=result.get("media_id"),
+        status=PostingStatus.success,
+        caption_used=caption,
+        hashtags_used=_get_hashtags(content),
+        posted_at=datetime.utcnow(),
+        scheduled_for=content.scheduled_at,
+    )
+    db.add(log)
+
+    logger.info(f"Successfully posted content #{content.id} as carousel ({len(image_urls)} slides) to Instagram")
+    return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "carousel"}
+
+
 def _post_to_facebook(db, content):
     """Cross-post a content piece to Facebook Page."""
-    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
+    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat, ContentType
 
     logger.info(f"Cross-posting content #{content.id} to Facebook...")
 
@@ -375,15 +457,32 @@ def _post_to_facebook(db, content):
         # Use Facebook-adapted caption (more conversational)
         caption = _build_facebook_caption(content)
 
-        # Check for reel/video first
-        reel = (
-            db.query(GeneratedImage)
-            .filter(
-                GeneratedImage.content_id == content.id,
-                GeneratedImage.format == ImageFormat.reel_9x16,
+        # Carousel with real slides → post as photo on Facebook
+        # Carousel without slides or non-carousel → check for reel first
+        has_carousel_slides = False
+        if content.content_type == ContentType.carousel:
+            slide_count = (
+                db.query(GeneratedImage)
+                .filter(
+                    GeneratedImage.content_id == content.id,
+                    GeneratedImage.format == ImageFormat.feed_4x5,
+                    GeneratedImage.r2_key.contains("carousel_"),
+                )
+                .count()
             )
-            .first()
-        )
+            has_carousel_slides = slide_count >= 2
+
+        if has_carousel_slides:
+            reel = None
+        else:
+            reel = (
+                db.query(GeneratedImage)
+                .filter(
+                    GeneratedImage.content_id == content.id,
+                    GeneratedImage.format == ImageFormat.reel_9x16,
+                )
+                .first()
+            )
 
         if reel and reel.final_url:
             result = client.publish_video(
