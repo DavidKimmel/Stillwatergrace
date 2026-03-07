@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Engagement Growth Strategy — StillWaterGrace</title>
+<style>
+  body { font-family: 'Segoe UI', Calibri, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; color: #2D4A3E; background: #FFF8F0; line-height: 1.7; }
+  h1 { font-family: Georgia, serif; color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 0.5rem; }
+  h2 { font-family: Georgia, serif; color: #D4A853; margin-top: 2.5rem; }
+  h3 { color: #4B6E5F; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th { background: #2D4A3E; color: #FFF8F0; padding: 0.6rem 1rem; text-align: left; }
+  td { border: 1px solid #e0d8ce; padding: 0.5rem 1rem; }
+  tr:nth-child(even) { background: #FAFAFA; }
+  .callout { background: #FAFAFA; border-left: 4px solid #D4A853; padding: 1rem 1.2rem; margin: 1.2rem 0; }
+  .phase-badge { display: inline-block; background: #2D4A3E; color: #FFF8F0; padding: 0.2rem 0.8rem; border-radius: 4px; font-size: 0.85rem; margin-right: 0.5rem; }
+  code { background: #f0ece6; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9rem; }
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+  .kpi-card { background: #FAFAFA; border: 1px solid #e0d8ce; border-top: 3px solid #D4A853; padding: 1rem; }
+  .kpi-card h4 { margin: 0 0 0.3rem 0; color: #2D4A3E; }
+  .kpi-card .target { font-size: 1.4rem; font-weight: bold; color: #D4A853; }
+  .timeline { position: relative; padding-left: 2rem; }
+  .timeline::before { content: ''; position: absolute; left: 0.5rem; top: 0; bottom: 0; width: 2px; background: #D4A853; }
+  .milestone { position: relative; margin-bottom: 1.5rem; }
+  .milestone::before { content: ''; position: absolute; left: -1.65rem; top: 0.4rem; width: 12px; height: 12px; border-radius: 50%; background: #D4A853; border: 2px solid #2D4A3E; }
+  .milestone h4 { margin: 0; color: #2D4A3E; }
+  .milestone .week { font-size: 0.85rem; color: #B4AAA0; }
+</style>
+</head>
+<body>
+
+<h1>Engagement Growth Strategy</h1>
+<p><strong>Goal:</strong> Grow @stillwatergrace from &lt;100 to 1,000 followers as quickly as possible through engagement-first tactics.</p>
+<p><strong>Approach:</strong> Engagement Engine — maximize algorithm signals via ManyChat DM automation, strategic CTAs, daily outbound engagement, and profile optimization.</p>
+<p><strong>Date:</strong> 2026-03-07</p>
+<p><strong>Budget:</strong> $0 (scale tools as account grows)</p>
+
+<div class="callout">
+<strong>What's already built (Phase 1 + Phase 2):</strong>
+<ul>
+<li>14-post/week content calendar (morning + noon, 7 days)</li>
+<li>Engagement CTAs already in caption prompts (<code>caption_long</code> ends with CTA)</li>
+<li>5 hashtags per post (3 tiers generated, 5 selected)</li>
+<li>Instagram Insights analytics endpoint</li>
+<li>Devotional PDF lead magnet (hosted on R2)</li>
+<li>Kit landing page live (<code>https://stillwater-grace.kit.com/8035cf2fca</code>)</li>
+<li>Reel generation with TTS narration + music</li>
+<li>Cross-posting to Facebook (TikTok pending approval)</li>
+</ul>
+<p>This strategy covers <strong>only net-new work</strong> not addressed by Phase 1 or Phase 2.</p>
+</div>
+
+<h2>1. ManyChat DM Automation</h2>
+
+<p>When a follower comments a trigger keyword on a post, ManyChat auto-sends them a DM with the devotional PDF download link and Kit landing page signup. This simultaneously boosts comment count (algorithm signal) and grows the email list.</p>
+
+<h3>Setup (Manual — Free Plan)</h3>
+<ol>
+<li>Create a ManyChat account at <code>manychat.com</code></li>
+<li>Connect to the @stillwatergrace Instagram account</li>
+<li>Create a <strong>Keyword Automation</strong>:
+  <ul>
+    <li><strong>Trigger keyword:</strong> PEACE</li>
+    <li><strong>Trigger type:</strong> Comment contains keyword</li>
+    <li><strong>Apply to:</strong> All posts (or specific posts tagged in ManyChat)</li>
+  </ul>
+</li>
+<li>Build the DM flow:
+  <ul>
+    <li><strong>Message 1:</strong> "Thanks for commenting! Here's your free 7-day devotional — Finding Peace in Every Season. Download it here: [R2 PDF URL]"</li>
+    <li><strong>Message 2 (delay 30s):</strong> "Want daily encouragement in your inbox? Join our community: [Kit landing page URL]"</li>
+  </ul>
+</li>
+<li>Add the keyword CTA to <strong>1-2 posts per week</strong> (faith_friday is the natural fit):
+  <br>"Comment PEACE and we'll send you our free 7-day devotional"</li>
+</ol>
+
+<div class="callout">
+<strong>Free plan limits:</strong> 1,000 contacts, 1 keyword trigger. Sufficient for the 0→1,000 follower phase. Upgrade to Pro ($15/mo) when contact limit is reached.
+</div>
+
+<h3>Code Changes (Optional, Minimal)</h3>
+<p>No code changes are strictly required — ManyChat is configured entirely in their UI. Optionally, add a <code>manychat_cta</code> hint to the <code>faith_friday.jinja2</code> prompt so Claude includes the keyword CTA in those captions specifically.</p>
+
+<h2>2. Bio &amp; Profile Optimization</h2>
+
+<h3>Recommended Bio</h3>
+<pre>
+Daily faith for your family
+Scripture | Marriage | Parenting
+Free 7-day devotional below
+</pre>
+
+<h3>Link in Bio</h3>
+<p>Kit landing page: <code>https://stillwater-grace.kit.com/8035cf2fca</code></p>
+<p>The landing page collects email and redirects to the R2-hosted PDF download. As the account grows and more lead magnets are added, switch to a Linktree or custom link page.</p>
+
+<h3>Profile Picture</h3>
+<p>Use a branded nature image or minimalist logo with the cream/gold/green palette. Must be recognizable at thumbnail size in comment sections.</p>
+
+<h3>Highlights</h3>
+<p>Create Instagram Story Highlights for:</p>
+<ul>
+<li><strong>Devotional</strong> — Preview pages from the PDF, download CTA</li>
+<li><strong>Verses</strong> — Best-performing daily verse stories</li>
+<li><strong>About</strong> — Who we are, what we share</li>
+</ul>
+
+<h2>3. Daily Engagement Playbook</h2>
+
+<p>This is the manual engagement routine. The algorithm rewards accounts that actively participate in the community, not just post content.</p>
+
+<h3>Daily Routine (15-20 minutes)</h3>
+<table>
+<tr><th>Action</th><th>Time</th><th>Details</th></tr>
+<tr><td>Reply to comments</td><td>5 min</td><td>Reply to every comment on your posts within 1 hour of posting. Ask a follow-up question to keep the thread going.</td></tr>
+<tr><td>Engage with niche accounts</td><td>10 min</td><td>Visit 10 accounts in the faith niche. Leave genuine 2-3 sentence comments on their posts (reference specific content, not "nice post"). Search hashtags: #christianmom, #faithandfamily, #bibleverseoftheday, #marriagegoals, #christianparenting</td></tr>
+<tr><td>Like niche content</td><td>2 min</td><td>Like 20-30 posts from accounts in your niche hashtag feeds</td></tr>
+<tr><td>Respond to DMs</td><td>3 min</td><td>Reply to all DMs — even "thanks" messages. Personal touch builds community.</td></tr>
+</table>
+
+<h3>Weekly Routine (30 minutes)</h3>
+<table>
+<tr><th>Action</th><th>Details</th></tr>
+<tr><td>Follow niche accounts</td><td>Follow 20-30 accounts that actively engage (not ghost followers). Look for accounts that comment on competitors' posts.</td></tr>
+<tr><td>Review Instagram Insights</td><td>Which posts got highest reach? Which reels got shares? Double down on those content types and tones next week.</td></tr>
+<tr><td>Clean follow list</td><td>Unfollow non-engagers after 7 days. Keep follow/following ratio below 1.5:1.</td></tr>
+<tr><td>Review ManyChat stats</td><td>How many keyword comments? DMs sent? Conversion to Kit signups?</td></tr>
+</table>
+
+<h3>Engagement Quality Rules</h3>
+<ul>
+<li><strong>Never:</strong> "Nice post!", "Amen!", one-word comments on other accounts</li>
+<li><strong>Always:</strong> Reference something specific — "This verse hit different today. Praying for everyone going through that season of waiting."</li>
+<li><strong>Goal:</strong> Your comment should make the poster AND their followers want to click your profile</li>
+</ul>
+
+<h2>4. Growth Milestones &amp; Actions</h2>
+
+<div class="timeline">
+  <div class="milestone">
+    <h4>100 Followers</h4>
+    <div class="week">Target: Week 2-3</div>
+    <p>Activate ManyChat keyword automation. Start adding "Comment PEACE for our free devotional" to 1-2 posts/week. Begin daily engagement routine.</p>
+  </div>
+
+  <div class="milestone">
+    <h4>300 Followers</h4>
+    <div class="week">Target: Week 4-6</div>
+    <p>Begin outreach for shoutout swaps with faith accounts in the 500-2,000 range. Use Instagram's native Collab Post feature. Create a second devotional theme for variety.</p>
+  </div>
+
+  <div class="milestone">
+    <h4>500 Followers</h4>
+    <div class="week">Target: Week 6-8</div>
+    <p>Add a second ManyChat keyword trigger (new lead magnet). Consider upgrading ManyChat if approaching 1,000 contacts. Evaluate TikTok cross-posting impact.</p>
+  </div>
+
+  <div class="milestone">
+    <h4>1,000 Followers</h4>
+    <div class="week">Target: Week 8-12</div>
+    <p>Unlock Instagram Link Sticker for Stories. Begin monetization planning (affiliate links, digital products). Consider first paid collaboration. Evaluate upgrading to ManyChat Pro.</p>
+  </div>
+</div>
+
+<h2>5. Weekly KPIs</h2>
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <h4>Follower Growth</h4>
+    <div class="target">+50-100/week</div>
+    <p>After hitting 100 followers. Track in Instagram Insights.</p>
+  </div>
+  <div class="kpi-card">
+    <h4>Reel Views</h4>
+    <div class="target">500+ average</div>
+    <p>Non-follower reach indicator. Below 200 = adjust hooks/content.</p>
+  </div>
+  <div class="kpi-card">
+    <h4>Comments per Post</h4>
+    <div class="target">5+ average</div>
+    <p>Algorithm signal. Keyword CTA posts should hit 10+.</p>
+  </div>
+  <div class="kpi-card">
+    <h4>Email Signups</h4>
+    <div class="target">10+/week</div>
+    <p>Via ManyChat DM → Kit landing page funnel.</p>
+  </div>
+</div>
+
+<h2>6. Implementation Summary</h2>
+
+<table>
+<tr><th>Item</th><th>Type</th><th>Code Change?</th><th>Priority</th></tr>
+<tr><td>ManyChat account + keyword automation</td><td>Manual setup</td><td>No</td><td>High — do at 100 followers</td></tr>
+<tr><td>Bio + link-in-bio optimization</td><td>Manual setup</td><td>No</td><td>High — do now</td></tr>
+<tr><td>Story Highlights (Devotional, Verses, About)</td><td>Manual setup</td><td>No</td><td>Medium — do this week</td></tr>
+<tr><td>Daily engagement routine</td><td>Manual daily</td><td>No</td><td>High — start now</td></tr>
+<tr><td>Weekly analytics review</td><td>Manual weekly</td><td>No</td><td>Medium — use existing Insights endpoint</td></tr>
+<tr><td>Keyword CTA in faith_friday prompt</td><td>Optional code</td><td>Small edit to <code>faith_friday.jinja2</code></td><td>Low — manual caption edit works too</td></tr>
+<tr><td>Engagement playbook doc</td><td>This document</td><td>No</td><td>Reference doc</td></tr>
+</table>
+
+<div class="callout">
+<strong>Key insight:</strong> This strategy is 95% playbook, 5% code. The content engine, posting pipeline, analytics, and lead magnet are already built. The growth gap is the human engagement layer + ManyChat automation. The fastest path to 1,000 followers is consistent daily engagement + keyword-triggered DMs driving the devotional PDF funnel.
+</div>
+
+<h2>7. Future Phases (After 1,000 Followers)</h2>
+<ul>
+<li><strong>Monetization:</strong> Affiliate links, premium devotional bundles, branded merchandise</li>
+<li><strong>Collaborations:</strong> Paid partnerships with faith brands, guest content exchanges</li>
+<li><strong>Email marketing:</strong> Purchase custom domain for Kit email delivery, welcome sequence, weekly newsletter</li>
+<li><strong>Scaling:</strong> ManyChat Pro ($15/mo), additional lead magnets, segmented DM flows</li>
+<li><strong>10K strategy:</strong> Instagram Ads ($5-10/day), influencer partnerships, cross-platform growth via TikTok</li>
+</ul>
+
+</body>
+</html>
