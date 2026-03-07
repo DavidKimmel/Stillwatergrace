@@ -231,3 +231,12 @@ def refresh_instagram_token_task():
     except Exception as e:
         logger.error(f"Token refresh task error: {e}")
         return {"status": "error", "error": str(e)}
+
+    # Also refresh the insights token (IGAA) if configured
+    try:
+        from core.posting.instagram_client import refresh_insights_token
+        insights_result = refresh_insights_token()
+        if insights_result:
+            logger.info("Insights token refreshed successfully")
+    except Exception as e:
+        logger.error(f"Insights token refresh error: {e}")

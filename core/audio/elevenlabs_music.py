@@ -504,54 +504,40 @@ import random as _random
 
 NARRATION_VOICES: list[dict[str, str]] = [
     {
-        "id": "JBFqnCBsd6RMkjVDRZzb",
-        "name": "George",
-        "description": "British male, warm and raspy — calm narration",
+        "id": "3AvFKjwBVQoGCFjmz5ib",
+        "name": "Suzanne",
     },
     {
-        "id": "onwK4e9ZLuTAKqWW03F9",
-        "name": "Daniel",
-        "description": "British male, deep — authoritative scripture reading",
+        "id": "oQV06a7Gn8pbCJh5DXcO",
+        "name": "Archer",
     },
     {
-        "id": "ZQe5CZNOzWyzPSCn5a3c",
+        "id": "EkK5I93UQWFDigLMpZcX",
         "name": "James",
-        "description": "Australian male, calm — reflective and measured",
     },
     {
-        "id": "lL4hpA5hxNF3ovpnRQT5",
-        "name": "Barry",
-        "description": "Narration voice — rich and engaging",
-    },
-    {
-        "id": "4dZr8J4CBeokyRkTRpoN",
-        "name": "Hardwood",
-        "description": "Narration voice — warm and grounded",
-    },
-    {
-        "id": "kBag1HOZlaVBH7ICPE8x",
-        "name": "Sakky Ford",
-        "description": "Narration voice — expressive and distinctive",
-    },
-    {
-        "id": "66y97vsfcmXgLh93gcal",
-        "name": "Connery",
-        "description": "Narration voice — commanding and distinctive",
-    },
-    {
-        "id": "4QLC5fepxZkYmdD2IGRU",
-        "name": "Matthew",
-        "description": "Narration voice — clear and expressive",
+        "id": "uju3wxzG5OhpWcoi3SMy",
+        "name": "Michael C. Vincent",
     },
     {
         "id": "jfIS2w2yJi0grJZPyEsk",
         "name": "Oliver Silk",
-        "description": "Narration voice — smooth and refined",
     },
     {
         "id": "B5jEZPqk2OJ2vkPw3wBM",
         "name": "Cillian",
-        "description": "Narration voice — intense and captivating",
+    },
+    {
+        "id": "66y97vsfcmXgLh93gcal",
+        "name": "Connery",
+    },
+    {
+        "id": "kBag1HOZlaVBH7ICPE8x",
+        "name": "Sakky Ford",
+    },
+    {
+        "id": "lL4hpA5hxNF3ovpnRQT5",
+        "name": "Barry",
     },
 ]
 

@@ -20,6 +20,7 @@ from core.config import settings
 logger = logging.getLogger(__name__)
 
 GRAPH_API_BASE = "https://graph.facebook.com/v19.0"
+INSTAGRAM_API_BASE = "https://graph.instagram.com/v25.0"
 ENV_FILE = Path(__file__).parent.parent.parent / ".env"
 
 # Rate limits
@@ -176,22 +177,36 @@ class InstagramClient:
         return {"id": creation_id, "media_id": result.get("id")}
 
     def get_media_insights(self, media_id: str) -> Optional[dict]:
-        """Get insights for a published media item."""
-        metrics = "impressions,reach,saved,shares,likes,comments,plays"
-        result = self._api_get(
-            f"{media_id}/insights",
-            params={"metric": metrics},
-        )
-        if not result:
+        """Get insights for a published media item.
+
+        Uses the Instagram Login token (IGAA) via graph.instagram.com.
+        Falls back to the standard token if no insights token is configured.
+        """
+        token = settings.instagram_insights_token or self.access_token
+        base = INSTAGRAM_API_BASE if settings.instagram_insights_token else GRAPH_API_BASE
+        metrics = "reach,saved,likes,comments,shares"
+        url = f"{base}/{media_id}/insights"
+        params = {"metric": metrics, "access_token": token}
+
+        try:
+            response = self.client.get(url, params=params)
+            data = response.json()
+
+            if "error" in data:
+                logger.error(f"Insights API error: {data['error'].get('message')}")
+                return None
+
+            insights = {}
+            for item in data.get("data", []):
+                name = item.get("name")
+                values = item.get("values", [{}])
+                insights[name] = values[0].get("value", 0) if values else 0
+
+            return insights
+
+        except Exception as e:
+            logger.error(f"Insights API request failed: {e}")
             return None
-
-        insights = {}
-        for item in result.get("data", []):
-            name = item.get("name")
-            values = item.get("values", [{}])
-            insights[name] = values[0].get("value", 0) if values else 0
-
-        return insights
 
     # ── Private Methods ──
 
@@ -358,24 +373,76 @@ def refresh_instagram_token() -> Optional[str]:
     return new_token
 
 
-def _update_env_token(new_token: str) -> bool:
-    """Replace INSTAGRAM_ACCESS_TOKEN in the .env file."""
+def refresh_insights_token() -> Optional[str]:
+    """Refresh the Instagram Login (IGAA) insights token for another 60 days.
+
+    Uses the ig_refresh_token endpoint on graph.instagram.com.
+    Returns the new token on success, None on failure.
+    """
+    if not settings.instagram_insights_token:
+        logger.info("No insights token configured, skipping refresh")
+        return None
+
+    url = f"{INSTAGRAM_API_BASE}/refresh_access_token"
+    params = {
+        "grant_type": "ig_refresh_token",
+        "access_token": settings.instagram_insights_token,
+    }
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(url, params=params)
+            data = response.json()
+    except Exception as e:
+        logger.error(f"Insights token refresh failed: {e}")
+        return None
+
+    if "error" in data:
+        logger.error(f"Insights token refresh error: {data['error'].get('message')}")
+        return None
+
+    new_token = data.get("access_token")
+    expires_in = data.get("expires_in", 0)
+
+    if not new_token:
+        logger.error("No access_token in insights refresh response")
+        return None
+
+    expires_days = expires_in // 86400
+    logger.info(f"Got new insights token (expires in {expires_days} days)")
+
+    if _update_env_var("INSTAGRAM_INSIGHTS_TOKEN", new_token):
+        logger.info("Updated .env with new insights token")
+    else:
+        logger.warning("Failed to update .env — insights token will be lost on restart")
+
+    settings.instagram_insights_token = new_token
+    return new_token
+
+
+def _update_env_var(var_name: str, value: str) -> bool:
+    """Replace a variable's value in the .env file."""
     try:
         content = ENV_FILE.read_text(encoding="utf-8")
         updated = re.sub(
-            r"^INSTAGRAM_ACCESS_TOKEN=.*$",
-            f"INSTAGRAM_ACCESS_TOKEN={new_token}",
+            rf"^{re.escape(var_name)}=.*$",
+            f"{var_name}={value}",
             content,
             flags=re.MULTILINE,
         )
         if updated == content:
-            logger.warning("INSTAGRAM_ACCESS_TOKEN line not found in .env")
+            logger.warning(f"{var_name} line not found in .env")
             return False
         ENV_FILE.write_text(updated, encoding="utf-8")
         return True
     except Exception as e:
         logger.error(f"Failed to update .env file: {e}")
         return False
+
+
+def _update_env_token(new_token: str) -> bool:
+    """Replace INSTAGRAM_ACCESS_TOKEN in the .env file."""
+    return _update_env_var("INSTAGRAM_ACCESS_TOKEN", new_token)
 
 
 def check_token_health() -> dict:

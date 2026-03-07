@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # Instagram / Meta
     instagram_access_token: str = ""
+    instagram_insights_token: str = ""  # IGAA token for Instagram Login (insights)
     instagram_business_account_id: str = ""
     facebook_page_id: str = ""
     meta_app_id: str = ""
