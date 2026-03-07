@@ -15,6 +15,8 @@ Usage:
     python manage.py purge-local      Delete local media files already uploaded to R2
     python manage.py token-status     Check Instagram token health (--refresh to renew)
     python manage.py tiktok-auth      Start TikTok OAuth flow to get access token
+    python manage.py generate-devotional  Generate a branded devotional PDF (--theme=finding_peace [--upload])
+    python manage.py list-devotionals     List available devotional themes
 """
 
 import sys
@@ -533,6 +535,49 @@ def tiktok_auth():
         print("\n  Token exchange FAILED. Check logs for details.")
 
 
+def generate_devotional():
+    """Generate a branded devotional PDF from a theme."""
+    from core.devotional.orchestrator import DevotionalOrchestrator
+    from core.devotional.themes import list_themes
+
+    # Parse --theme arg
+    theme_slug = None
+    upload = False
+    for arg in sys.argv[2:]:
+        if arg.startswith("--theme="):
+            theme_slug = arg.split("=", 1)[1].lower().replace(" ", "_")
+        elif arg == "--upload":
+            upload = True
+
+    if not theme_slug:
+        print("Usage: python manage.py generate-devotional --theme=finding_peace [--upload]")
+        print(f"\nAvailable themes: {', '.join(list_themes())}")
+        return
+
+    print(f"\n== Generating Devotional: {theme_slug} ==\n")
+    orch = DevotionalOrchestrator()
+
+    if upload:
+        result = orch.generate_and_upload(theme_slug)
+    else:
+        result = orch.generate(theme_slug)
+
+    print(f"\nDone! Output: {result}")
+
+
+def list_devotionals_cmd():
+    """List available devotional themes."""
+    from core.devotional.themes import THEMES
+
+    print("\n== Available Devotional Themes ==\n")
+    for slug, theme in THEMES.items():
+        print(f"  {slug}")
+        print(f"    Title: {theme.title}")
+        print(f"    Subtitle: {theme.subtitle}")
+        print(f"    Days: {len(theme.days)}")
+        print()
+
+
 COMMANDS = {
     "init-db": init_db,
     "seed": seed,
@@ -548,6 +593,8 @@ COMMANDS = {
     "token-status": token_status,
     "purge-local": purge_local_media,
     "tiktok-auth": tiktok_auth,
+    "generate-devotional": generate_devotional,
+    "list-devotionals": list_devotionals_cmd,
 }
 
 

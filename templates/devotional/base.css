@@ -1,0 +1,300 @@
+@page {
+    size: 8.5in 11in;
+    margin: 0;
+}
+
+@page content {
+    margin: 0.75in 0.85in;
+}
+
+:root {
+    --cream: #FFF8F0;
+    --gold: #D4A853;
+    --gold-light: #E8C88C;
+    --green: #2D4A3E;
+    --green-light: #4B6E5F;
+    --white: #FAFAFA;
+    --warm-gray: #B4AAA0;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: Calibri, 'Segoe UI', sans-serif;
+    color: var(--green);
+    background: var(--cream);
+    font-size: 11pt;
+    line-height: 1.65;
+}
+
+/* Cover Page */
+.cover-page {
+    page: content;
+    page-break-after: always;
+    position: relative;
+    width: 100%;
+    min-height: 9.5in;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background-size: cover;
+    background-position: center;
+    color: var(--white);
+}
+
+.cover-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg, rgba(45,74,62,0.3) 0%, rgba(45,74,62,0.7) 50%, rgba(45,74,62,0.85) 100%);
+}
+
+.cover-content {
+    position: relative;
+    z-index: 1;
+    padding: 2rem;
+}
+
+.cover-content h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 32pt;
+    font-weight: normal;
+    letter-spacing: 0.5pt;
+    margin-bottom: 0.3em;
+    color: var(--white);
+}
+
+.cover-content .subtitle {
+    font-family: Calibri, sans-serif;
+    font-size: 14pt;
+    color: var(--gold-light);
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+}
+
+.cover-content .brand {
+    font-family: Georgia, serif;
+    font-size: 11pt;
+    color: var(--gold-light);
+    font-style: italic;
+    margin-top: 3rem;
+}
+
+.cover-divider {
+    width: 60px;
+    height: 2px;
+    background: var(--gold);
+    margin: 1rem auto;
+}
+
+/* Welcome Page */
+.welcome-page {
+    page: content;
+    page-break-after: always;
+    padding-top: 1.5in;
+}
+
+.welcome-page h2 {
+    font-family: Georgia, serif;
+    font-size: 20pt;
+    color: var(--green);
+    margin-bottom: 0.5rem;
+}
+
+.welcome-divider {
+    width: 40px;
+    height: 2px;
+    background: var(--gold);
+    margin: 0.8rem 0 1.5rem 0;
+}
+
+.welcome-page p { margin-bottom: 1rem; font-size: 11.5pt; }
+
+.how-to-use {
+    background: var(--white);
+    border-left: 3px solid var(--gold);
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+}
+
+.how-to-use h3 {
+    font-family: Georgia, serif;
+    font-size: 13pt;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+}
+
+.how-to-use ol { padding-left: 1.2rem; font-size: 10.5pt; }
+.how-to-use li { margin-bottom: 0.4rem; }
+
+/* Day Image Page */
+.day-image-page {
+    page: content;
+    page-break-after: always;
+    position: relative;
+    min-height: 9.5in;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background-size: cover;
+    background-position: center;
+}
+
+.day-image-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg, rgba(45,74,62,0.25) 0%, rgba(45,74,62,0.6) 40%, rgba(45,74,62,0.8) 100%);
+}
+
+.day-image-content {
+    position: relative;
+    z-index: 1;
+    color: var(--white);
+    padding: 2rem;
+    max-width: 85%;
+}
+
+.day-label {
+    font-family: Calibri, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 3pt;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 0.5rem;
+}
+
+.day-image-content h2 {
+    font-family: Georgia, serif;
+    font-size: 24pt;
+    color: var(--white);
+    margin-bottom: 1rem;
+}
+
+.verse-text {
+    font-family: Georgia, serif;
+    font-size: 14pt;
+    font-style: italic;
+    line-height: 1.7;
+    margin-bottom: 1rem;
+    color: var(--white);
+}
+
+.verse-ref {
+    font-family: Calibri, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 1.5pt;
+    text-transform: uppercase;
+    color: var(--gold-light);
+}
+
+/* Day Reflection Page */
+.day-reflection-page {
+    page: content;
+}
+
+.day-reflection-page h3 {
+    font-family: Georgia, serif;
+    font-size: 16pt;
+    color: var(--green);
+    margin-bottom: 0.3rem;
+}
+
+.reflection-divider {
+    width: 30px;
+    height: 2px;
+    background: var(--gold);
+    margin: 0.6rem 0 1.2rem 0;
+}
+
+.reflection-body { font-size: 11pt; margin-bottom: 1.5rem; text-align: justify; }
+
+.reflect-section {
+    background: var(--white);
+    border-left: 3px solid var(--gold);
+    padding: 0.8rem 1rem;
+    margin: 1.2rem 0;
+}
+
+.reflect-section h4 {
+    font-family: Georgia, serif;
+    font-size: 12pt;
+    color: var(--gold);
+    margin-bottom: 0.4rem;
+}
+
+.reflect-section p { font-size: 10.5pt; font-style: italic; margin-bottom: 0.3rem; }
+
+.prayer-section { margin: 1.2rem 0; }
+.prayer-section h4 {
+    font-family: Georgia, serif;
+    font-size: 12pt;
+    color: var(--green);
+    margin-bottom: 0.4rem;
+}
+.prayer-section p { font-size: 10.5pt; font-style: italic; }
+
+.journal-section { margin-top: 1.5rem; }
+.journal-section h4 {
+    font-family: Georgia, serif;
+    font-size: 11pt;
+    color: var(--warm-gray);
+    margin-bottom: 0.6rem;
+}
+.journal-lines { border-bottom: 1px solid #e0d8ce; height: 1.8rem; }
+
+/* Notes Page */
+.notes-page {
+    page: content;
+    page-break-before: always;
+    page-break-after: always;
+}
+
+.notes-page h4 {
+    font-family: Georgia, serif;
+    font-size: 13pt;
+    color: var(--warm-gray);
+    margin-bottom: 0.3rem;
+}
+
+.notes-divider {
+    width: 30px;
+    height: 1px;
+    background: var(--gold);
+    margin: 0.5rem 0 1rem 0;
+}
+
+/* Closing Page */
+.closing-page {
+    page: content;
+    page-break-after: always;
+    padding-top: 2in;
+    text-align: center;
+}
+
+.closing-page h2 {
+    font-family: Georgia, serif;
+    font-size: 20pt;
+    color: var(--green);
+    margin-bottom: 0.5rem;
+}
+
+.closing-page p { font-size: 11pt; max-width: 80%; margin: 0.8rem auto; }
+
+.social-links { margin-top: 2rem; font-size: 10pt; color: var(--warm-gray); }
+.social-links a { color: var(--gold); text-decoration: none; }
+
+/* Footer */
+.page-footer {
+    position: fixed;
+    bottom: 0.4in;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 8pt;
+    color: var(--warm-gray);
+    font-style: italic;
+}

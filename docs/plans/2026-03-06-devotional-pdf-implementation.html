@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Devotional PDF + Email List — Implementation Plan</title>
+<style>
+body { font-family: Calibri, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; color: #2D4A3E; background: #FFF8F0; line-height: 1.6; }
+h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 0.5rem; }
+h2 { color: #D4A853; margin-top: 2.5rem; border-bottom: 1px solid #e0d5c5; padding-bottom: 0.3rem; }
+h3 { color: #2D4A3E; margin-top: 1.5rem; }
+code { background: #f0ebe3; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9rem; }
+pre { background: #f0ebe3; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; border-left: 3px solid #D4A853; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #D4A853; padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
+th { background: #2D4A3E; color: #FFF8F0; }
+.task { background: #faf6f0; border: 1px solid #e0d5c5; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+.files { background: #f5f0e8; padding: 0.5rem 1rem; border-radius: 4px; margin: 0.5rem 0; }
+.step { margin: 0.8rem 0; padding-left: 1rem; border-left: 2px solid #D4A853; }
+.warn { background: #fff3cd; padding: 0.5rem 1rem; border-radius: 4px; border-left: 3px solid #D4A853; }
+</style>
+</head>
+<body>
+
+<h1>Devotional PDF + Email List &mdash; Implementation Plan</h1>
+
+<p><strong>For Claude:</strong> REQUIRED SUB-SKILL: Use <code>superpowers:executing-plans</code> to implement this plan task-by-task.</p>
+
+<p><strong>Goal:</strong> Build a templated devotional PDF generator that produces branded 7-day devotionals, plus ConvertKit integration for email subscriber growth.</p>
+
+<p><strong>Architecture:</strong> Theme configs define verse lists and mood keywords. The generator fetches verses from bible-api.com, sends them to Claude API for devotional reflections, downloads Unsplash images, generates verse overlay cards with PIL, then renders everything into a PDF via WeasyPrint + Jinja2 HTML templates. The PDF uploads to R2 for public access. ConvertKit handles the landing page, email delivery, and subscriber management — we just add a thin API client for subscriber count.</p>
+
+<p><strong>Tech Stack:</strong> WeasyPrint, Jinja2, Claude API (Sonnet), Unsplash API, PIL (existing), boto3/R2 (existing), ConvertKit API v4</p>
+
+<hr>
+
+<h2>Task 1: Add WeasyPrint dependency</h2>
+
+<div class="task">
+<div class="files">
+<strong>Modify:</strong> <code>requirements.txt</code>
+</div>
+
+<div class="step">
+<strong>Step 1:</strong> Replace <code>reportlab==4.2.5</code> with <code>weasyprint==62.3</code> in <code>requirements.txt</code>.
+<pre>
+# PDF Generation
+weasyprint==62.3
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Install the dependency.
+<pre>pip install weasyprint==62.3</pre>
+Expected: Installs successfully. WeasyPrint requires GTK libraries on Windows — if install fails, run <code>pip install weasyprint</code> (latest) and check <a href="https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation">WeasyPrint installation docs</a>.
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Verify it works.
+<pre>python -c "import weasyprint; print(weasyprint.__version__)"</pre>
+Expected: prints version number.
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Commit.
+<pre>git add requirements.txt
+git commit -m "chore: replace reportlab with weasyprint for PDF generation"</pre>
+</div>
+</div>
+
+<h2>Task 2: Theme configuration system</h2>
+
+<div class="task">
+<div class="files">
+<strong>Create:</strong> <code>core/devotional/__init__.py</code>, <code>core/devotional/themes.py</code><br>
+<strong>Test:</strong> <code>tests/unit/test_devotional_themes.py</code>
+</div>
+
+<div class="step">
+<strong>Step 1:</strong> Write the failing test.
+<pre>
+# tests/unit/test_devotional_themes.py
+from core.devotional.themes import get_theme, list_themes, DevotionalTheme
+
+
+def test_get_theme_returns_theme():
+    theme = get_theme("finding_peace")
+    assert isinstance(theme, DevotionalTheme)
+    assert theme.title == "Finding Peace in Every Season"
+    assert len(theme.days) == 7
+    assert theme.days[0].verse_ref  # has a verse reference
+    assert theme.days[0].mood_keywords  # has Unsplash keywords
+
+
+def test_get_theme_unknown_raises():
+    import pytest
+    with pytest.raises(KeyError):
+        get_theme("nonexistent_theme")
+
+
+def test_list_themes():
+    themes = list_themes()
+    assert "finding_peace" in themes
+    assert len(themes) >= 1
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Run test to verify it fails.
+<pre>pytest tests/unit/test_devotional_themes.py -v</pre>
+Expected: FAIL — <code>ModuleNotFoundError: No module named 'core.devotional'</code>
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Implement the theme system.
+<pre>
+# core/devotional/__init__.py
+(empty)
+
+# core/devotional/themes.py
+"""Devotional theme configurations.
+
+Each theme defines 7 days of content: verse references, mood keywords
+for Unsplash image search, and thematic context for Claude API reflections.
+"""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class DayConfig:
+    """Configuration for one day of a devotional."""
+    day_number: int
+    day_title: str
+    verse_ref: str
+    mood_keywords: list[str]
+    reflection_focus: str  # Hint for Claude API
+
+
+@dataclass(frozen=True)
+class DevotionalTheme:
+    """Complete theme configuration for a 7-day devotional."""
+    slug: str
+    title: str
+    subtitle: str
+    description: str  # Welcome page text
+    cover_keywords: list[str]  # Unsplash search for cover image
+    days: tuple[DayConfig, ...]
+
+
+THEMES: dict[str, DevotionalTheme] = {
+    "finding_peace": DevotionalTheme(
+        slug="finding_peace",
+        title="Finding Peace in Every Season",
+        subtitle="A 7-Day Devotional Journey",
+        description=(
+            "Life moves fast. Seasons change. Uncertainty creeps in. "
+            "But God's peace is not dependent on your circumstances — "
+            "it is anchored in His presence. Over the next seven days, "
+            "let these scriptures quiet your heart and remind you that "
+            "the God of all peace is walking with you, right now, "
+            "in this very season."
+        ),
+        cover_keywords=[
+            "calm lake sunrise peaceful mountains",
+            "morning mist forest serene landscape",
+            "peaceful ocean sunset golden light",
+        ],
+        days=(
+            DayConfig(
+                day_number=1,
+                day_title="Peace That Surpasses Understanding",
+                verse_ref="Philippians 4:6-7",
+                mood_keywords=["calm morning light meadow", "peaceful sunrise field"],
+                reflection_focus="Trading anxiety for prayer — finding peace through surrender",
+            ),
+            DayConfig(
+                day_number=2,
+                day_title="Be Still and Know",
+                verse_ref="Psalm 46:10",
+                mood_keywords=["still lake reflection dawn", "quiet forest morning mist"],
+                reflection_focus="The discipline of stillness in a noisy world",
+            ),
+            DayConfig(
+                day_number=3,
+                day_title="Perfect Peace",
+                verse_ref="Isaiah 26:3",
+                mood_keywords=["mountain summit peaceful sunrise", "calm ocean horizon"],
+                reflection_focus="Keeping your mind fixed on God through trust",
+            ),
+            DayConfig(
+                day_number=4,
+                day_title="My Peace I Give You",
+                verse_ref="John 14:27",
+                mood_keywords=["warm sunlight through window", "gentle stream forest"],
+                reflection_focus="The difference between the world's peace and Christ's peace",
+            ),
+            DayConfig(
+                day_number=5,
+                day_title="Peace in the Storm",
+                verse_ref="Mark 4:39-40",
+                mood_keywords=["calm after storm landscape", "rainbow clouds dramatic sky"],
+                reflection_focus="Jesus calming the storm — peace is a person, not a circumstance",
+            ),
+            DayConfig(
+                day_number=6,
+                day_title="The God of Peace",
+                verse_ref="Romans 15:13",
+                mood_keywords=["golden hour garden flowers", "warm light peaceful garden"],
+                reflection_focus="Joy, peace, and hope through the Holy Spirit",
+            ),
+            DayConfig(
+                day_number=7,
+                day_title="Rest for Your Soul",
+                verse_ref="Matthew 11:28-30",
+                mood_keywords=["peaceful path through forest", "quiet morning nature trail"],
+                reflection_focus="Coming to Jesus with your burdens — rest as an invitation",
+            ),
+        ),
+    ),
+}
+
+
+def get_theme(slug: str) -> DevotionalTheme:
+    """Get a theme by slug. Raises KeyError if not found."""
+    return THEMES[slug]
+
+
+def list_themes() -> list[str]:
+    """Return all available theme slugs."""
+    return list(THEMES.keys())
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Run tests.
+<pre>pytest tests/unit/test_devotional_themes.py -v</pre>
+Expected: 3 passed.
+</div>
+
+<div class="step">
+<strong>Step 5:</strong> Commit.
+<pre>git add core/devotional/ tests/unit/test_devotional_themes.py
+git commit -m "feat: add devotional theme configuration system"</pre>
+</div>
+</div>
+
+<h2>Task 3: Devotional content generator (Claude API)</h2>
+
+<div class="task">
+<div class="files">
+<strong>Create:</strong> <code>core/devotional/generator.py</code>, <code>prompts/devotional_reflection.jinja2</code><br>
+<strong>Test:</strong> <code>tests/unit/test_devotional_generator.py</code>
+</div>
+
+<div class="step">
+<strong>Step 1:</strong> Write the failing test.
+<pre>
+# tests/unit/test_devotional_generator.py
+import json
+from unittest.mock import MagicMock, patch
+from core.devotional.generator import DevotionalGenerator
+
+
+def _mock_claude_response(reflection: str, prayer: str, questions: list[str]):
+    """Create a mock Claude API response."""
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(
+        text=json.dumps({
+            "reflection": reflection,
+            "prayer": prayer,
+            "questions": questions,
+        })
+    )]
+    mock_response.usage = MagicMock(input_tokens=100, output_tokens=200)
+    return mock_response
+
+
+@patch("core.devotional.generator.anthropic.Anthropic")
+def test_generate_day_content(mock_anthropic_cls):
+    mock_client = MagicMock()
+    mock_anthropic_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _mock_claude_response(
+        reflection="God's peace is available to us...",
+        prayer="Lord, help me to release my anxieties...",
+        questions=["What are you anxious about today?"],
+    )
+
+    gen = DevotionalGenerator()
+    result = gen.generate_day_content(
+        verse_ref="Philippians 4:6-7",
+        verse_text="Do not be anxious about anything...",
+        day_title="Peace That Surpasses Understanding",
+        reflection_focus="Trading anxiety for prayer",
+        theme_title="Finding Peace in Every Season",
+    )
+
+    assert result["reflection"]
+    assert result["prayer"]
+    assert len(result["questions"]) >= 1
+    mock_client.messages.create.assert_called_once()
+
+
+@patch("core.devotional.generator.anthropic.Anthropic")
+def test_generate_all_days(mock_anthropic_cls):
+    mock_client = MagicMock()
+    mock_anthropic_cls.return_value = mock_client
+    mock_client.messages.create.return_value = _mock_claude_response(
+        reflection="A reflection...",
+        prayer="A prayer...",
+        questions=["A question?"],
+    )
+
+    gen = DevotionalGenerator()
+    from core.devotional.themes import get_theme
+    theme = get_theme("finding_peace")
+
+    # Mock bible API fetch
+    with patch.object(gen, "_fetch_verse_text", return_value="Verse text here..."):
+        results = gen.generate_all_days(theme)
+
+    assert len(results) == 7
+    assert all(r["reflection"] for r in results)
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Run test to verify it fails.
+<pre>pytest tests/unit/test_devotional_generator.py -v</pre>
+Expected: FAIL — <code>ImportError</code>
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Create the Jinja2 prompt template.
+<pre>
+# prompts/devotional_reflection.jinja2
+You are a warm, thoughtful Christian devotional writer for the Still Water Grace community.
+Our audience is faith-and-family focused — married couples, parents, and believers seeking
+encouragement in their daily walk.
+
+Write a devotional reflection for Day {{ day_number }} of our "{{ theme_title }}" series.
+
+## Today's Scripture
+**{{ verse_ref }}**
+"{{ verse_text }}"
+
+## Day Title
+{{ day_title }}
+
+## Reflection Focus
+{{ reflection_focus }}
+
+## Instructions
+Write a devotional entry with these three components:
+
+1. **reflection** — A warm, personal, 200-250 word devotional reflection on this verse.
+   Write in second person ("you"). Be conversational but reverent. Connect the verse
+   to everyday life — marriage, parenting, work, worry, joy. End with an encouraging
+   application point. Do NOT use churchy jargon or cliches.
+
+2. **prayer** — A 3-4 sentence prayer inspired by the verse. Intimate, sincere tone.
+   Address God directly.
+
+3. **questions** — 1-2 reflection questions that help the reader apply the verse
+   to their own life today. Personal and specific, not generic.
+
+## Output Format
+Return ONLY valid JSON:
+```json
+{
+  "reflection": "...",
+  "prayer": "...",
+  "questions": ["...", "..."]
+}
+```
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Implement the generator.
+<pre>
+# core/devotional/generator.py
+"""Devotional content generator using Claude API.
+
+Generates reflections, prayers, and questions for each day of a devotional,
+given a theme configuration and Bible verses.
+"""
+
+import json
+import logging
+from typing import Any
+
+import anthropic
+import httpx
+
+from core.config import settings
+from core.content.prompt_templates import PromptTemplateEngine
+from core.devotional.themes import DevotionalTheme, DayConfig
+
+logger = logging.getLogger(__name__)
+
+MODEL = "claude-sonnet-4-6"
+BIBLE_API_URL = "https://bible-api.com"
+
+
+class DevotionalGenerator:
+    """Generates devotional text content via Claude API."""
+
+    def __init__(self) -> None:
+        self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self.templates = PromptTemplateEngine()
+
+    def _fetch_verse_text(self, verse_ref: str) -> str:
+        """Fetch verse text from bible-api.com."""
+        ref_encoded = verse_ref.replace(" ", "%20")
+        resp = httpx.get(f"{BIBLE_API_URL}/{ref_encoded}", timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("text", "").strip()
+
+    def generate_day_content(
+        self,
+        verse_ref: str,
+        verse_text: str,
+        day_title: str,
+        reflection_focus: str,
+        theme_title: str,
+        day_number: int = 1,
+    ) -> dict[str, Any]:
+        """Generate devotional content for a single day."""
+        prompt = self.templates.render(
+            "devotional_reflection",
+            verse_ref=verse_ref,
+            verse_text=verse_text,
+            day_title=day_title,
+            reflection_focus=reflection_focus,
+            theme_title=theme_title,
+            day_number=day_number,
+        )
+
+        response = self.client.messages.create(
+            model=MODEL,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw = response.content[0].text.strip()
+        # Strip markdown fences if present
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[1]
+            if raw.endswith("```"):
+                raw = raw[:-3]
+            raw = raw.strip()
+
+        result = json.loads(raw)
+        logger.info(
+            f"Generated Day {day_number} reflection "
+            f"({response.usage.input_tokens}+{response.usage.output_tokens} tokens)"
+        )
+        return result
+
+    def generate_all_days(
+        self, theme: DevotionalTheme
+    ) -> list[dict[str, Any]]:
+        """Generate devotional content for all 7 days of a theme."""
+        results: list[dict[str, Any]] = []
+
+        for day in theme.days:
+            verse_text = self._fetch_verse_text(day.verse_ref)
+            content = self.generate_day_content(
+                verse_ref=day.verse_ref,
+                verse_text=verse_text,
+                day_title=day.day_title,
+                reflection_focus=day.reflection_focus,
+                theme_title=theme.title,
+                day_number=day.day_number,
+            )
+            content["verse_ref"] = day.verse_ref
+            content["verse_text"] = verse_text
+            content["day_title"] = day.day_title
+            content["day_number"] = day.day_number
+            results.append(content)
+
+        return results
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 5:</strong> Run tests.
+<pre>pytest tests/unit/test_devotional_generator.py -v</pre>
+Expected: 2 passed.
+</div>
+
+<div class="step">
+<strong>Step 6:</strong> Commit.
+<pre>git add core/devotional/generator.py prompts/devotional_reflection.jinja2 tests/unit/test_devotional_generator.py
+git commit -m "feat: add devotional content generator with Claude API"</pre>
+</div>
+</div>
+
+<h2>Task 4: PDF renderer (WeasyPrint + Jinja2 HTML templates)</h2>
+
+<div class="task">
+<div class="files">
+<strong>Create:</strong> <code>core/devotional/pdf_renderer.py</code>, <code>templates/devotional/base.css</code>, <code>templates/devotional/cover.html</code>, <code>templates/devotional/welcome.html</code>, <code>templates/devotional/day_image.html</code>, <code>templates/devotional/day_reflection.html</code>, <code>templates/devotional/closing.html</code>, <code>templates/devotional/devotional.html</code> (master template)<br>
+<strong>Test:</strong> <code>tests/unit/test_pdf_renderer.py</code>
+</div>
+
+<p class="warn"><strong>Note:</strong> This is the largest task. The HTML/CSS templates define the visual design. The <code>devotional.html</code> master template includes all pages and WeasyPrint renders the full PDF in one pass.</p>
+
+<div class="step">
+<strong>Step 1:</strong> Write the failing test.
+<pre>
+# tests/unit/test_pdf_renderer.py
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+from core.devotional.pdf_renderer import DevotionalPDFRenderer
+
+
+def _make_test_days():
+    """Create minimal test data for 7 days."""
+    return [
+        {
+            "day_number": i,
+            "day_title": f"Day {i} Title",
+            "verse_ref": f"Psalm {i}:1",
+            "verse_text": f"Test verse text for day {i}.",
+            "reflection": f"A reflection for day {i}." * 10,
+            "prayer": f"Lord, thank you for day {i}.",
+            "questions": [f"What does day {i} mean to you?"],
+            "image_path": None,  # No images for unit test
+        }
+        for i in range(1, 8)
+    ]
+
+
+def test_render_pdf_creates_file():
+    days = _make_test_days()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "test_devotional.pdf")
+        renderer = DevotionalPDFRenderer()
+        result = renderer.render(
+            title="Test Devotional",
+            subtitle="A Test Journey",
+            description="This is a test devotional.",
+            days=days,
+            output_path=output_path,
+        )
+        assert Path(result).exists()
+        assert Path(result).stat().st_size > 1000  # Not empty
+
+
+def test_render_pdf_has_correct_filename():
+    days = _make_test_days()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = os.path.join(tmpdir, "my_devotional.pdf")
+        renderer = DevotionalPDFRenderer()
+        result = renderer.render(
+            title="Test",
+            subtitle="Test",
+            description="Test",
+            days=days,
+            output_path=output_path,
+        )
+        assert result.endswith(".pdf")
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Run test to verify it fails.
+<pre>pytest tests/unit/test_pdf_renderer.py -v</pre>
+Expected: FAIL — <code>ImportError</code>
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Create the CSS stylesheet. This is the brand design system for the PDF.
+<pre>
+/* templates/devotional/base.css */
+@page {
+    size: 8.5in 11in;
+    margin: 0;
+}
+
+@page content {
+    margin: 0.75in 0.85in;
+}
+
+:root {
+    --cream: #FFF8F0;
+    --gold: #D4A853;
+    --gold-light: #E8C88C;
+    --green: #2D4A3E;
+    --green-light: #4B6E5F;
+    --white: #FAFAFA;
+    --warm-gray: #B4AAA0;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: Calibri, 'Segoe UI', sans-serif;
+    color: var(--green);
+    background: var(--cream);
+    font-size: 11pt;
+    line-height: 1.65;
+}
+
+/* ── Cover Page ── */
+.cover-page {
+    page: content;
+    page-break-after: always;
+    position: relative;
+    width: 100%;
+    min-height: 9.5in;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background-size: cover;
+    background-position: center;
+    color: var(--white);
+}
+
+.cover-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(45, 74, 62, 0.3) 0%,
+        rgba(45, 74, 62, 0.7) 50%,
+        rgba(45, 74, 62, 0.85) 100%
+    );
+}
+
+.cover-content {
+    position: relative;
+    z-index: 1;
+    padding: 2rem;
+}
+
+.cover-content h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 32pt;
+    font-weight: normal;
+    letter-spacing: 0.5pt;
+    margin-bottom: 0.3em;
+    color: var(--white);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.cover-content .subtitle {
+    font-family: Calibri, sans-serif;
+    font-size: 14pt;
+    color: var(--gold-light);
+    letter-spacing: 2pt;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+}
+
+.cover-content .brand {
+    font-family: Georgia, serif;
+    font-size: 11pt;
+    color: var(--gold-light);
+    font-style: italic;
+    margin-top: 3rem;
+}
+
+.cover-divider {
+    width: 60px;
+    height: 2px;
+    background: var(--gold);
+    margin: 1rem auto;
+}
+
+/* ── Welcome Page ── */
+.welcome-page {
+    page: content;
+    page-break-after: always;
+    padding-top: 1.5in;
+}
+
+.welcome-page h2 {
+    font-family: Georgia, serif;
+    font-size: 20pt;
+    color: var(--green);
+    margin-bottom: 0.5rem;
+}
+
+.welcome-divider {
+    width: 40px;
+    height: 2px;
+    background: var(--gold);
+    margin: 0.8rem 0 1.5rem 0;
+}
+
+.welcome-page p {
+    margin-bottom: 1rem;
+    font-size: 11.5pt;
+}
+
+.how-to-use {
+    background: var(--white);
+    border-left: 3px solid var(--gold);
+    padding: 1rem 1.2rem;
+    margin: 1.5rem 0;
+}
+
+.how-to-use h3 {
+    font-family: Georgia, serif;
+    font-size: 13pt;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+}
+
+.how-to-use ol {
+    padding-left: 1.2rem;
+    font-size: 10.5pt;
+}
+
+.how-to-use li {
+    margin-bottom: 0.4rem;
+}
+
+/* ── Day Image Page ── */
+.day-image-page {
+    page: content;
+    page-break-after: always;
+    position: relative;
+    min-height: 9.5in;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background-size: cover;
+    background-position: center;
+}
+
+.day-image-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(
+        180deg,
+        rgba(45, 74, 62, 0.25) 0%,
+        rgba(45, 74, 62, 0.6) 40%,
+        rgba(45, 74, 62, 0.8) 100%
+    );
+}
+
+.day-image-content {
+    position: relative;
+    z-index: 1;
+    color: var(--white);
+    padding: 2rem;
+    max-width: 85%;
+}
+
+.day-label {
+    font-family: Calibri, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 3pt;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 0.5rem;
+}
+
+.day-image-content h2 {
+    font-family: Georgia, serif;
+    font-size: 24pt;
+    color: var(--white);
+    margin-bottom: 1rem;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.verse-text {
+    font-family: Georgia, serif;
+    font-size: 14pt;
+    font-style: italic;
+    line-height: 1.7;
+    margin-bottom: 1rem;
+    color: var(--white);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.verse-ref {
+    font-family: Calibri, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 1.5pt;
+    text-transform: uppercase;
+    color: var(--gold-light);
+}
+
+/* ── Day Reflection Page ── */
+.day-reflection-page {
+    page: content;
+    page-break-after: always;
+}
+
+.day-reflection-page h3 {
+    font-family: Georgia, serif;
+    font-size: 16pt;
+    color: var(--green);
+    margin-bottom: 0.3rem;
+}
+
+.reflection-divider {
+    width: 30px;
+    height: 2px;
+    background: var(--gold);
+    margin: 0.6rem 0 1.2rem 0;
+}
+
+.reflection-body {
+    font-size: 11pt;
+    margin-bottom: 1.5rem;
+    text-align: justify;
+}
+
+.reflect-section {
+    background: var(--white);
+    border-left: 3px solid var(--gold);
+    padding: 0.8rem 1rem;
+    margin: 1.2rem 0;
+}
+
+.reflect-section h4 {
+    font-family: Georgia, serif;
+    font-size: 12pt;
+    color: var(--gold);
+    margin-bottom: 0.4rem;
+}
+
+.reflect-section p {
+    font-size: 10.5pt;
+    font-style: italic;
+    margin-bottom: 0.3rem;
+}
+
+.prayer-section {
+    margin: 1.2rem 0;
+}
+
+.prayer-section h4 {
+    font-family: Georgia, serif;
+    font-size: 12pt;
+    color: var(--green);
+    margin-bottom: 0.4rem;
+}
+
+.prayer-section p {
+    font-size: 10.5pt;
+    font-style: italic;
+}
+
+.journal-section {
+    margin-top: 1.5rem;
+}
+
+.journal-section h4 {
+    font-family: Georgia, serif;
+    font-size: 11pt;
+    color: var(--warm-gray);
+    margin-bottom: 0.6rem;
+}
+
+.journal-lines {
+    border-bottom: 1px solid #e0d8ce;
+    height: 1.8rem;
+}
+
+/* ── Closing Page ── */
+.closing-page {
+    page: content;
+    page-break-after: always;
+    padding-top: 2in;
+    text-align: center;
+}
+
+.closing-page h2 {
+    font-family: Georgia, serif;
+    font-size: 20pt;
+    color: var(--green);
+    margin-bottom: 0.5rem;
+}
+
+.closing-page p {
+    font-size: 11pt;
+    max-width: 80%;
+    margin: 0.8rem auto;
+}
+
+.social-links {
+    margin-top: 2rem;
+    font-size: 10pt;
+    color: var(--warm-gray);
+}
+
+.social-links a {
+    color: var(--gold);
+    text-decoration: none;
+}
+
+/* ── Footer ── */
+.page-footer {
+    position: fixed;
+    bottom: 0.4in;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 8pt;
+    color: var(--warm-gray);
+    font-style: italic;
+}
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Create the master HTML template that WeasyPrint renders.
+<pre>
+&lt;!-- templates/devotional/devotional.html --&gt;
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+&lt;meta charset="UTF-8"&gt;
+&lt;link rel="stylesheet" href="base.css"&gt;
+&lt;/head&gt;
+&lt;body&gt;
+
+&lt;!-- Cover --&gt;
+&lt;div class="cover-page"
+     {% if cover_image %}style="background-image: url('{{ cover_image }}')"{% endif %}&gt;
+  &lt;div class="cover-overlay"&gt;&lt;/div&gt;
+  &lt;div class="cover-content"&gt;
+    &lt;h1&gt;{{ title }}&lt;/h1&gt;
+    &lt;div class="cover-divider"&gt;&lt;/div&gt;
+    &lt;div class="subtitle"&gt;{{ subtitle }}&lt;/div&gt;
+    &lt;div class="brand"&gt;@stillwatergrace&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- Welcome --&gt;
+&lt;div class="welcome-page"&gt;
+  &lt;h2&gt;Welcome&lt;/h2&gt;
+  &lt;div class="welcome-divider"&gt;&lt;/div&gt;
+  &lt;p&gt;{{ description }}&lt;/p&gt;
+  &lt;div class="how-to-use"&gt;
+    &lt;h3&gt;How to Use This Devotional&lt;/h3&gt;
+    &lt;ol&gt;
+      &lt;li&gt;&lt;strong&gt;Read the verse&lt;/strong&gt; slowly, letting each word settle.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Read the reflection&lt;/strong&gt; and sit with what resonates.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Consider the questions&lt;/strong&gt; — write your thoughts in the space provided.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Pray&lt;/strong&gt; the closing prayer or use your own words.&lt;/li&gt;
+    &lt;/ol&gt;
+  &lt;/div&gt;
+  &lt;p style="margin-top: 1.5rem; font-style: italic; color: var(--warm-gray);"&gt;
+    There is no rush. Take as many days as you need.
+  &lt;/p&gt;
+&lt;/div&gt;
+
+&lt;!-- Days --&gt;
+{% for day in days %}
+&lt;!-- Day {{ day.day_number }} — Image Page --&gt;
+&lt;div class="day-image-page"
+     {% if day.image_path %}style="background-image: url('{{ day.image_path }}')"{% endif %}&gt;
+  &lt;div class="day-image-overlay"&gt;&lt;/div&gt;
+  &lt;div class="day-image-content"&gt;
+    &lt;div class="day-label"&gt;Day {{ day.day_number }}&lt;/div&gt;
+    &lt;h2&gt;{{ day.day_title }}&lt;/h2&gt;
+    &lt;div class="cover-divider"&gt;&lt;/div&gt;
+    &lt;div class="verse-text"&gt;&ldquo;{{ day.verse_text }}&rdquo;&lt;/div&gt;
+    &lt;div class="verse-ref"&gt;&mdash; {{ day.verse_ref }}&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;!-- Day {{ day.day_number }} — Reflection Page --&gt;
+&lt;div class="day-reflection-page"&gt;
+  &lt;h3&gt;Day {{ day.day_number }}: {{ day.day_title }}&lt;/h3&gt;
+  &lt;div class="reflection-divider"&gt;&lt;/div&gt;
+  &lt;div class="reflection-body"&gt;{{ day.reflection }}&lt;/div&gt;
+
+  &lt;div class="reflect-section"&gt;
+    &lt;h4&gt;Reflect&lt;/h4&gt;
+    {% for q in day.questions %}
+    &lt;p&gt;{{ q }}&lt;/p&gt;
+    {% endfor %}
+  &lt;/div&gt;
+
+  &lt;div class="prayer-section"&gt;
+    &lt;h4&gt;Today&rsquo;s Prayer&lt;/h4&gt;
+    &lt;p&gt;{{ day.prayer }}&lt;/p&gt;
+  &lt;/div&gt;
+
+  &lt;div class="journal-section"&gt;
+    &lt;h4&gt;Journal&lt;/h4&gt;
+    {% for _ in range(6) %}
+    &lt;div class="journal-lines"&gt;&lt;/div&gt;
+    {% endfor %}
+  &lt;/div&gt;
+&lt;/div&gt;
+{% endfor %}
+
+&lt;!-- Closing --&gt;
+&lt;div class="closing-page"&gt;
+  &lt;h2&gt;Keep Going&lt;/h2&gt;
+  &lt;div class="cover-divider" style="margin: 0.8rem auto;"&gt;&lt;/div&gt;
+  &lt;p&gt;
+    You&rsquo;ve spent seven days letting God&rsquo;s Word speak peace over your life.
+    But the journey doesn&rsquo;t stop here. Keep returning to these verses.
+    Keep praying. Keep trusting.
+  &lt;/p&gt;
+  &lt;p&gt;He who began a good work in you will carry it on to completion. &mdash; Philippians 1:6&lt;/p&gt;
+  &lt;div class="social-links"&gt;
+    &lt;p&gt;Follow us for daily encouragement&lt;/p&gt;
+    &lt;p&gt;&lt;strong&gt;Instagram:&lt;/strong&gt; @stillwatergrace&lt;/p&gt;
+    &lt;p&gt;&lt;strong&gt;Facebook:&lt;/strong&gt; Still Water Grace&lt;/p&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div class="page-footer"&gt;@stillwatergrace&lt;/div&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 5:</strong> Implement the PDF renderer.
+<pre>
+# core/devotional/pdf_renderer.py
+"""PDF renderer using WeasyPrint + Jinja2 HTML templates.
+
+Renders a devotional theme into a branded multi-page PDF.
+"""
+
+import logging
+from pathlib import Path
+
+from jinja2 import Environment, FileSystemLoader
+from weasyprint import HTML
+
+logger = logging.getLogger(__name__)
+
+TEMPLATES_DIR = Path(__file__).parent.parent.parent / "templates" / "devotional"
+
+
+class DevotionalPDFRenderer:
+    """Renders devotional content into a branded PDF."""
+
+    def __init__(self, templates_dir: Path | None = None) -> None:
+        self.templates_dir = templates_dir or TEMPLATES_DIR
+        self.env = Environment(
+            loader=FileSystemLoader(str(self.templates_dir)),
+            autoescape=True,
+        )
+
+    def render(
+        self,
+        title: str,
+        subtitle: str,
+        description: str,
+        days: list[dict],
+        output_path: str,
+        cover_image: str | None = None,
+    ) -> str:
+        """Render a complete devotional PDF.
+
+        Args:
+            title: Devotional title.
+            subtitle: Subtitle line.
+            description: Welcome page description text.
+            days: List of day dicts with keys: day_number, day_title,
+                  verse_ref, verse_text, reflection, prayer, questions,
+                  image_path (optional, absolute path or None).
+            output_path: Where to save the PDF.
+            cover_image: Optional cover image path.
+
+        Returns:
+            Path to the generated PDF file.
+        """
+        template = self.env.get_template("devotional.html")
+        html_content = template.render(
+            title=title,
+            subtitle=subtitle,
+            description=description,
+            days=days,
+            cover_image=cover_image,
+        )
+
+        base_url = str(self.templates_dir)
+        html = HTML(string=html_content, base_url=base_url)
+        html.write_pdf(output_path)
+
+        output = Path(output_path)
+        size_kb = output.stat().st_size / 1024
+        logger.info(f"Generated PDF: {output_path} ({size_kb:.0f} KB)")
+        return str(output)
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 6:</strong> Run tests.
+<pre>pytest tests/unit/test_pdf_renderer.py -v</pre>
+Expected: 2 passed.
+</div>
+
+<div class="step">
+<strong>Step 7:</strong> Commit.
+<pre>git add core/devotional/pdf_renderer.py templates/devotional/ tests/unit/test_pdf_renderer.py
+git commit -m "feat: add WeasyPrint PDF renderer with branded HTML templates"</pre>
+</div>
+</div>
+
+<h2>Task 5: Orchestrator + CLI command</h2>
+
+<div class="task">
+<div class="files">
+<strong>Create:</strong> <code>core/devotional/orchestrator.py</code><br>
+<strong>Modify:</strong> <code>manage.py</code><br>
+<strong>Test:</strong> <code>tests/unit/test_devotional_orchestrator.py</code>
+</div>
+
+<div class="step">
+<strong>Step 1:</strong> Write the failing test.
+<pre>
+# tests/unit/test_devotional_orchestrator.py
+from unittest.mock import MagicMock, patch
+from core.devotional.orchestrator import DevotionalOrchestrator
+
+
+@patch("core.devotional.orchestrator.DevotionalPDFRenderer")
+@patch("core.devotional.orchestrator.DevotionalGenerator")
+@patch("core.devotional.orchestrator.UnsplashClient")
+def test_orchestrator_generates_pdf(mock_unsplash_cls, mock_gen_cls, mock_renderer_cls):
+    # Mock Unsplash
+    mock_unsplash = MagicMock()
+    mock_unsplash_cls.return_value = mock_unsplash
+    mock_unsplash.search_and_download.return_value = {
+        "local_path": "/tmp/test_img.jpg"
+    }
+
+    # Mock content generator
+    mock_gen = MagicMock()
+    mock_gen_cls.return_value = mock_gen
+    mock_gen.generate_all_days.return_value = [
+        {
+            "day_number": i,
+            "day_title": f"Day {i}",
+            "verse_ref": f"Psalm {i}:1",
+            "verse_text": f"Verse {i}",
+            "reflection": f"Reflection {i}",
+            "prayer": f"Prayer {i}",
+            "questions": [f"Question {i}?"],
+        }
+        for i in range(1, 8)
+    ]
+
+    # Mock renderer
+    mock_renderer = MagicMock()
+    mock_renderer_cls.return_value = mock_renderer
+    mock_renderer.render.return_value = "/tmp/output.pdf"
+
+    orch = DevotionalOrchestrator()
+    result = orch.generate("finding_peace")
+
+    assert result == "/tmp/output.pdf"
+    mock_gen.generate_all_days.assert_called_once()
+    mock_renderer.render.assert_called_once()
+    # Should have fetched 8 images (1 cover + 7 days)
+    assert mock_unsplash.search_and_download.call_count == 8
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Run test to verify it fails.
+<pre>pytest tests/unit/test_devotional_orchestrator.py -v</pre>
+Expected: FAIL
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Implement the orchestrator.
+<pre>
+# core/devotional/orchestrator.py
+"""Devotional generation orchestrator.
+
+Coordinates: theme config -> verse fetch -> Claude reflections ->
+Unsplash images -> PDF rendering -> R2 upload.
+"""
+
+import logging
+import random
+from pathlib import Path
+
+from core.config import settings
+from core.devotional.generator import DevotionalGenerator
+from core.devotional.pdf_renderer import DevotionalPDFRenderer
+from core.devotional.themes import get_theme
+from core.images.unsplash_client import UnsplashClient
+
+logger = logging.getLogger(__name__)
+
+OUTPUT_DIR = Path(__file__).parent.parent.parent / "output" / "devotionals"
+
+
+class DevotionalOrchestrator:
+    """End-to-end devotional PDF generation."""
+
+    def __init__(self) -> None:
+        self.generator = DevotionalGenerator()
+        self.renderer = DevotionalPDFRenderer()
+        self.unsplash = UnsplashClient()
+
+    def _download_image(self, keywords: list[str]) -> str | None:
+        """Download an image from Unsplash using mood keywords."""
+        query = random.choice(keywords)
+        try:
+            result = self.unsplash.search_and_download(
+                content_type="daily_verse",
+                query_override=query,
+                high_res=True,
+            )
+            if result and result.get("local_path"):
+                return result["local_path"]
+        except Exception as e:
+            logger.warning(f"Unsplash download failed for '{query}': {e}")
+        return None
+
+    def generate(self, theme_slug: str, output_dir: Path | None = None) -> str:
+        """Generate a complete devotional PDF.
+
+        Args:
+            theme_slug: Theme identifier (e.g., 'finding_peace').
+            output_dir: Optional output directory override.
+
+        Returns:
+            Path to the generated PDF file.
+        """
+        theme = get_theme(theme_slug)
+        out_dir = output_dir or OUTPUT_DIR
+        out_dir.mkdir(parents=True, exist_ok=True)
+        output_path = str(out_dir / f"{theme.slug}.pdf")
+
+        logger.info(f"Generating devotional: {theme.title}")
+
+        # 1. Generate all devotional text via Claude API
+        logger.info("Step 1/3: Generating devotional reflections...")
+        day_contents = self.generator.generate_all_days(theme)
+
+        # 2. Download images from Unsplash
+        logger.info("Step 2/3: Downloading images...")
+        cover_image = self._download_image(theme.cover_keywords)
+
+        for day_config, day_content in zip(theme.days, day_contents):
+            img_path = self._download_image(day_config.mood_keywords)
+            day_content["image_path"] = img_path
+
+        # 3. Render PDF
+        logger.info("Step 3/3: Rendering PDF...")
+        result = self.renderer.render(
+            title=theme.title,
+            subtitle=theme.subtitle,
+            description=theme.description,
+            days=day_contents,
+            output_path=output_path,
+            cover_image=cover_image,
+        )
+
+        logger.info(f"Devotional PDF generated: {result}")
+        return result
+
+    def generate_and_upload(self, theme_slug: str) -> str:
+        """Generate PDF and upload to R2. Returns public URL."""
+        import boto3
+
+        pdf_path = self.generate(theme_slug)
+        theme = get_theme(theme_slug)
+
+        if not settings.cloudflare_r2_access_key:
+            logger.warning("R2 not configured — PDF saved locally only")
+            return pdf_path
+
+        try:
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=settings.cloudflare_r2_endpoint,
+                aws_access_key_id=settings.cloudflare_r2_access_key,
+                aws_secret_access_key=settings.cloudflare_r2_secret_key,
+            )
+
+            key = f"devotionals/{theme.slug}.pdf"
+            s3.upload_file(
+                pdf_path,
+                settings.cloudflare_r2_bucket,
+                key,
+                ExtraArgs={"ContentType": "application/pdf"},
+            )
+
+            public_base = settings.cloudflare_r2_public_url.rstrip("/")
+            url = f"{public_base}/{key}"
+            logger.info(f"Uploaded to R2: {url}")
+            return url
+
+        except Exception as e:
+            logger.error(f"R2 upload failed: {e}")
+            return pdf_path
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Run tests.
+<pre>pytest tests/unit/test_devotional_orchestrator.py -v</pre>
+Expected: PASS
+</div>
+
+<div class="step">
+<strong>Step 5:</strong> Add CLI commands to <code>manage.py</code>. Add these two functions and register them in <code>COMMANDS</code>:
+<pre>
+# Add to manage.py — new functions:
+
+def generate_devotional():
+    """Generate a branded devotional PDF from a theme."""
+    from core.devotional.orchestrator import DevotionalOrchestrator
+    from core.devotional.themes import list_themes
+
+    # Parse --theme arg
+    theme_slug = None
+    upload = False
+    for arg in sys.argv[2:]:
+        if arg.startswith("--theme="):
+            theme_slug = arg.split("=", 1)[1].lower().replace(" ", "_")
+        elif arg == "--upload":
+            upload = True
+
+    if not theme_slug:
+        print("Usage: python manage.py generate-devotional --theme=finding_peace [--upload]")
+        print(f"\nAvailable themes: {', '.join(list_themes())}")
+        return
+
+    print(f"\n== Generating Devotional: {theme_slug} ==\n")
+    orch = DevotionalOrchestrator()
+
+    if upload:
+        result = orch.generate_and_upload(theme_slug)
+    else:
+        result = orch.generate(theme_slug)
+
+    print(f"\nDone! Output: {result}")
+
+
+def list_devotionals():
+    """List available devotional themes."""
+    from core.devotional.themes import THEMES
+
+    print("\n== Available Devotional Themes ==\n")
+    for slug, theme in THEMES.items():
+        print(f"  {slug}")
+        print(f"    Title: {theme.title}")
+        print(f"    Subtitle: {theme.subtitle}")
+        print(f"    Days: {len(theme.days)}")
+        print()
+
+
+# Add to COMMANDS dict:
+#   "generate-devotional": generate_devotional,
+#   "list-devotionals": list_devotionals,
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 6:</strong> Commit.
+<pre>git add core/devotional/orchestrator.py manage.py tests/unit/test_devotional_orchestrator.py
+git commit -m "feat: add devotional orchestrator and CLI commands"</pre>
+</div>
+</div>
+
+<h2>Task 6: Unsplash query_override support</h2>
+
+<div class="task">
+<div class="files">
+<strong>Modify:</strong> <code>core/images/unsplash_client.py</code>
+</div>
+
+<p>The orchestrator calls <code>unsplash.search_and_download(query_override=...)</code>. Check if UnsplashClient already supports a <code>query_override</code> parameter. If not, add it — when provided, use it directly instead of looking up <code>CONTENT_TYPE_KEYWORDS</code>.</p>
+
+<div class="step">
+<strong>Step 1:</strong> Read <code>core/images/unsplash_client.py</code> and check the <code>search_and_download</code> signature.
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> If <code>query_override</code> is not supported, add it as an optional parameter. Use it as the search query when provided, bypassing the content-type keyword lookup.
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Test with existing tests + manual test.
+<pre>pytest tests/ -k unsplash -v</pre>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Commit.
+<pre>git commit -am "feat: add query_override param to UnsplashClient.search_and_download"</pre>
+</div>
+</div>
+
+<h2>Task 7: End-to-end test run</h2>
+
+<div class="task">
+<div class="step">
+<strong>Step 1:</strong> Run all tests to make sure nothing is broken.
+<pre>pytest -v</pre>
+Expected: All passing (existing 64 + new ~7 devotional tests).
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Generate the first devotional PDF (requires Docker stack running for Bible API, Claude API key, Unsplash key).
+<pre>python manage.py generate-devotional --theme=finding_peace</pre>
+Expected: PDF generated at <code>output/devotionals/finding_peace.pdf</code>
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Open the PDF and visually inspect. Check:
+<ul>
+<li>Cover image renders with text overlay</li>
+<li>Welcome page has proper typography and spacing</li>
+<li>Each day has image page + reflection page</li>
+<li>Brand colors (cream, gold, green) are correct</li>
+<li>Journal lines appear on reflection pages</li>
+<li>Closing page has social links</li>
+</ul>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Upload to R2.
+<pre>python manage.py generate-devotional --theme=finding_peace --upload</pre>
+</div>
+
+<div class="step">
+<strong>Step 5:</strong> Commit all remaining changes.
+<pre>git add -A
+git commit -m "feat: devotional PDF generator — Phase 1 complete"</pre>
+</div>
+</div>
+
+<h2>Task 8: ConvertKit integration (Phase 2)</h2>
+
+<div class="task">
+<div class="files">
+<strong>Create:</strong> <code>core/email/__init__.py</code>, <code>core/email/convertkit_client.py</code><br>
+<strong>Modify:</strong> <code>core/config.py</code><br>
+<strong>Test:</strong> <code>tests/unit/test_convertkit_client.py</code>
+</div>
+
+<div class="step">
+<strong>Step 1:</strong> Add <code>convertkit_api_secret</code> to config.
+<pre>
+# In core/config.py Settings class, after convertkit_api_key:
+    convertkit_api_secret: str = ""
+    convertkit_form_id: str = ""  # Landing page form ID
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Write the failing test.
+<pre>
+# tests/unit/test_convertkit_client.py
+from unittest.mock import patch, MagicMock
+from core.email.convertkit_client import ConvertKitClient
+
+
+@patch("core.email.convertkit_client.httpx.Client")
+def test_get_subscriber_count(mock_client_cls):
+    mock_client = MagicMock()
+    mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
+    mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+    mock_client.get.return_value = MagicMock(
+        status_code=200,
+        json=MagicMock(return_value={
+            "total_subscribers": 42,
+        }),
+    )
+
+    client = ConvertKitClient(api_secret="test_secret")
+    count = client.get_subscriber_count()
+    assert count == 42
+
+
+@patch("core.email.convertkit_client.httpx.Client")
+def test_get_subscriber_count_error_returns_zero(mock_client_cls):
+    mock_client = MagicMock()
+    mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
+    mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+    mock_client.get.side_effect = Exception("Network error")
+
+    client = ConvertKitClient(api_secret="test_secret")
+    count = client.get_subscriber_count()
+    assert count == 0
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Implement.
+<pre>
+# core/email/__init__.py
+(empty)
+
+# core/email/convertkit_client.py
+"""ConvertKit API client — subscriber count and basic stats.
+
+All heavy lifting (landing pages, email sequences, PDF delivery)
+is handled in ConvertKit's UI. This client just pulls stats
+for our dashboard.
+"""
+
+import logging
+from typing import Optional
+
+import httpx
+
+from core.config import settings
+
+logger = logging.getLogger(__name__)
+
+BASE_URL = "https://api.convertkit.com/v3"
+
+
+class ConvertKitClient:
+    """Thin wrapper for ConvertKit API v3."""
+
+    def __init__(self, api_secret: Optional[str] = None) -> None:
+        self.api_secret = api_secret or settings.convertkit_api_secret
+
+    def get_subscriber_count(self) -> int:
+        """Get total subscriber count."""
+        try:
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(
+                    f"{BASE_URL}/subscribers",
+                    params={"api_secret": self.api_secret},
+                )
+                resp.raise_for_status()
+                return resp.json().get("total_subscribers", 0)
+        except Exception as e:
+            logger.error(f"ConvertKit API error: {e}")
+            return 0
+
+    def get_form_subscribers(self, form_id: str | None = None) -> int:
+        """Get subscriber count for a specific form (landing page)."""
+        fid = form_id or settings.convertkit_form_id
+        if not fid:
+            return 0
+
+        try:
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(
+                    f"{BASE_URL}/forms/{fid}/subscriptions",
+                    params={"api_secret": self.api_secret},
+                )
+                resp.raise_for_status()
+                return resp.json().get("total_subscriptions", 0)
+        except Exception as e:
+            logger.error(f"ConvertKit form API error: {e}")
+            return 0
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Run tests.
+<pre>pytest tests/unit/test_convertkit_client.py -v</pre>
+Expected: 2 passed.
+</div>
+
+<div class="step">
+<strong>Step 5:</strong> Commit.
+<pre>git add core/email/ core/config.py tests/unit/test_convertkit_client.py
+git commit -m "feat: add ConvertKit API client for subscriber stats"</pre>
+</div>
+</div>
+
+<h2>Task 9: Dashboard subscriber widget API endpoint</h2>
+
+<div class="task">
+<div class="files">
+<strong>Modify:</strong> <code>api/</code> — find the dashboard routes file and add a <code>/api/email/stats</code> endpoint.<br>
+<strong>Test:</strong> Manual via <code>curl</code>
+</div>
+
+<div class="step">
+<strong>Step 1:</strong> Find the existing dashboard API routes.
+<pre>grep -r "router\|APIRouter" api/ --include="*.py"</pre>
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Add a new endpoint that returns subscriber count from ConvertKit.
+<pre>
+@router.get("/api/email/stats")
+def email_stats():
+    from core.email.convertkit_client import ConvertKitClient
+    client = ConvertKitClient()
+    return {
+        "total_subscribers": client.get_subscriber_count(),
+        "form_subscribers": client.get_form_subscribers(),
+    }
+</pre>
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Test manually.
+<pre>curl http://localhost:8000/api/email/stats</pre>
+Expected: JSON with subscriber counts (0 until ConvertKit is configured).
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Commit.
+<pre>git commit -am "feat: add /api/email/stats endpoint for subscriber count"</pre>
+</div>
+</div>
+
+<h2>Task 10: Update CLAUDE.md and memory</h2>
+
+<div class="task">
+<div class="step">
+<strong>Step 1:</strong> Update <code>CLAUDE.md</code> project structure section to include <code>core/devotional/</code> and <code>core/email/</code>.
+</div>
+
+<div class="step">
+<strong>Step 2:</strong> Update <code>CLAUDE.md</code> "Next Steps" to mark devotional and email list as completed, add new next steps.
+</div>
+
+<div class="step">
+<strong>Step 3:</strong> Update memory file with devotional system details.
+</div>
+
+<div class="step">
+<strong>Step 4:</strong> Commit.
+<pre>git commit -am "docs: update CLAUDE.md and memory for devotional + email features"</pre>
+</div>
+</div>
+
+<h2>Task Summary</h2>
+
+<table>
+<tr><th>#</th><th>Task</th><th>New Files</th><th>Tests</th></tr>
+<tr><td>1</td><td>Add WeasyPrint dependency</td><td>0</td><td>0</td></tr>
+<tr><td>2</td><td>Theme configuration system</td><td>2</td><td>3</td></tr>
+<tr><td>3</td><td>Devotional content generator</td><td>2</td><td>2</td></tr>
+<tr><td>4</td><td>PDF renderer + HTML/CSS templates</td><td>4</td><td>2</td></tr>
+<tr><td>5</td><td>Orchestrator + CLI commands</td><td>1</td><td>1</td></tr>
+<tr><td>6</td><td>Unsplash query_override</td><td>0</td><td>0</td></tr>
+<tr><td>7</td><td>End-to-end test run</td><td>0</td><td>0</td></tr>
+<tr><td>8</td><td>ConvertKit client</td><td>2</td><td>2</td></tr>
+<tr><td>9</td><td>Dashboard API endpoint</td><td>0</td><td>0</td></tr>
+<tr><td>10</td><td>Update docs + memory</td><td>0</td><td>0</td></tr>
+</table>
+
+<p><strong>Total: 11 new files, ~10 new tests, 10 commits</strong></p>
+
+</body>
+</html>

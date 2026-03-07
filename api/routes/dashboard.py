@@ -166,3 +166,15 @@ def get_dashboard_overview(db: Session = Depends(get_db_dependency)):
         "top_performer": top_performer,
         "generated_at": now.isoformat(),
     }
+
+
+@router.get("/email-stats")
+def get_email_stats():
+    """Get email subscriber stats from ConvertKit."""
+    from core.email.convertkit_client import ConvertKitClient
+
+    client = ConvertKitClient()
+    return {
+        "total_subscribers": client.get_subscriber_count(),
+        "form_subscribers": client.get_form_subscribers(),
+    }

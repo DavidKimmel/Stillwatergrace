@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Design: Devotional PDF Generator + Email List</title>
+<style>
+body { font-family: Georgia, serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #2D4A3E; background: #FFF8F0; }
+h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 0.5rem; }
+h2 { color: #D4A853; margin-top: 2rem; }
+h3 { color: #2D4A3E; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #D4A853; padding: 0.5rem; text-align: left; }
+th { background: #2D4A3E; color: #FFF8F0; }
+code, pre { background: #f0ebe3; padding: 0.2rem 0.4rem; border-radius: 3px; font-size: 0.9rem; }
+pre { padding: 1rem; overflow-x: auto; }
+.status { background: #2D4A3E; color: #FFF8F0; padding: 0.3rem 0.8rem; border-radius: 4px; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>Design: Devotional PDF Generator + Email List Setup</h1>
+<p><strong>Date:</strong> 2026-03-06 | <span class="status">Approved</span></p>
+
+<h2>Overview</h2>
+<p>Two-phase feature: (1) a templated devotional PDF generator producing branded 7-day devotionals as lead magnets, and (2) ConvertKit email list integration for subscriber growth with automated welcome sequences.</p>
+
+<h2>Phase 1: Devotional PDF Generator</h2>
+
+<h3>Product</h3>
+<p>"Finding Peace in Every Season" &mdash; a 7-day branded devotional PDF (16-18 pages).</p>
+
+<h3>Page Structure</h3>
+<table>
+<tr><th>Page</th><th>Content</th></tr>
+<tr><td>1</td><td><strong>Cover</strong> &mdash; hero Unsplash nature image, title in Georgia, @stillwatergrace branding</td></tr>
+<tr><td>2</td><td><strong>Welcome</strong> &mdash; brief intro, how to use this devotional, about Still Water Grace</td></tr>
+<tr><td>3-16</td><td><strong>Day 1-7</strong> (2 pages each) &mdash; image page + reflection page</td></tr>
+<tr><td>17</td><td><strong>Closing</strong> &mdash; encouragement, CTA to follow on Instagram, share with a friend</td></tr>
+<tr><td>18</td><td><strong>About / Connect</strong> &mdash; social links, website, brief mission statement</td></tr>
+</table>
+
+<h3>Each Day (2-page spread)</h3>
+<ul>
+<li><strong>Page A (Image):</strong> Day number + theme title, full-bleed Unsplash photo with verse overlay (styled like Instagram cards), verse reference</li>
+<li><strong>Page B (Reflection):</strong> Devotional reflection (200-250 words, Claude-generated), "Reflect" question (1-2 prompts), written prayer (3-4 sentences), journaling lines</li>
+</ul>
+
+<h3>Visual Design</h3>
+<ul>
+<li>Cream <code>#FFF8F0</code> page background with subtle paper texture</li>
+<li>Gold <code>#D4A853</code> accent lines, dividers, day numbers</li>
+<li>Green <code>#2D4A3E</code> headings and verse references</li>
+<li>Georgia for headings/verses, Calibri for body text</li>
+<li>Watercolor wash elements on section transitions</li>
+<li><code>@stillwatergrace</code> watermark in footer</li>
+</ul>
+
+<h3>Content Generation (Hybrid Approach)</h3>
+<ul>
+<li>Bible verses: pulled from existing DB cache (curated list per theme)</li>
+<li>Devotional text: Claude API generates reflections, prayers, and reflection questions</li>
+<li>Images: Unsplash (1 cover + 7 day images, mood-matched to verse content)</li>
+<li>Verse overlay cards: reuse existing PIL image_processor.py</li>
+</ul>
+
+<h3>Technical Stack</h3>
+<ul>
+<li><strong>WeasyPrint</strong> &mdash; HTML/CSS to PDF rendering</li>
+<li><strong>Jinja2</strong> &mdash; reusable page templates (cover, day_a, day_b, closing)</li>
+<li><strong>Claude API</strong> &mdash; devotional reflection generation</li>
+<li><strong>Unsplash</strong> &mdash; nature/landscape photography</li>
+<li><strong>PIL</strong> &mdash; verse overlay cards (existing code)</li>
+<li><strong>R2</strong> &mdash; final PDF upload for public download URL</li>
+</ul>
+
+<h3>Templated System</h3>
+<p>Theme configs define: title, subtitle, 7 verse references, mood keywords for Unsplash queries. Swapping theme config produces a new devotional with no code changes.</p>
+
+<h3>CLI Commands</h3>
+<pre><code>python manage.py generate-devotional --theme "Finding Peace in Every Season"
+python manage.py generate-devotional --theme "Strength for the Family"
+python manage.py list-devotionals</code></pre>
+
+<h3>New Files</h3>
+<pre><code>core/devotional/
+  __init__.py
+  generator.py          # Orchestrator: fetch verses, generate text, render PDF
+  pdf_renderer.py       # WeasyPrint HTML-&gt;PDF, Jinja2 page templates
+  themes.py             # Theme configs (verse lists, mood keywords, metadata)
+templates/devotional/
+  cover.html            # Cover page template
+  welcome.html          # Welcome/intro page
+  day_image.html        # Day page A (photo + verse)
+  day_reflection.html   # Day page B (reflection + prayer + journal)
+  closing.html          # Closing + about page
+  base.css              # Brand styles, page sizing, typography
+assets/devotional/
+  paper_texture.jpg     # Subtle background texture
+  watercolor_accent.png # Decorative element</code></pre>
+
+<h2>Phase 2: Email List (ConvertKit)</h2>
+
+<h3>Architecture Split</h3>
+<ul>
+<li><strong>ConvertKit</strong> = audience growth (signup, lead magnet delivery, welcome sequence, weekly devotional email)</li>
+<li><strong>SendGrid</strong> = system ops (posting failure alerts, weekly analytics digest) &mdash; already in config</li>
+</ul>
+
+<h3>ConvertKit Setup</h3>
+<ol>
+<li>Create free ConvertKit account (free up to 10,000 subscribers)</li>
+<li>Create landing page: "Get Your Free 7-Day Devotional"</li>
+<li>Upload PDF as incentive email attachment (auto-delivered on signup)</li>
+<li>Build welcome email sequence</li>
+</ol>
+
+<h3>Welcome Sequence (5 emails, 14 days)</h3>
+<table>
+<tr><th>Email</th><th>Timing</th><th>Content</th></tr>
+<tr><td>1</td><td>Immediate</td><td>Welcome + PDF download link</td></tr>
+<tr><td>2</td><td>Day 3</td><td>"How's Day 1 going?" + encouragement verse</td></tr>
+<tr><td>3</td><td>Day 5</td><td>Best-of content from Instagram (curated)</td></tr>
+<tr><td>4</td><td>Day 10</td><td>Personal story / testimony</td></tr>
+<tr><td>5</td><td>Day 14</td><td>"Stay connected" &mdash; follow on socials, share with a friend</td></tr>
+</table>
+
+<h3>Integration (Minimal Code)</h3>
+<ul>
+<li>Add <code>convertkit_api_secret</code> to config</li>
+<li>New <code>core/email/convertkit_client.py</code> &mdash; thin wrapper to pull subscriber count</li>
+<li>Dashboard widget showing subscriber count</li>
+<li>Instagram bio link points to ConvertKit landing page URL</li>
+<li>Optional: Celery task to sync subscriber count daily for analytics</li>
+</ul>
+
+<h3>What ConvertKit Handles (No Code Needed)</h3>
+<ul>
+<li>Landing page design and hosting</li>
+<li>Email sequence automation</li>
+<li>Subscriber management, tagging, unsubscribe</li>
+<li>PDF delivery to new subscribers</li>
+<li>GDPR/CAN-SPAM compliance</li>
+</ul>
+
+<h2>Out of Scope (YAGNI)</h2>
+<ul>
+<li>No custom landing page (ConvertKit provides one)</li>
+<li>No subscriber database table (ConvertKit manages this)</li>
+<li>No email sending logic (ConvertKit handles delivery)</li>
+<li>No unsubscribe handling (ConvertKit handles compliance)</li>
+<li>No A/B testing (premature at this stage)</li>
+<li>No personalized PDFs per subscriber</li>
+</ul>
+
+</body>
+</html>

@@ -61,6 +61,8 @@ class Settings(BaseSettings):
 
     # ConvertKit
     convertkit_api_key: str = ""
+    convertkit_api_secret: str = ""
+    convertkit_form_id: str = ""  # Landing page form ID
 
     # Monetization
     gumroad_access_token: str = ""

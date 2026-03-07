@@ -3,7 +3,7 @@
 Automated faith-and-family social media content platform.
 Python/FastAPI backend, React/Tailwind dashboard, Celery workers, PostgreSQL, Redis.
 
-## Current Status (2026-03-05)
+## Current Status (2026-03-06)
 
 **LIVE** — First week of content generated, approved, and auto-posting via Celery beat.
 Content #29 (Jeremiah 29:11) posted as reel to Instagram. Next post: #34 Thu 7 AM EST.
@@ -21,15 +21,20 @@ Content #29 (Jeremiah 29:11) posted as reel to Instagram. Next post: #34 Thu 7 A
 - Facebook cross-posting: auto-posts alongside Instagram with Facebook-optimized captions
 - Instagram token auto-refresh: weekly Celery task, CLI `python manage.py token-status`
 - All 18 weekly content slots generate (carousel + viral formats fixed)
+- Devotional PDF generator: themed 7-day branded PDFs with Claude reflections + Unsplash images
+- ConvertKit email integration: subscriber count API + dashboard endpoint
+- TikTok cross-posting (sandbox tested, production app pending review)
 
 ### Known Issues to Fix
 - **R2 public dev URL** is rate-limited — need custom domain for production (low priority at current volume)
+- **WeasyPrint on Windows** requires MSYS2 GTK DLLs on PATH (`C:\msys64\mingw64\bin`)
+- **WeasyPrint in Docker** needs `libpango-1.0-0 libgdk-pixbuf2.0-0 libffi-dev` system packages
 
 ### Next Steps (Priority Order)
-1. TikTok cross-posting (need account + API setup)
-2. Devotional PDF generator
-3. Email list setup (ConvertKit/SendGrid)
-4. Custom R2 domain (when scaling)
+1. ConvertKit account setup (landing page, welcome sequence, PDF upload)
+2. Custom R2 domain (when scaling)
+3. Devotional PDF visual refinements (based on review)
+4. Additional devotional themes
 
 ## Running the Stack
 
@@ -52,6 +57,8 @@ api/                  FastAPI routes (content, analytics, monetization, dashboar
 core/
   config.py           Pydantic settings from .env (extra="ignore")
   content/            Claude API generator, Jinja2 prompts, series manager, calendar
+  devotional/         Themed devotional PDF generator (WeasyPrint, Claude reflections, Unsplash)
+  email/              ConvertKit API client (subscriber stats)
   audio/              ElevenLabs TTS narration + Mixkit music + FFmpeg fallback
   images/             Unsplash client, PIL processor (6 overlay styles), reel generator (Ken Burns)
   posting/            Instagram (publish_reel, publish_photo, publish_carousel), Facebook, TikTok
@@ -61,10 +68,12 @@ database/
   session.py          Engine, SessionLocal, get_db/get_db_dependency
   migrations/         Alembic (env.py, versions/)
 dashboard/            React 18 + Vite + Tailwind (port 5175 in Docker)
-prompts/              8 Jinja2 prompt templates
+prompts/              9 Jinja2 prompt templates (incl. devotional_reflection)
+templates/devotional/ WeasyPrint HTML/CSS templates for devotional PDF
 workers/              Celery app, daily_tasks, posting_tasks
 audio/                Mixkit royalty-free tracks (gitignored), narration cache (gitignored)
-manage.py             CLI: generate-week, test-render, generate-audio, show-calendar, etc.
+output/devotionals/   Generated devotional PDFs
+manage.py             CLI: generate-week, test-render, generate-audio, generate-devotional, etc.
 ```
 
 ## Key Technical Details
@@ -90,7 +99,7 @@ manage.py             CLI: generate-week, test-render, generate-audio, show-cale
 ## Testing
 
 ```bash
-pytest                       # Run all 64 tests
+pytest                       # Run all 75 tests
 pytest --cov=core            # With coverage
 ```
 

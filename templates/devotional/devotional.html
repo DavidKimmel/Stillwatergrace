@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="base.css">
+</head>
+<body>
+
+<!-- Cover -->
+<div class="cover-page"
+     {% if cover_image %}style="background-image: url('{{ cover_image }}')"{% endif %}>
+  <div class="cover-overlay"></div>
+  <div class="cover-content">
+    <h1>{{ title }}</h1>
+    <div class="cover-divider"></div>
+    <div class="subtitle">{{ subtitle }}</div>
+    <div class="brand">@stillwatergrace</div>
+  </div>
+</div>
+
+<!-- Welcome -->
+<div class="welcome-page">
+  <h2>Welcome</h2>
+  <div class="welcome-divider"></div>
+  <p>{{ description }}</p>
+  <div class="how-to-use">
+    <h3>How to Use This Devotional</h3>
+    <ol>
+      <li><strong>Read the verse</strong> slowly, letting each word settle.</li>
+      <li><strong>Read the reflection</strong> and sit with what resonates.</li>
+      <li><strong>Consider the questions</strong> &mdash; write your thoughts in the space provided.</li>
+      <li><strong>Pray</strong> the closing prayer or use your own words.</li>
+    </ol>
+  </div>
+  <p style="margin-top: 1.5rem; font-style: italic; color: var(--warm-gray);">
+    There is no rush. Take as many days as you need.
+  </p>
+</div>
+
+<!-- Days -->
+{% for day in days %}
+<!-- Day {{ day.day_number }} Image Page -->
+<div class="day-image-page"
+     {% if day.image_path %}style="background-image: url('{{ day.image_path }}')"{% endif %}>
+  <div class="day-image-overlay"></div>
+  <div class="day-image-content">
+    <div class="day-label">Day {{ day.day_number }}</div>
+    <h2>{{ day.day_title }}</h2>
+    <div class="cover-divider"></div>
+    <div class="verse-text">&ldquo;{{ day.verse_text }}&rdquo;</div>
+    <div class="verse-ref">&mdash; {{ day.verse_ref }}</div>
+  </div>
+</div>
+
+<!-- Day {{ day.day_number }} Reflection Page -->
+<div class="day-reflection-page">
+  <h3>Day {{ day.day_number }}: {{ day.day_title }}</h3>
+  <div class="reflection-divider"></div>
+  <div class="reflection-body">{{ day.reflection }}</div>
+
+  <div class="reflect-section">
+    <h4>Reflect</h4>
+    {% for q in day.questions %}
+    <p>{{ q }}</p>
+    {% endfor %}
+  </div>
+
+  <div class="prayer-section">
+    <h4>Today&rsquo;s Prayer</h4>
+    <p>{{ day.prayer }}</p>
+  </div>
+</div>
+
+<!-- Day {{ day.day_number }} Notes Page -->
+<div class="notes-page">
+  <h4>Notes</h4>
+  <div class="notes-divider"></div>
+  {% for _ in range(22) %}
+  <div class="journal-lines"></div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<!-- Closing -->
+<div class="closing-page">
+  <h2>Keep Going</h2>
+  <div class="cover-divider" style="margin: 0.8rem auto;"></div>
+  <p>
+    You&rsquo;ve spent seven days letting God&rsquo;s Word speak peace over your life.
+    But the journey doesn&rsquo;t stop here. Keep returning to these verses.
+    Keep praying. Keep trusting.
+  </p>
+  <p>He who began a good work in you will carry it on to completion. &mdash; Philippians 1:6</p>
+  <div class="social-links">
+    <p>Follow us for daily encouragement</p>
+    <p><strong>Instagram:</strong> @stillwatergrace</p>
+    <p><strong>Facebook:</strong> Still Water Grace</p>
+  </div>
+</div>
+
+<div class="page-footer">@stillwatergrace</div>
+
+</body>
+</html>
