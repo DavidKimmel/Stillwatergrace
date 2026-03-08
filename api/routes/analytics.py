@@ -36,7 +36,17 @@ def get_analytics_overview(
         .count()
     )
 
-    # Aggregate engagement
+    # Use the latest snapshot per content item (not just 24hr)
+    latest_snap = (
+        db.query(
+            AnalyticsSnapshot.content_id,
+            func.max(AnalyticsSnapshot.id).label("max_id"),
+        )
+        .filter(AnalyticsSnapshot.captured_at >= since)
+        .group_by(AnalyticsSnapshot.content_id)
+        .subquery()
+    )
+
     engagement = (
         db.query(
             func.sum(AnalyticsSnapshot.likes).label("total_likes"),
@@ -46,10 +56,7 @@ def get_analytics_overview(
             func.sum(AnalyticsSnapshot.reach).label("total_reach"),
             func.avg(AnalyticsSnapshot.engagement_rate).label("avg_engagement_rate"),
         )
-        .filter(
-            AnalyticsSnapshot.captured_at >= since,
-            AnalyticsSnapshot.hours_after_post == 24,  # Use 24hr snapshot
-        )
+        .join(latest_snap, AnalyticsSnapshot.id == latest_snap.c.max_id)
         .first()
     )
 
@@ -76,12 +83,20 @@ def get_top_posts(
     since = datetime.utcnow() - timedelta(days=days)
     order_col = getattr(AnalyticsSnapshot, metric)
 
+    # Use the latest snapshot per content item
+    latest_snap = (
+        db.query(
+            AnalyticsSnapshot.content_id,
+            func.max(AnalyticsSnapshot.id).label("max_id"),
+        )
+        .filter(AnalyticsSnapshot.captured_at >= since)
+        .group_by(AnalyticsSnapshot.content_id)
+        .subquery()
+    )
+
     snapshots = (
         db.query(AnalyticsSnapshot)
-        .filter(
-            AnalyticsSnapshot.captured_at >= since,
-            AnalyticsSnapshot.hours_after_post == 24,
-        )
+        .join(latest_snap, AnalyticsSnapshot.id == latest_snap.c.max_id)
         .order_by(order_col.desc())
         .limit(limit)
         .all()
@@ -111,6 +126,17 @@ def get_content_type_performance(
     """Get average performance by content type."""
     since = datetime.utcnow() - timedelta(days=days)
 
+    # Use the latest snapshot per content item
+    latest_snap = (
+        db.query(
+            AnalyticsSnapshot.content_id,
+            func.max(AnalyticsSnapshot.id).label("max_id"),
+        )
+        .filter(AnalyticsSnapshot.captured_at >= since)
+        .group_by(AnalyticsSnapshot.content_id)
+        .subquery()
+    )
+
     results = (
         db.query(
             GeneratedContent.content_type,
@@ -120,11 +146,8 @@ def get_content_type_performance(
             func.avg(AnalyticsSnapshot.reach).label("avg_reach"),
             func.avg(AnalyticsSnapshot.engagement_rate).label("avg_engagement"),
         )
-        .join(AnalyticsSnapshot, AnalyticsSnapshot.content_id == GeneratedContent.id)
-        .filter(
-            AnalyticsSnapshot.captured_at >= since,
-            AnalyticsSnapshot.hours_after_post == 24,
-        )
+        .join(latest_snap, AnalyticsSnapshot.id == latest_snap.c.max_id)
+        .join(GeneratedContent, GeneratedContent.id == AnalyticsSnapshot.content_id)
         .group_by(GeneratedContent.content_type)
         .all()
     )

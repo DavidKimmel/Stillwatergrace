@@ -43,11 +43,11 @@ app.conf.update(
         },
         "daily-content-generation": {
             "task": "workers.daily_tasks.run_content_generation",
-            "schedule": crontab(hour=6, minute=30),
+            "schedule": crontab(hour=5, minute=15),
         },
         "daily-image-generation": {
             "task": "workers.daily_tasks.run_image_generation",
-            "schedule": crontab(hour=7, minute=0),
+            "schedule": crontab(hour=5, minute=45),
         },
 
         # ── Posting Windows ──
