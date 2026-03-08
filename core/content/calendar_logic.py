@@ -27,21 +27,25 @@ logger = logging.getLogger(__name__)
 # Day of week (0=Monday) → content type mapping
 # 12 slots/week: morning + noon only. Reels and carousels determined by content type.
 # Reels auto-generate for any verse-backed content via FFmpeg pipeline.
+# Optimized for reach based on analytics data (2026-03-08):
+# Top performers: carousel (108 avg reach), daily_verse (79), encouragement (74)
+# Dropped: gratitude (3), prayer_prompt (2), parenting_wednesday (5)
+# Kept 1x: marriage_monday (brand identity), faith_friday (brand identity)
 WEEKLY_SCHEDULE = {
     0: {  # Monday
         "morning": {"type": ContentType.marriage_monday, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
+        "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
     },
     1: {  # Tuesday
         "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
-        "noon": {"type": ContentType.this_or_that, "tone": EmotionalTone.celebratory},
+        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
     },
     2: {  # Wednesday
-        "morning": {"type": ContentType.parenting_wednesday, "tone": EmotionalTone.hopeful},
+        "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
         "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
     },
     3: {  # Thursday
-        "morning": {"type": ContentType.fill_in_blank, "tone": EmotionalTone.celebratory},
+        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
         "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
     },
     4: {  # Friday
@@ -50,11 +54,11 @@ WEEKLY_SCHEDULE = {
     },
     5: {  # Saturday
         "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.conviction_quote, "tone": EmotionalTone.challenging},
+        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.reflective},
     },
     6: {  # Sunday
-        "morning": {"type": ContentType.gratitude, "tone": EmotionalTone.celebratory},
-        "noon": {"type": ContentType.prayer_prompt, "tone": EmotionalTone.reflective},
+        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
+        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
     },
 }
 
