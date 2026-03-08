@@ -127,6 +127,7 @@ class TestBuildAudioFilters:
         )
         assert len(filters) == 1
         assert "[1:a]" in filters[0]
+        assert "afade" in filters[0]
         assert audio_map == "[a]"
 
     def test_narration_plus_music(self) -> None:
@@ -139,8 +140,8 @@ class TestBuildAudioFilters:
         assert len(filters) == 3
         assert "amix=inputs=2" in filters[2]
         assert audio_map == "[a]"
-        # Music should be ducked to 0.08 when narration present
-        assert "volume=0.08" in filters[1]
+        # Music should be ducked when narration present
+        assert "volume=0.15" in filters[1]
 
     def test_music_only_louder(self) -> None:
         """Music without narration should be at 0.20 volume."""
@@ -149,7 +150,7 @@ class TestBuildAudioFilters:
             narr_idx=-1, music_idx=1, ambient_idx=-1,
             narr_fade_start=10.0, music_fade_start=8.0,
         )
-        assert "volume=0.20" in filters[0]
+        assert "volume=0.25" in filters[0]
 
     def test_all_three_audio_sources(self) -> None:
         filters, audio_map = _build_audio_filters(

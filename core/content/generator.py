@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from core.config import settings
 from core.content.prompt_templates import get_template_engine
 from database.models import (
+    ChristianQuote,
     GeneratedContent,
     ContentType,
     ContentStatus,
@@ -111,6 +112,7 @@ class ContentGenerator:
             theme=theme,
             usage=usage,
             scheduled_at=kwargs.get("scheduled_at"),
+            quote=kwargs.get("quote"),
         )
 
         return content
@@ -149,6 +151,14 @@ class ContentGenerator:
             bible = BibleAPIClient(self.db)
             verse = bible.fetch_daily_verse()
 
+        # Get a random quote for christian_quote content
+        quote = None
+        if content_type == ContentType.christian_quote:
+            quote = self._get_random_quote()
+            if not quote:
+                logger.warning("No approved quotes available for christian_quote slot")
+                return None
+
         # Get the top trending topic
         trending_topic = self._get_top_trend()
 
@@ -162,6 +172,7 @@ class ContentGenerator:
             theme=theme,
             age_group=slot.get("age_group", "general"),
             scheduled_at=slot.get("scheduled_at"),
+            quote=quote,
         )
 
     def _build_prompt(
@@ -202,6 +213,17 @@ class ContentGenerator:
         elif content_type == ContentType.faith_friday:
             return self.templates.render_faith_friday(
                 hardship_topic=theme or "waiting seasons",
+                trending_topic=trending_topic,
+            )
+
+        elif content_type == ContentType.christian_quote:
+            quote = kwargs.get("quote")
+            if not quote:
+                logger.warning("No quote provided for christian_quote")
+                return None
+            return self.templates.render_christian_quote(
+                quote_text=quote.quote_text,
+                author=quote.author,
                 trending_topic=trending_topic,
             )
 
@@ -281,6 +303,7 @@ class ContentGenerator:
         theme: str,
         usage: Optional[dict],
         scheduled_at: Optional[datetime] = None,
+        quote: Optional["ChristianQuote"] = None,
     ) -> GeneratedContent:
         """Validate and store generated content in the database."""
         # Handle legacy array response (viral formats used to return arrays)
@@ -304,6 +327,7 @@ class ContentGenerator:
 
         content = GeneratedContent(
             verse_id=verse.id if verse else None,
+            quote_id=quote.id if quote else None,
             content_type=content_type,
             series_type=self._get_series_type(content_type),
             emotional_tone=tone,
@@ -349,6 +373,19 @@ class ContentGenerator:
         )
 
         return content
+
+    def _get_random_quote(self) -> Optional[ChristianQuote]:
+        """Get a random approved Christian quote from the database."""
+        from sqlalchemy.sql.expression import func
+        quote = (
+            self.db.query(ChristianQuote)
+            .filter(ChristianQuote.approved == True)
+            .order_by(func.random())
+            .first()
+        )
+        if quote:
+            logger.info(f"Selected quote by {quote.author}: {quote.quote_text[:50]}...")
+        return quote
 
     def _get_top_trend(self) -> str:
         """Get the highest-scoring unused trend topic."""

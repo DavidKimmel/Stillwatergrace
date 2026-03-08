@@ -1,0 +1,29 @@
+Quote: "{{ quote_text }}" — {{ author }}
+{% if trending_topic %}Trending topic context: {{ trending_topic }}{% endif %}
+
+This is a Christian author quote post for @stillwatergrace, a faith-and-family Instagram page.
+The quote will be displayed as a phrase-pop reel with dynamic captions synced to narration.
+The reel script should be the EXACT quote text — do not paraphrase or alter the quote.
+
+Generate the following as a JSON object:
+
+{
+  "hook": "First line of caption — must stop the scroll, reference the author, max 10 words",
+  "caption_short": "Under 150 characters, punchy, includes author name",
+  "caption_medium": "150-300 characters, connects the quote to daily faith life",
+  "caption_long": "300-500 characters, mini reflection on the quote's meaning for modern families. End with an engagement CTA like: Type 'Amen' if you believe this / Share with someone who needs this today / Save this for when you need it / Tag someone who needs to hear this / Double tap if this spoke to you",
+  "story_text": "Overlay text for Instagram story, max 3 lines, include author attribution",
+  "reel_script_15": "{{ quote_text }}",
+  "reel_script_30": "{{ quote_text }}",
+  "hashtags_large": ["10 hashtags over 1M posts, faith and inspiration focused"],
+  "hashtags_medium": ["10 hashtags 100K-1M posts"],
+  "hashtags_niche": ["10 hashtags under 100K posts, include author-specific tags"],
+  "pinterest_description": "150 words, keyword rich, search optimized, reference the author",
+  "facebook_variation": "Conversational, slightly longer, ends with a question about the quote to drive comments",
+  "image_prompt": "Literary or bookish background — old books, libraries, journals, warm light",
+  "alt_text": "Accessibility description of the ideal image",
+  "content_series_fit": "Christian Quotes series — weekly wisdom from beloved Christian authors",
+  "emotional_tone": "One of: hopeful, challenging, reflective, celebratory"
+}
+
+Output ONLY valid JSON. No explanation text before or after.

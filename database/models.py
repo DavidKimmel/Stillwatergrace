@@ -52,6 +52,7 @@ class ContentType(str, enum.Enum):
     marriage_challenge = "marriage_challenge"
     carousel = "carousel"
     reel = "reel"
+    christian_quote = "christian_quote"
 
 
 class Platform(str, enum.Enum):
@@ -161,6 +162,7 @@ class GeneratedContent(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     verse_id = Column(Integer, ForeignKey("bible_verses.id"), nullable=True)
     trend_id = Column(Integer, ForeignKey("trending_content.id"), nullable=True)
+    quote_id = Column(Integer, ForeignKey("christian_quotes.id"), nullable=True)
 
     # Content metadata
     content_type = Column(SAEnum(ContentType), nullable=False, index=True)
@@ -208,6 +210,7 @@ class GeneratedContent(Base):
     # Relationships
     verse = relationship("BibleVerse", back_populates="generated_content")
     trend = relationship("TrendingContent")
+    quote = relationship("ChristianQuote")
     images = relationship("GeneratedImage", back_populates="content")
     posting_logs = relationship("PostingLog", back_populates="content")
     analytics = relationship("AnalyticsSnapshot", back_populates="content")

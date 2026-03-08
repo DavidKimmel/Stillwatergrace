@@ -110,6 +110,16 @@ CONTENT_TYPE_KEYWORDS: dict[str, list[str]] = {
         "desert oasis contrast landscape",
         "winter frost morning ice",
     ],
+    "christian_quote": [
+        "old leather bible open desk warm light",
+        "library bookshelves warm cozy reading",
+        "vintage typewriter desk warm light",
+        "coffee shop window rainy day cozy",
+        "antique bookshelf old books leather",
+        "open journal pen desk morning coffee",
+        "stacked old books candlelight warm",
+        "reading nook window seat cozy blanket",
+    ],
     "conviction_quote": [
         "mountain landscape powerful nature",
         "stormy sky dramatic clouds",

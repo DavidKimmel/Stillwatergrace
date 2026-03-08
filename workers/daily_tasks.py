@@ -230,6 +230,98 @@ def scrape_competitor_content():
             return {"status": "error", "error": str(e)}
 
 
+@app.task(bind=True, max_retries=1, default_retry_delay=900)
+def run_weekly_content_generation(self):
+    """Generate content + images for the entire upcoming week (Mon-Sun).
+
+    Runs Sunday morning so the user can review and approve throughout the day.
+    Uses dedup check to skip any slots that already have content.
+    """
+    from datetime import datetime, timedelta
+    from database.session import get_db
+    from core.config import settings
+
+    if not settings.has_anthropic:
+        logger.warning("Anthropic API key not configured, skipping weekly generation")
+        return {"status": "skipped", "reason": "no API key"}
+
+    logger.info("Starting weekly content generation for upcoming week...")
+
+    with get_db() as db:
+        try:
+            from core.content.generator import ContentGenerator
+            from core.content.calendar_logic import ContentCalendar, WEEKLY_SCHEDULE, POSTING_TIMES
+            from core.images.image_processor import ImagePipeline
+
+            gen = ContentGenerator(db)
+            img_pipeline = ImagePipeline(db)
+            cal = ContentCalendar(db)
+
+            # Generate for the upcoming Monday through Sunday
+            today = datetime.utcnow()
+            # Next Monday (if today is Sunday, that's tomorrow)
+            days_until_monday = (7 - today.weekday()) % 7
+            if days_until_monday == 0:
+                days_until_monday = 1  # If today is Monday, generate for next week
+            monday = today + timedelta(days=days_until_monday)
+            monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            total = 0
+            for day_offset in range(7):
+                day = monday + timedelta(days=day_offset)
+                day_of_week = day.weekday()
+                day_schedule = WEEKLY_SCHEDULE.get(day_of_week, {})
+
+                for time_slot, config in day_schedule.items():
+                    if config is None:
+                        continue
+
+                    from database.models import ContentType
+                    posting_time = POSTING_TIMES[time_slot]
+                    scheduled_at = day.replace(
+                        hour=posting_time.hour,
+                        minute=posting_time.minute,
+                    )
+
+                    slot = {
+                        "date": day.date().isoformat(),
+                        "time_slot": time_slot,
+                        "content_type": config["type"].value,
+                        "emotional_tone": config["tone"].value,
+                        "scheduled_at": scheduled_at,
+                        "theme": "",
+                        "age_group": "general",
+                    }
+
+                    # Add themes
+                    content_type = config["type"]
+                    if content_type == ContentType.marriage_monday:
+                        slot["theme"] = cal.series.get_marriage_theme()
+                    elif content_type == ContentType.faith_friday:
+                        slot["theme"] = cal.series.get_hardship_topic()
+
+                    try:
+                        content = gen._generate_for_slot(slot)
+                        if content:
+                            total += 1
+                            try:
+                                img_pipeline.generate_images_for_content(content)
+                            except Exception as img_e:
+                                logger.warning(f"Image gen failed for #{content.id}: {img_e}")
+                            logger.info(
+                                f"Generated {slot['content_type']} for "
+                                f"{day.strftime('%A')} {time_slot} (#{content.id})"
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to generate {slot['content_type']}: {e}")
+
+            logger.info(f"Weekly generation complete: {total} pieces for week of {monday.date()}")
+            return {"status": "success", "generated": total, "week_of": monday.date().isoformat()}
+        except Exception as e:
+            logger.error(f"Weekly content generation error: {e}")
+            raise self.retry(exc=e)
+
+
 @app.task
 def generate_weekly_report():
     """Generate and email the weekly performance report."""

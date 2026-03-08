@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from core.config import settings
 from database.models import (
+    ContentType,
     GeneratedContent,
     GeneratedImage,
     ContentStatus,
@@ -205,8 +206,39 @@ class ImagePipeline:
             except Exception as e:
                 logger.error(f"Failed to process {img_format.value} for content #{content.id}: {e}")
 
-        # Generate animated reel if content has a verse
-        if raw_path and content.verse and content.verse.text:
+        # Generate phrase-pop reel for christian_quote content
+        if raw_path and content.content_type == ContentType.christian_quote and content.quote:
+            try:
+                from core.images.phrase_reel_generator import generate_phrase_reel
+                reel_path = generate_phrase_reel(
+                    background_path=raw_path,
+                    text=content.quote.quote_text,
+                    content_id=content.id,
+                    content_type="christian_quote",
+                    author=content.quote.author,
+                )
+                if reel_path:
+                    final_url = self._upload_to_storage(
+                        reel_path, content.id, ImageFormat.reel_9x16,
+                    )
+                    reel_record = GeneratedImage(
+                        content_id=content.id,
+                        provider=provider,
+                        format=ImageFormat.reel_9x16,
+                        raw_url=raw_path,
+                        final_url=final_url,
+                        r2_key=f"content/{content.id}/reel_9x16.mp4",
+                        width=1080,
+                        height=1920,
+                    )
+                    self.db.add(reel_record)
+                    images.append(reel_record)
+                    logger.info(f"Phrase-pop reel generated for content #{content.id}")
+            except Exception as e:
+                logger.error(f"Phrase reel generation failed for content #{content.id}: {e}")
+
+        # Generate animated reel if content has a verse (non-quote content)
+        elif raw_path and content.verse and content.verse.text:
             try:
                 from core.images.reel_generator import generate_reel
                 reel_path = generate_reel(

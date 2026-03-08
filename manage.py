@@ -719,6 +719,7 @@ def test_phrase_reel():
     content_id_arg = None
     text_arg = None
     voice_arg = None
+    author_arg = None
     for arg in sys.argv[2:]:
         if arg.startswith("--content-id="):
             content_id_arg = int(arg.split("=", 1)[1])
@@ -726,6 +727,8 @@ def test_phrase_reel():
             text_arg = arg.split("=", 1)[1]
         elif arg.startswith("--voice="):
             voice_arg = int(arg.split("=", 1)[1])
+        elif arg.startswith("--author="):
+            author_arg = arg.split("=", 1)[1]
 
     if content_id_arg is None and text_arg is None:
         print("Usage:")
@@ -736,7 +739,7 @@ def test_phrase_reel():
     background_path = None
     text = text_arg or ""
     content_id = content_id_arg or 0
-    content_type = "daily_verse"
+    content_type = "christian_quote" if author_arg else "daily_verse"
 
     if content_id_arg is not None:
         # Load from database
@@ -806,6 +809,9 @@ def test_phrase_reel():
         print("\n  ERROR: No background image available")
         return
 
+    if author_arg:
+        print(f"  Author: {author_arg}")
+
     print(f"\n  Generating phrase-pop reel...")
     reel_path = generate_phrase_reel(
         background_path=background_path,
@@ -813,6 +819,7 @@ def test_phrase_reel():
         content_id=content_id,
         voice_index=voice_arg,
         content_type=content_type,
+        author=author_arg,
     )
 
     if reel_path:

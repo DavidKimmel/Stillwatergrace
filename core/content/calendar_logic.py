@@ -46,7 +46,7 @@ WEEKLY_SCHEDULE = {
     },
     3: {  # Thursday
         "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
+        "noon": {"type": ContentType.christian_quote, "tone": EmotionalTone.reflective},
     },
     4: {  # Friday
         "morning": {"type": ContentType.faith_friday, "tone": EmotionalTone.reflective},

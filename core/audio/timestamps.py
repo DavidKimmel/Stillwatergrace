@@ -101,39 +101,38 @@ def generate_narration_with_timestamps(
             model_id="eleven_v3",
             output_format="mp3_44100_128",
             voice_settings=VoiceSettings(
-                stability=0.4,
-                similarity_boost=0.75,
-                style=0.3,
+                stability=0.25,          # Lower = more emotional range
+                similarity_boost=0.70,
+                style=0.55,              # Higher = more expressive inflection
                 use_speaker_boost=True,
             ),
         )
 
-        # Collect audio chunks and alignment data
-        audio_chunks: list[bytes] = []
-        alignment_data: Optional[dict] = None
+        # Response is AudioWithTimestampsResponse — access fields directly
+        audio_b64 = response.audio_base_64
+        alignment_obj = response.alignment
 
-        for item in response:
-            if hasattr(item, "audio_base64") and item.audio_base64:
-                audio_chunks.append(base64.b64decode(item.audio_base64))
-            if hasattr(item, "alignment") and item.alignment is not None:
-                alignment_data = {
-                    "characters": list(item.alignment.characters),
-                    "character_start_times_seconds": list(
-                        item.alignment.character_start_times_seconds
-                    ),
-                    "character_end_times_seconds": list(
-                        item.alignment.character_end_times_seconds
-                    ),
-                }
-
-        if not audio_chunks:
+        if not audio_b64:
             logger.error("No audio data received from ElevenLabs")
             return None
 
+        audio_bytes = base64.b64decode(audio_b64)
+
         # Write audio file
         with open(output_path, "wb") as f:
-            for chunk in audio_chunks:
-                f.write(chunk)
+            f.write(audio_bytes)
+
+        alignment_data: Optional[dict] = None
+        if alignment_obj is not None:
+            alignment_data = {
+                "characters": list(alignment_obj.characters),
+                "character_start_times_seconds": list(
+                    alignment_obj.character_start_times_seconds
+                ),
+                "character_end_times_seconds": list(
+                    alignment_obj.character_end_times_seconds
+                ),
+            }
 
         if output_path.stat().st_size < 1000:
             logger.warning("Timestamped narration file is empty/corrupt, removing")

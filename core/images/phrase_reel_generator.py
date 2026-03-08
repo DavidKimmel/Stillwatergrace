@@ -50,6 +50,9 @@ KEN_BURNS_MIN_WIDTH = 1728
 PRE_PHRASE_PAD = 0.8
 POST_PHRASE_PAD = 1.5
 
+# Video outro — appended after the main reel content
+OUTRO_PATH = Path(__file__).parent.parent.parent / "images" / "Logo.mp4"
+
 # Font settings for drawtext
 FONT_SIZE = 80
 SHADOW_OFFSET = 4
@@ -77,12 +80,16 @@ _FONT_DIRS = [
 ]
 
 
+MIN_REEL_SECONDS = 15.0  # Minimum reel length for engagement
+
+
 def generate_phrase_reel(
     background_path: str,
     text: str,
     content_id: int = 0,
     voice_index: Optional[int] = None,
     content_type: str = "daily_verse",
+    author: Optional[str] = None,
 ) -> Optional[str]:
     """Generate a phrase-pop reel with word-synced captions.
 
@@ -92,6 +99,7 @@ def generate_phrase_reel(
         content_id: Content ID for voice selection, music matching, and output naming.
         voice_index: Override voice index (0-8). None uses content_id rotation.
         content_type: Content type for mood-matched music selection.
+        author: Quote author for attribution (e.g. "C.S. Lewis"). Shown after last phrase.
 
     Returns:
         Path to output MP4 file, or None on failure.
@@ -110,11 +118,21 @@ def generate_phrase_reel(
     # Normalize text whitespace
     text = " ".join(text.split())
 
-    logger.info(f"Generating phrase-pop reel for content #{content_id}: {len(text)} chars")
+    # Build narration text: prepend author attribution if provided
+    # Voice says "C.S. Lewis writes..." then the quote
+    # On-screen text only shows the quote itself (no author text overlay)
+    narration_text = text
+    author_word_count = 0
+    if author and author.strip():
+        author_intro = f"{author.strip()} writes... "
+        narration_text = author_intro + text
+        author_word_count = len(author_intro.split())
+
+    logger.info(f"Generating phrase-pop reel for content #{content_id}: {len(narration_text)} chars")
 
     # Step 1: Generate TTS with timestamps
     tts_result = generate_narration_with_timestamps(
-        text=text,
+        text=narration_text,
         content_id=content_id,
         voice_index=voice_index,
     )
@@ -129,8 +147,14 @@ def generate_phrase_reel(
         logger.error("No word timestamps returned -- cannot sync phrases")
         return None
 
-    # Step 2: Group into phrases
-    phrases = group_into_phrases(word_timestamps)
+    # Strip author intro words from timestamps — only display quote text on screen
+    quote_timestamps = word_timestamps[author_word_count:]
+    if not quote_timestamps:
+        logger.error("No quote words after stripping author intro")
+        return None
+
+    # Step 2: Group into phrases (quote text only)
+    phrases = group_into_phrases(quote_timestamps)
     if not phrases:
         logger.error("No phrases generated from word timestamps")
         return None
@@ -143,17 +167,20 @@ def generate_phrase_reel(
         )
 
     # Step 3: Calculate total duration
-    # Duration = narration length + padding
     narration_end = phrases[-1].end_time
-    total_seconds = narration_end + PRE_PHRASE_PAD + POST_PHRASE_PAD
-    total_frames = int(total_seconds * FPS)
+    total_seconds = narration_end + POST_PHRASE_PAD
 
     # Get narration audio duration for more accurate timing
     narration_duration = _get_audio_duration(narration_path)
-    if narration_duration and narration_duration > total_seconds:
+    if narration_duration and narration_duration + POST_PHRASE_PAD > total_seconds:
         total_seconds = narration_duration + POST_PHRASE_PAD
-        total_frames = int(total_seconds * FPS)
 
+    # Enforce minimum reel length
+    if total_seconds < MIN_REEL_SECONDS:
+        logger.info(f"Extending reel from {total_seconds:.1f}s to {MIN_REEL_SECONDS}s minimum")
+        total_seconds = MIN_REEL_SECONDS
+
+    total_frames = int(total_seconds * FPS)
     logger.info(f"Reel duration: {total_seconds:.1f}s ({total_frames} frames)")
 
     # Step 4: Prepare background
@@ -184,11 +211,15 @@ def generate_phrase_reel(
 
         # Pass 2: Composite with drawtext phrases + audio
         font_path = _find_font_path()
+        # If outro exists, render main content to temp file first
+        has_outro = OUTRO_PATH.exists()
+        main_output = tmpdir_path / "main_content.mp4" if has_outro else output_path
+
         success = _render_phrase_composite(
             video_path=bg_motion_path,
-            output_path=output_path,
+            output_path=main_output,
             phrases=phrases,
-            phrase_offset=PRE_PHRASE_PAD,
+            phrase_offset=0.0,
             total_seconds=total_seconds,
             font_path=font_path,
             narration_path=narration_path,
@@ -201,6 +232,13 @@ def generate_phrase_reel(
         if not success:
             logger.error("Phrase composite rendering failed")
             return None
+
+        # Step 7: Concatenate with outro video if available
+        if has_outro:
+            success = _concat_with_outro(main_output, output_path, tmpdir_path)
+            if not success:
+                logger.warning("Outro concat failed, using main content only")
+                shutil.copy2(str(main_output), str(output_path))
 
     if output_path.exists() and output_path.stat().st_size > 10_000:
         size_mb = output_path.stat().st_size / (1024 * 1024)
@@ -434,17 +472,16 @@ def _build_drawtext_filters(
     font_arg = f":fontfile='{font_path}'" if font_path else ""
 
     # Chain drawtext filters for each phrase
-    prev_label = ""
     filters: list[str] = []
 
     for i, phrase in enumerate(phrases):
         start = phrase.start_time + phrase_offset
         end = phrase.end_time + phrase_offset
 
-        # Add small gap between phrases for visual breathing room
-        # Fade: show 0.1s before start_time, hold until end_time + 0.15s
-        display_start = max(0, start - 0.1)
-        display_end = end + 0.15
+        # Sharp cut: text snaps in at start, snaps out with small gap before next
+        display_start = start
+        next_start = phrases[i + 1].start_time + phrase_offset if i < len(phrases) - 1 else end + 0.5
+        display_end = min(end + 0.05, next_start - 0.05)
 
         escaped_text = _escape_drawtext(phrase.text)
 
@@ -472,22 +509,83 @@ def _build_drawtext_filters(
         )
 
         if i == 0:
-            # First phrase: chain from base (drawbox)
             filters.append(f"{base_filter},{shadow_filter},{text_filter}")
-            prev_label = ""
         else:
-            # Subsequent phrases: chain from previous output
             in_label = f"[dt{i - 1}]"
-            filters_text = f"{in_label}{shadow_filter},{text_filter}"
-            filters.append(filters_text)
+            filters.append(f"{in_label}{shadow_filter},{text_filter}")
 
-        # Label output for next filter (except last which becomes [vout])
         if i < len(phrases) - 1:
             filters[-1] += f"[dt{i}]"
         else:
             filters[-1] += "[vout]"
 
     return filters
+
+
+def _concat_with_outro(
+    main_video: Path,
+    output_path: Path,
+    tmpdir: Path,
+) -> bool:
+    """Concatenate the main reel with the outro video clip.
+
+    Scales the outro to match reel dimensions (1080x1920) and concatenates
+    using FFmpeg concat filter for seamless joining.
+    """
+    concat_list = tmpdir / "concat.txt"
+    scaled_outro = tmpdir / "outro_scaled.mp4"
+
+    # Scale outro to match reel dimensions and ensure same pixel format
+    scale_cmd = [
+        "ffmpeg", "-y",
+        "-i", str(OUTRO_PATH),
+        "-vf", f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=decrease,"
+               f"pad={REEL_W}:{REEL_H}:(ow-iw)/2:(oh-ih)/2:color=black",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-crf", "18",
+        "-preset", "medium",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-r", str(FPS),
+        str(scaled_outro),
+    ]
+
+    try:
+        result = subprocess.run(scale_cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            logger.error(f"Outro scaling failed: {result.stderr[-300:]}")
+            return False
+    except Exception as e:
+        logger.error(f"Outro scaling error: {e}")
+        return False
+
+    # Write concat demuxer list
+    concat_list.write_text(
+        f"file '{main_video}'\nfile '{scaled_outro}'\n"
+    )
+
+    # Concatenate using demuxer (fast, no re-encode)
+    concat_cmd = [
+        "ffmpeg", "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", str(concat_list),
+        "-c", "copy",
+        "-movflags", "+faststart",
+        str(output_path),
+    ]
+
+    try:
+        result = subprocess.run(concat_cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            logger.error(f"Outro concat failed: {result.stderr[-300:]}")
+            return False
+        logger.info(f"Appended outro ({OUTRO_PATH.name}) to reel")
+        return True
+    except Exception as e:
+        logger.error(f"Outro concat error: {e}")
+        return False
 
 
 def _build_audio_filters(
@@ -516,7 +614,7 @@ def _build_audio_filters(
         mix_count += 1
 
     if has_music:
-        music_vol = "0.08" if has_narration else "0.20"
+        music_vol = "0.15" if has_narration else "0.25"
         filters.append(
             f"[{music_idx}:a]volume={music_vol},"
             f"afade=t=in:st=0:d=1.5,"
@@ -583,6 +681,7 @@ def _find_font_path() -> Optional[str]:
             if candidate.exists():
                 # FFmpeg needs forward slashes even on Windows
                 return str(candidate).replace("\\", "/")
+    logger.warning("No suitable font found for phrase reel — FFmpeg will use default")
     return None
 
 
@@ -605,8 +704,8 @@ def _get_audio_duration(audio_path: Path) -> Optional[float]:
         )
         if result.returncode == 0 and result.stdout.strip():
             return float(result.stdout.strip())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to get audio duration for {audio_path}: {e}")
     return None
 
 

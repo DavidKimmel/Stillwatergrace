@@ -90,6 +90,12 @@ app.conf.update(
             "schedule": crontab(hour=14, minute=0),  # 2 PM EST — refresh all recent posts
         },
 
+        # ── Sunday Weekly Generation (full week ahead) ──
+        "sunday-weekly-content-generation": {
+            "task": "workers.daily_tasks.run_weekly_content_generation",
+            "schedule": crontab(hour=5, minute=15, day_of_week="sunday"),
+        },
+
         # ── Weekly Tasks ──
         "weekly-competitor-scrape": {
             "task": "workers.daily_tasks.run_competitor_scrape",
