@@ -17,6 +17,9 @@ Usage:
     python manage.py tiktok-auth      Start TikTok OAuth flow to get access token
     python manage.py generate-devotional  Generate a branded devotional PDF (--theme=finding_peace [--upload])
     python manage.py list-devotionals     List available devotional themes
+    python manage.py scrape-quotes        Scrape Christian quotes (seed + APIs)
+    python manage.py list-quotes          Browse stored quotes (--author=lewis)
+    python manage.py generate-quote-content  Generate Instagram caption from a random quote
 """
 
 import sys
@@ -581,6 +584,127 @@ def list_devotionals_cmd():
         print()
 
 
+def scrape_quotes():
+    """Run the Christian quotes scraper (seed data + public APIs)."""
+    from database.session import get_db
+    from core.scraper.quotes_scraper import QuotesScraper
+
+    with get_db() as db:
+        scraper = QuotesScraper(db)
+        result = scraper.run_full_scrape()
+        print(f"\nQuotes scrape complete:")
+        print(f"  Seeded:      {result['seeded']}")
+        print(f"  From APIs:   {result['scraped']}")
+        print(f"  Total new:   {result['total_new']}")
+
+        from database.models import ChristianQuote
+        total_in_db = db.query(ChristianQuote).count()
+        print(f"  Total in DB: {total_in_db}")
+
+
+def list_quotes_cmd():
+    """Browse stored Christian quotes. Use --author=lewis to filter."""
+    from database.session import get_db
+    from core.scraper.quotes_scraper import QuotesScraper
+
+    # Parse --author flag
+    author_filter = None
+    for arg in sys.argv[2:]:
+        if arg.startswith("--author="):
+            author_filter = arg.split("=", 1)[1]
+
+    with get_db() as db:
+        scraper = QuotesScraper(db)
+        quotes = scraper.list_quotes(author=author_filter)
+
+        if not quotes:
+            print("\nNo quotes found. Run 'python manage.py scrape-quotes' first.")
+            return
+
+        print(f"\n== Christian Quotes ({len(quotes)} total) ==\n")
+        current_author = ""
+        for q in quotes:
+            if q.author != current_author:
+                print(f"\n  {q.author}")
+                print(f"  {'─' * 50}")
+                current_author = q.author
+            source_str = f" — {q.source}" if q.source else ""
+            tags_str = ", ".join(q.tags) if q.tags else ""
+            print(f'    "{q.quote_text}"{source_str}')
+            if tags_str:
+                print(f"      [{tags_str}]")
+
+
+def generate_quote_content():
+    """Pick a random quote and generate Instagram caption text via Claude API."""
+    from database.session import get_db
+    from core.scraper.quotes_scraper import QuotesScraper
+    from core.config import settings
+
+    import anthropic
+
+    with get_db() as db:
+        scraper = QuotesScraper(db)
+        quote = scraper.get_random_quote()
+
+        if not quote:
+            print("\nNo quotes in database. Run 'python manage.py scrape-quotes' first.")
+            return
+
+        print(f'\nSelected quote by {quote.author}:')
+        print(f'  "{quote.quote_text}"')
+        if quote.source:
+            print(f"  Source: {quote.source}")
+        print()
+
+        if not settings.anthropic_api_key:
+            print("Error: ANTHROPIC_API_KEY not set in .env")
+            return
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+        system_prompt = (
+            "You are the social media manager for @stillwatergrace, a Christian faith-and-family "
+            "Instagram page. Your captions are warm, relatable, and encourage engagement. "
+            "Write for a broad Christian audience — married couples, parents, young adults seeking faith."
+        )
+
+        user_prompt = (
+            f'Generate an Instagram caption for this Christian quote:\n\n'
+            f'Quote: "{quote.quote_text}"\n'
+            f'Author: {quote.author}\n'
+            f'Source: {quote.source or "Unknown"}\n'
+            f'Tags: {", ".join(quote.tags) if quote.tags else "general"}\n\n'
+            f'Requirements:\n'
+            f'1. A short hook line (under 15 words) to stop the scroll\n'
+            f'2. The quote itself, properly attributed\n'
+            f'3. A 2-3 sentence reflection connecting the quote to daily life\n'
+            f'4. A call-to-action question for engagement\n'
+            f'5. 5-8 relevant hashtags\n\n'
+            f'Format: Plain text, not JSON. Use line breaks for readability.'
+        )
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=800,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+
+            text = ""
+            for block in response.content:
+                if block.type == "text":
+                    text += block.text
+
+            print("== Generated Caption ==\n")
+            print(text)
+            print(f"\n(Tokens: {response.usage.input_tokens} in / {response.usage.output_tokens} out)")
+
+        except anthropic.APIError as e:
+            print(f"Claude API error: {e}")
+
+
 COMMANDS = {
     "init-db": init_db,
     "seed": seed,
@@ -598,6 +722,9 @@ COMMANDS = {
     "tiktok-auth": tiktok_auth,
     "generate-devotional": generate_devotional,
     "list-devotionals": list_devotionals_cmd,
+    "scrape-quotes": scrape_quotes,
+    "list-quotes": list_quotes_cmd,
+    "generate-quote-content": generate_quote_content,
 }
 
 

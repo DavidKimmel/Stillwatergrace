@@ -475,6 +475,26 @@ class RevenueLog(Base):
     notes = Column(Text)
 
 
+class ChristianQuote(Base):
+    """Curated Christian quotes from classic and modern authors."""
+    __tablename__ = "christian_quotes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    author = Column(String(200), nullable=False, index=True)
+    quote_text = Column(Text, nullable=False)
+    text_hash = Column(String(64), unique=True, nullable=False)  # SHA-256 for dedup
+    source = Column(String(500))  # book, sermon, etc.
+    tags = Column(JSON, default=list)  # [faith, marriage, hardship, ...]
+    scraped_from = Column(String(2000))  # source URL
+    scraped_at = Column(DateTime)
+    approved = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_quotes_author_approved", "author", "approved"),
+    )
+
+
 class BrandContact(Base):
     """CRM for potential brand partners."""
     __tablename__ = "brand_contacts"
