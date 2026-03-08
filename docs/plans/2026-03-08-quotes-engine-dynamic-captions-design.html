@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html><head><title>Christian Quotes Engine + Dynamic Caption Reels — Design</title>
+<style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6;color:#2D4A3E}
+h1{color:#D4A853;border-bottom:2px solid #D4A853;padding-bottom:8px}
+h2{color:#2D4A3E;margin-top:32px}
+h3{color:#D4A853}
+code{background:#FFF8F0;padding:2px 6px;border-radius:3px;font-size:0.9em}
+pre{background:#FFF8F0;padding:16px;border-radius:6px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;margin:16px 0}
+th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
+th{background:#2D4A3E;color:white}
+.note{background:#FFF8F0;border-left:4px solid #D4A853;padding:12px 16px;margin:16px 0}
+</style></head><body>
+
+<h1>Christian Quotes Engine + Dynamic Caption Reels</h1>
+<p><strong>Date:</strong> 2026-03-08<br>
+<strong>Status:</strong> Approved<br>
+<strong>Goal:</strong> Expand content library beyond Bible verses and add a high-reach reel format</p>
+
+<h2>Feature 1: Christian Quotes Engine</h2>
+
+<h3>Overview</h3>
+<p>Automated scraping pipeline that collects quotes from notable Christian authors, stores them in a dedicated database table, and makes them available for content generation. Built as a standalone system — no calendar or posting integration until manually approved.</p>
+
+<h3>Database</h3>
+<pre>
+christian_quotes table:
+  id              INTEGER PRIMARY KEY
+  author          VARCHAR(200) NOT NULL
+  quote_text      TEXT NOT NULL
+  text_hash       VARCHAR(64) UNIQUE NOT NULL  -- SHA-256 for dedup
+  source          VARCHAR(500)                 -- book, sermon, etc.
+  tags            JSON DEFAULT '[]'            -- [faith, marriage, hardship, ...]
+  scraped_from    VARCHAR(2000)                -- source URL
+  scraped_at      DATETIME
+  approved        BOOLEAN DEFAULT TRUE
+  created_at      DATETIME DEFAULT NOW()
+</pre>
+
+<h3>Scraper Sources</h3>
+<table>
+<tr><th>Priority</th><th>Source</th><th>Method</th><th>Notes</th></tr>
+<tr><td>1</td><td>Public quote APIs</td><td>REST API</td><td>Filter by Christian authors</td></tr>
+<tr><td>2</td><td>Goodreads / BrainyQuote</td><td>Web scraping</td><td>Author-specific pages</td></tr>
+<tr><td>3</td><td>Seed data</td><td>Migration</td><td>~50 curated classic quotes</td></tr>
+</table>
+
+<h3>Target Authors</h3>
+<p>CS Lewis, Charles Spurgeon, A.W. Tozer, Francis Chan, Tim Keller, A.W. Pink, Corrie ten Boom, Elisabeth Elliot, Dietrich Bonhoeffer, Billy Graham</p>
+
+<h3>CLI Commands</h3>
+<ul>
+<li><code>manage.py scrape-quotes</code> — run scraper manually</li>
+<li><code>manage.py list-quotes [--author=lewis]</code> — browse stored quotes</li>
+<li><code>manage.py generate-quote-content</code> — test content generation from a quote</li>
+</ul>
+
+<h3>Integration (Future — NOT part of this build)</h3>
+<ul>
+<li>GeneratedContent gets nullable <code>quote_id</code> FK</li>
+<li>Calendar slots can use quote OR verse</li>
+<li>Celery beat weekly scrape task</li>
+<li>Auto-posting via existing pipeline</li>
+</ul>
+
+<h2>Feature 2: Dynamic Caption Reels (Phrase Pop)</h2>
+
+<h3>Overview</h3>
+<p>New reel rendering style where text appears phrase-by-phrase synced to TTS narration — the dominant format on Reels/TikTok for reach. Uses ElevenLabs word-level timestamps to drive FFmpeg text overlays.</p>
+
+<h3>Pipeline</h3>
+<ol>
+<li>Text input (Bible verse or Christian quote)</li>
+<li>ElevenLabs TTS generates audio + word-level timestamps</li>
+<li>Group words into 3-5 word phrases based on natural breaks</li>
+<li>FFmpeg renders Ken Burns background + phrase overlays at exact timestamps</li>
+<li>Audio mix: narration + mood-matched music (same as existing)</li>
+<li>Output: 1080x1920 MP4 reel</li>
+</ol>
+
+<h3>Phrase Rendering</h3>
+<ul>
+<li>Large bold white text, centered on screen</li>
+<li>Slight drop shadow for readability</li>
+<li>Fade-in on phrase start, fade-out before next phrase</li>
+<li>Font: same brand fonts (Georgia bold)</li>
+<li>Background: Ken Burns zoompan on Unsplash image (same as existing)</li>
+</ul>
+
+<h3>ElevenLabs Timestamps</h3>
+<p>ElevenLabs <code>with_timestamps=True</code> returns character-level alignment data. We convert to word boundaries, then group into natural phrases using punctuation and word count rules.</p>
+
+<h3>CLI Commands</h3>
+<ul>
+<li><code>manage.py test-phrase-reel --content-id 63</code> — generate a phrase-pop reel from existing content</li>
+<li><code>manage.py test-phrase-reel --text "The quote text" --voice 0</code> — generate from arbitrary text</li>
+</ul>
+
+<h3>Integration (Future — NOT part of this build)</h3>
+<ul>
+<li>Add <code>phrase_pop</code> to reel style rotation</li>
+<li>Calendar can assign reel style per slot</li>
+<li>A/B test phrase_pop vs classic/quick/cinematic</li>
+</ul>
+
+<div class="note">
+<strong>Key constraint:</strong> Both features are CLI-only with no calendar or posting integration. They will be tested manually before any production integration.
+</div>
+
+</body></html>
+</pre>
