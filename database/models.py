@@ -341,6 +341,25 @@ class CompetitorSnapshot(Base):
     captured_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class CompetitorPost(Base):
+    """Individual posts scraped from competitor accounts."""
+    __tablename__ = "competitor_posts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    competitor_handle = Column(String(100), nullable=False, index=True)
+    platform_media_id = Column(String(100), unique=True, nullable=False)
+    media_type = Column(String(20), nullable=False)  # IMAGE, VIDEO, CAROUSEL_ALBUM
+    caption = Column(Text)
+    hashtags = Column(JSON, default=list)
+    posted_at = Column(DateTime)
+    permalink = Column(String(2000))
+    scraped_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_comp_posts_handle_date", "competitor_handle", "posted_at"),
+    )
+
+
 # ──────────────────────────────────────────────
 # Content Calendar
 # ──────────────────────────────────────────────
