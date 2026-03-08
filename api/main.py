@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import content, analytics, monetization, dashboard
+from api.routes import content, analytics, insights, monetization, dashboard
 from core.config import settings
 
 app = FastAPI(
@@ -50,5 +50,6 @@ if _images_dir.is_dir():
 
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(insights.router, prefix="/api/analytics/insights", tags=["insights"])
 app.include_router(monetization.router, prefix="/api/monetization", tags=["monetization"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
