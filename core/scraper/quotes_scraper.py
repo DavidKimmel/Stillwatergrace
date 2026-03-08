@@ -192,9 +192,9 @@ SEED_QUOTES: tuple[dict, ...] = (
     },
     {
         "author": "Francis Chan",
-        "quote_text": "Stress says that the things we are involved in are important enough to merit our impatience, our ## and frustration.",
+        "quote_text": "What are you doing right now that requires faith?",
         "source": "Crazy Love",
-        "tags": ["trust", "wisdom", "faith"],
+        "tags": ["faith", "courage", "wisdom"],
     },
     {
         "author": "Francis Chan",
@@ -204,7 +204,7 @@ SEED_QUOTES: tuple[dict, ...] = (
     },
     {
         "author": "Francis Chan",
-        "quote_text": "Following Christ isn't something that can be done halfheartedly or on the side. It is not a label we can display when it Christ convenient.",
+        "quote_text": "Following Christ isn't something that can be done halfheartedly or on the side. It is not a label we can display when convenient.",
         "source": "Crazy Love",
         "tags": ["faith", "courage", "perseverance"],
     },
