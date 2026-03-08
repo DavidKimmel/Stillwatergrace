@@ -650,12 +650,20 @@ def _build_caption(content) -> str:
 
 
 def _get_hashtags(content) -> list[str]:
-    """Extract hashtags — 5 max (2 large + 2 niche + 1 branded)."""
+    """Extract hashtags — 12 total (3 large + 4 medium + 4 niche + 1 branded).
+
+    Instagram sweet spot is 10-15 hashtags. Mix tiers for reach:
+    - Large (>1M): discoverability via trending tags
+    - Medium (100K-1M): best reach-to-competition ratio
+    - Niche (<100K): targeted, high-engagement audiences
+    """
     hashtags = []
     if content.hashtags_large:
-        hashtags.extend(content.hashtags_large[:2])
+        hashtags.extend(content.hashtags_large[:3])
+    if content.hashtags_medium:
+        hashtags.extend(content.hashtags_medium[:4])
     if content.hashtags_niche:
-        hashtags.extend(content.hashtags_niche[:2])
+        hashtags.extend(content.hashtags_niche[:4])
     hashtags.append("#stillwatergrace")
     return hashtags
 

@@ -102,9 +102,21 @@ def get_top_posts(
         .all()
     )
 
-    return [
-        {
+    # Fetch content details for context
+    content_ids = [s.content_id for s in snapshots]
+    contents = {
+        c.id: c
+        for c in db.query(GeneratedContent).filter(GeneratedContent.id.in_(content_ids)).all()
+    } if content_ids else {}
+
+    results = []
+    for s in snapshots:
+        c = contents.get(s.content_id)
+        results.append({
             "content_id": s.content_id,
+            "content_type": c.content_type.value if c else None,
+            "hook": c.hook if c else None,
+            "scheduled_at": c.scheduled_at.isoformat() if c and c.scheduled_at else None,
             "platform": s.platform.value if s.platform else None,
             "likes": s.likes,
             "comments": s.comments,
@@ -113,9 +125,8 @@ def get_top_posts(
             "reach": s.reach,
             "engagement_rate": s.engagement_rate,
             "captured_at": s.captured_at.isoformat() if s.captured_at else None,
-        }
-        for s in snapshots
-    ]
+        })
+    return results
 
 
 @router.get("/content-type-performance")

@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 # Target competitor pages to track
 COMPETITOR_HANDLES = [
-    "biblesociety",
-    "dailyverses.net",
+    "youversion",
+    "thedailygraceco",
+    "bibleverse",
     "proverbs31ministries",
-    "womenoffaith",
-    "faithward_org",
+    "shereadstruth",
 ]
 
 

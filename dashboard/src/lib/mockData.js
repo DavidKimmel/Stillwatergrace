@@ -355,16 +355,11 @@ export function analyticsOverview(days = 30) {
 
 export function topPosts() {
   return [
-    { content_id: 42, saves: 312, shares: 89, reach: 8400, engagement_rate: 0.072 },
-    { content_id: 38, saves: 278, shares: 64, reach: 6200, engagement_rate: 0.063 },
-    { content_id: 51, saves: 245, shares: 71, reach: 7100, engagement_rate: 0.058 },
-    { content_id: 29, saves: 198, shares: 53, reach: 5800, engagement_rate: 0.051 },
-    { content_id: 47, saves: 187, shares: 48, reach: 4900, engagement_rate: 0.049 },
-    { content_id: 33, saves: 164, shares: 42, reach: 4200, engagement_rate: 0.044 },
-    { content_id: 55, saves: 143, shares: 38, reach: 3800, engagement_rate: 0.041 },
-    { content_id: 21, saves: 128, shares: 31, reach: 3400, engagement_rate: 0.038 },
-    { content_id: 44, saves: 112, shares: 27, reach: 3100, engagement_rate: 0.035 },
-    { content_id: 36, saves: 98, shares: 24, reach: 2800, engagement_rate: 0.032 },
+    { content_id: 42, content_type: 'daily_verse', hook: 'His peace is not like the world gives', scheduled_at: '2026-03-07T06:30:00', saves: 312, shares: 89, reach: 8400, engagement_rate: 0.072 },
+    { content_id: 38, content_type: 'marriage_monday', hook: 'Love is patient even on hard days', scheduled_at: '2026-03-06T06:30:00', saves: 278, shares: 64, reach: 6200, engagement_rate: 0.063 },
+    { content_id: 51, content_type: 'faith_friday', hook: 'When fear whispers God is silent', scheduled_at: '2026-03-05T06:30:00', saves: 245, shares: 71, reach: 7100, engagement_rate: 0.058 },
+    { content_id: 29, content_type: 'carousel', hook: '5 prayers for your marriage this week', scheduled_at: '2026-03-04T06:30:00', saves: 198, shares: 53, reach: 5800, engagement_rate: 0.051 },
+    { content_id: 47, content_type: 'daily_verse', hook: 'The Lord is my shepherd', scheduled_at: '2026-03-03T12:00:00', saves: 187, shares: 48, reach: 4900, engagement_rate: 0.049 },
   ];
 }
 

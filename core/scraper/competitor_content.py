@@ -19,11 +19,11 @@ from database.models import CompetitorPost
 logger = logging.getLogger(__name__)
 
 COMPETITOR_HANDLES = [
-    "biblesociety",
-    "dailyverses.net",
+    "youversion",
+    "thedailygraceco",
+    "bibleverse",
     "proverbs31ministries",
-    "womenoffaith",
-    "faithward_org",
+    "shereadstruth",
 ]
 
 

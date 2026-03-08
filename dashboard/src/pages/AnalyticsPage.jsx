@@ -130,7 +130,13 @@ export default function AnalyticsPage() {
                 {topPosts.map((post, i) => (
                   <tr key={i} className="border-b border-gray-50">
                     <td className="py-2 text-gray-400">{i + 1}</td>
-                    <td className="py-2">#{post.content_id}</td>
+                    <td className="py-2">
+                      <div className="font-medium">{post.hook || `#${post.content_id}`}</div>
+                      <div className="text-xs text-gray-400">
+                        {post.content_type?.replace('_', ' ')}
+                        {post.scheduled_at && ` · ${new Date(post.scheduled_at).toLocaleDateString()}`}
+                      </div>
+                    </td>
                     <td className="py-2 text-right font-medium text-brand-gold">{post.saves}</td>
                     <td className="py-2 text-right">{post.shares}</td>
                     <td className="py-2 text-right">{(post.reach || 0).toLocaleString()}</td>
