@@ -472,8 +472,9 @@ def check_token_health() -> dict:
         expires_dt = datetime.utcfromtimestamp(expires_at)
         days_remaining = (expires_dt - datetime.utcnow()).days
     else:
+        # No expiration = never-expiring token
         expires_dt = None
-        days_remaining = -1
+        days_remaining = None
 
     result = {
         "valid": is_valid,
@@ -483,7 +484,9 @@ def check_token_health() -> dict:
         "scopes": token_data.get("scopes", []),
     }
 
-    if days_remaining <= 7:
+    if days_remaining is None:
+        logger.info("Instagram token valid (never-expiring)")
+    elif days_remaining <= 7:
         logger.warning(f"Instagram token expires in {days_remaining} days!")
     else:
         logger.info(f"Instagram token valid, {days_remaining} days remaining")

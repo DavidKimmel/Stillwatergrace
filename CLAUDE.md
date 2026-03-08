@@ -3,14 +3,14 @@
 Automated faith-and-family social media content platform.
 Python/FastAPI backend, React/Tailwind dashboard, Celery workers, PostgreSQL, Redis.
 
-## Current Status (2026-03-06)
+## Current Status (2026-03-08)
 
-**LIVE** — First week of content generated, approved, and auto-posting via Celery beat.
-Content #29 (Jeremiah 29:11) posted as reel to Instagram. Next post: #34 Thu 7 AM EST.
+**LIVE** — Content auto-generating and posting via Celery beat.
+14 posts/week (2/day), content generation at 5:15 AM EST, images at 5:45 AM.
 
 ### What's Working
 - Full content pipeline: Claude API generates text, Unsplash images, Ken Burns reels, ElevenLabs TTS narration
-- 10 rotating male narration voices (George, Daniel, James, Barry, Hardwood, Sakky Ford, Connery, Matthew, Oliver Silk, Cillian)
+- 9 rotating narration voices (Suzanne, Archer, James, Michael C. Vincent, Oliver Silk, Cillian, Connery, Sakky Ford, Barry)
 - Narration-aware reel duration: auto-extends up to 30s, drops narration for very long verses
 - 3 reel presentation styles (classic, quick, cinematic) rotating for feed variety
 - Audio mixing: narration full volume, music ducked to 8%, fade at last 0.5s
@@ -20,10 +20,15 @@ Content #29 (Jeremiah 29:11) posted as reel to Instagram. Next post: #34 Thu 7 A
 - Instagram posting verified working
 - Facebook cross-posting: auto-posts alongside Instagram with Facebook-optimized captions
 - Instagram token auto-refresh: weekly Celery task, CLI `python manage.py token-status`
-- All 18 weekly content slots generate (carousel + viral formats fixed)
+- All 14 weekly content slots generate (carousel + viral formats fixed)
 - Devotional PDF generator: themed 7-day branded PDFs with Claude reflections + Unsplash images
 - ConvertKit email integration: subscriber count API + dashboard endpoint
 - TikTok cross-posting (sandbox tested, production app pending review)
+- Insights dashboard: recommendations, performance breakdown (content type/format/time), competitor activity
+- Competitor content scraper: Mon/Thu Celery tasks via Instagram Business Discovery API
+- Performance analyzer: pure Python rules engine generates actionable recommendations
+- Analytics recovery: daily refresh at 2 PM EST catches posts missed during Docker downtime
+- Content dedup: prevents duplicate generation when batch + daily cron overlap
 
 ### Known Issues to Fix
 - **R2 public dev URL** is rate-limited — need custom domain for production (low priority at current volume)
@@ -31,10 +36,11 @@ Content #29 (Jeremiah 29:11) posted as reel to Instagram. Next post: #34 Thu 7 A
 - **WeasyPrint in Docker** needs `libpango-1.0-0 libgdk-pixbuf2.0-0 libffi-dev` system packages
 
 ### Next Steps (Priority Order)
-1. ConvertKit account setup (landing page, welcome sequence, PDF upload)
-2. Custom R2 domain (when scaling)
-3. Devotional PDF visual refinements (based on review)
-4. Additional devotional themes
+1. Add `instagram_basic` permission in Meta Business Manager (enables competitor scraping)
+2. TikTok production app approval (submitted 2026-03-06)
+3. ManyChat setup at 100 followers
+4. Custom R2 domain (when scaling)
+5. Additional devotional themes
 
 ## Running the Stack
 
@@ -53,7 +59,7 @@ Services: db (Postgres 16), redis, api (:8000), celery-worker, celery-beat, dash
 ## Project Structure
 
 ```
-api/                  FastAPI routes (content, analytics, monetization, dashboard)
+api/                  FastAPI routes (content, analytics, insights, monetization, dashboard)
 core/
   config.py           Pydantic settings from .env (extra="ignore")
   content/            Claude API generator, Jinja2 prompts, series manager, calendar
@@ -62,9 +68,10 @@ core/
   audio/              ElevenLabs TTS narration + Mixkit music + FFmpeg fallback
   images/             Unsplash client, PIL processor (6 overlay styles), reel generator (Ken Burns)
   posting/            Instagram (publish_reel, publish_photo, publish_carousel), Facebook, TikTok
-  scraper/            Bible API (~100 curated verses), Google Trends, Reddit, hashtags
+  analytics/          Performance analyzer (rules engine), Instagram insights collector
+  scraper/            Bible API (~100 curated verses), Google Trends, Reddit, hashtags, competitor content
 database/
-  models.py           SQLAlchemy ORM — 13 tables, 9 enums, Base class
+  models.py           SQLAlchemy ORM — 14 tables, 9 enums, Base class (incl. CompetitorPost)
   session.py          Engine, SessionLocal, get_db/get_db_dependency
   migrations/         Alembic (env.py, versions/)
 dashboard/            React 18 + Vite + Tailwind (port 5175 in Docker)

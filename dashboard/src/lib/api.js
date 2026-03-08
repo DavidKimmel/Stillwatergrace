@@ -135,6 +135,33 @@ export const fetchCompetitors = withMock(
   () => mock.competitors(),
 );
 
+// ── Insights ──
+
+export const fetchInsightsRecommendations = withMock(
+  (days = 30) => request(`/analytics/insights/recommendations?days=${days}`),
+  () => mock.insightsRecommendations(),
+);
+
+export const fetchInsightsContentType = withMock(
+  (days = 30) => request(`/analytics/insights/content-type-performance?days=${days}`),
+  () => mock.insightsContentType(),
+);
+
+export const fetchInsightsFormat = withMock(
+  (days = 30) => request(`/analytics/insights/format-performance?days=${days}`),
+  () => mock.insightsFormat(),
+);
+
+export const fetchInsightsTime = withMock(
+  (days = 30) => request(`/analytics/insights/time-performance?days=${days}`),
+  () => mock.insightsTime(),
+);
+
+export const fetchInsightsCompetitors = withMock(
+  (days = 14) => request(`/analytics/insights/competitor-activity?days=${days}`),
+  () => mock.insightsCompetitors(),
+);
+
 // ── Monetization ──
 
 export const fetchRevenueSummary = withMock(

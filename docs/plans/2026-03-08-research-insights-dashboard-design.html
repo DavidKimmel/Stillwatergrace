@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Research &amp; Insights Dashboard — Design</title>
+<style>
+body { font-family: Georgia, serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #2D4A3E; }
+h1 { color: #2D4A3E; border-bottom: 2px solid #D4A853; padding-bottom: 0.5rem; }
+h2 { color: #D4A853; margin-top: 2rem; }
+h3 { color: #2D4A3E; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+th { background: #2D4A3E; color: #FFF8F0; }
+code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+pre { background: #f4f4f4; padding: 1rem; border-radius: 5px; overflow-x: auto; }
+.meta { color: #888; font-style: italic; }
+ul { line-height: 1.8; }
+</style>
+</head>
+<body>
+<h1>Research &amp; Insights Dashboard — Design</h1>
+<p class="meta">Date: 2026-03-08 | Status: Approved</p>
+
+<h2>Overview</h2>
+<p>Add a unified "Insights" tab to the dashboard that combines competitor content analysis with own-performance data to generate actionable content recommendations. The goal: open the tab, immediately know what to change this week.</p>
+
+<h2>Design Decisions</h2>
+<ul>
+<li><strong>Unified tab</strong> (not separate competitor + performance pages) — value comes from combining both data sources</li>
+<li><strong>Medium-depth competitor scraping</strong> — Instagram Graph API for recent posts (captions, media types, timestamps, hashtags). No Claude analysis yet (can add later as toggle).</li>
+<li><strong>Scrape frequency</strong> — Twice weekly (Monday 5:00 AM + Thursday 5:00 AM EST), last 10 posts per competitor, 5 competitors</li>
+<li><strong>Recommendations first</strong> — Actionable cards at top, data drill-down below</li>
+<li><strong>Performance by 3 dimensions</strong> — Content type, media format, posting time</li>
+<li><strong>No LLM calls</strong> — All analysis is pure Python rules engine against DB data</li>
+</ul>
+
+<h2>Dashboard Layout</h2>
+
+<h3>Section 1: Recommendations (Top)</h3>
+<p>3-5 actionable cards. Each card:</p>
+<ul>
+<li><strong>Title</strong>: Short directive ("Double down on carousels", "Shift noon posts to 6:30 AM")</li>
+<li><strong>Why</strong>: One sentence with supporting data</li>
+<li><strong>Confidence</strong>: High/Medium/Low badge based on data volume</li>
+<li><strong>Source icon</strong>: Your data, competitor data, or both</li>
+</ul>
+<p>Generated server-side by rules engine in <code>core/analytics/performance_analyzer.py</code>.</p>
+<p>Rule examples:</p>
+<ul>
+<li>Content type X has 2x+ engagement vs average → recommend more of it</li>
+<li>Format Y has 2x+ reach vs other formats → recommend shifting to it</li>
+<li>Morning posts outperform noon by 30%+ → recommend time shift</li>
+<li>Competitor increased format Z by 50%+ → flag the trend</li>
+<li>You don't post format Z but competitors do → flag the gap</li>
+</ul>
+
+<h3>Section 2: Your Performance Breakdown (Middle)</h3>
+<p>Three sub-panels side by side, shared time period selector (7/30/60/90 days):</p>
+<ol>
+<li><strong>By Content Type</strong> — Horizontal bar chart. Each content type with avg engagement rate + avg reach. Sorted by engagement. Color-coded by existing content type colors.</li>
+<li><strong>By Format</strong> — Horizontal bar chart. Reel / Carousel / Static Image. Avg reach, avg engagement rate, avg saves.</li>
+<li><strong>By Posting Time</strong> — Morning (6:30 AM) vs Noon (12:00 PM). Avg reach, avg engagement rate per slot.</li>
+</ol>
+
+<h3>Section 3: Competitor Activity (Bottom)</h3>
+<p>Collapsible cards per competitor:</p>
+<ul>
+<li><strong>Summary row</strong>: Username, follower count, posts/week, dominant format</li>
+<li><strong>Format mix bar</strong>: Horizontal stacked bar (reel/carousel/image distribution)</li>
+<li><strong>Recent posts table</strong>: Timestamp, media type, caption preview (100 chars), hashtag count</li>
+<li><strong>Trend indicator</strong>: Format shift detection vs previous scrape</li>
+</ul>
+
+<h2>Backend Components</h2>
+
+<h3>New Module: <code>core/scraper/competitor_content.py</code></h3>
+<p>Scrapes competitor post data via Instagram Business Discovery API:</p>
+<ul>
+<li>Endpoint: <code>GET /{our-ig-user-id}?fields=business_discovery.fields(media{id,caption,media_type,timestamp,permalink}).username(competitor)</code></li>
+<li>Requires: <code>instagram_basic</code> permission (already in our token scopes)</li>
+<li>Falls back to public profile HTML scraping if business discovery unavailable</li>
+<li>Stores results in <code>competitor_posts</code> table</li>
+</ul>
+
+<h3>New Module: <code>core/analytics/performance_analyzer.py</code></h3>
+<p>Pure Python analysis engine:</p>
+<ul>
+<li><code>get_content_type_performance(days)</code> — Avg metrics grouped by content_type</li>
+<li><code>get_format_performance(days)</code> — Avg metrics grouped by media format</li>
+<li><code>get_time_slot_performance(days)</code> — Avg metrics grouped by scheduled hour</li>
+<li><code>get_competitor_activity(days)</code> — Competitor post summaries + format distributions</li>
+<li><code>generate_recommendations(days)</code> — Combines all analyses, applies rule engine, returns ranked 3-5 insights</li>
+</ul>
+
+<h3>New API Endpoints</h3>
+<table>
+<tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr>
+<tr><td><code>/api/analytics/insights/recommendations</code></td><td>GET</td><td>Top 3-5 recommendations (days param)</td></tr>
+<tr><td><code>/api/analytics/insights/content-type-performance</code></td><td>GET</td><td>Performance by content type (days param)</td></tr>
+<tr><td><code>/api/analytics/insights/format-performance</code></td><td>GET</td><td>Performance by media format (days param)</td></tr>
+<tr><td><code>/api/analytics/insights/time-performance</code></td><td>GET</td><td>Performance by posting time (days param)</td></tr>
+<tr><td><code>/api/analytics/insights/competitor-activity</code></td><td>GET</td><td>Competitor post analysis</td></tr>
+</table>
+
+<h3>New DB Table: <code>competitor_posts</code></h3>
+<pre>
+competitor_posts
+  id                 SERIAL PRIMARY KEY
+  competitor_handle  VARCHAR NOT NULL
+  platform_media_id  VARCHAR UNIQUE NOT NULL
+  media_type         VARCHAR NOT NULL  (IMAGE, VIDEO, CAROUSEL_ALBUM)
+  caption            TEXT
+  hashtags           JSONB DEFAULT '[]'
+  posted_at          TIMESTAMP
+  permalink          VARCHAR
+  scraped_at         TIMESTAMP NOT NULL DEFAULT NOW()
+</pre>
+
+<h3>Celery Beat Schedule</h3>
+<pre>
+"competitor-content-monday": {
+    "task": "workers.daily_tasks.scrape_competitor_content",
+    "schedule": crontab(hour=5, minute=0, day_of_week="monday"),
+},
+"competitor-content-thursday": {
+    "task": "workers.daily_tasks.scrape_competitor_content",
+    "schedule": crontab(hour=5, minute=0, day_of_week="thursday"),
+},
+</pre>
+
+<h2>Dashboard Navigation</h2>
+<p>Sidebar order (updated):</p>
+<ol>
+<li>Dashboard</li>
+<li>Content Queue</li>
+<li>Calendar</li>
+<li>Analytics</li>
+<li><strong>Insights</strong> (new — between Analytics and Competitors)</li>
+<li>Competitors</li>
+<li>Monetization</li>
+</ol>
+
+<h2>Tech Stack</h2>
+<ul>
+<li><strong>Frontend</strong>: React 18, Recharts (bar charts), Tailwind CSS, Lucide icons</li>
+<li><strong>Backend</strong>: FastAPI, SQLAlchemy, Alembic migration</li>
+<li><strong>Scraping</strong>: Instagram Business Discovery API via httpx</li>
+<li><strong>Analysis</strong>: Pure Python (no LLM calls)</li>
+<li><strong>Scheduling</strong>: Celery beat (Mon + Thu 5:00 AM EST)</li>
+</ul>
+
+<h2>Future Enhancements (Not in Scope)</h2>
+<ul>
+<li>Claude-powered deep analysis of competitor captions (toggle-on feature)</li>
+<li>A/B hook testing (generate multiple variants per post)</li>
+<li>Dynamic calendar flex slots (auto-fill based on recommendations)</li>
+<li>Trending audio/sound tracking</li>
+</ul>
+</body>
+</html>

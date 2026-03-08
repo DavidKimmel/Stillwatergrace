@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Research &amp; Insights — Implementation Plan</title>
+<style>
+body { font-family: Georgia, serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #2D4A3E; line-height: 1.6; }
+h1 { color: #2D4A3E; border-bottom: 2px solid #D4A853; padding-bottom: 0.5rem; }
+h2 { color: #D4A853; margin-top: 2rem; }
+h3 { color: #2D4A3E; margin-top: 1.5rem; }
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
+th { background: #2D4A3E; color: #FFF8F0; }
+code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+pre { background: #f4f4f4; padding: 1rem; border-radius: 5px; overflow-x: auto; font-size: 0.85em; }
+.task { border-left: 3px solid #D4A853; padding-left: 1rem; margin: 1.5rem 0; }
+.meta { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Research &amp; Insights — Implementation Plan</h1>
+<p class="meta">Date: 2026-03-08 | Design: 2026-03-08-research-insights-dashboard-design.html</p>
+<p class="meta">For Claude: REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.</p>
+
+<p><strong>Goal:</strong> Add a unified Insights dashboard tab that combines competitor content analysis with own-performance data to generate actionable content recommendations.</p>
+
+<p><strong>Architecture:</strong> New DB table (competitor_posts) + Alembic migration. New backend modules: competitor content scraper (Instagram Business Discovery API) + performance analyzer (rules engine). New API endpoints under /api/analytics/insights/. New React page (InsightsPage) with Recharts visualizations. Celery beat tasks for Mon/Thu scraping.</p>
+
+<p><strong>Tech Stack:</strong> Python/FastAPI, SQLAlchemy, Alembic, httpx, React 18, Recharts, Tailwind CSS, Celery</p>
+
+<hr/>
+
+<h2>Task 1: Database — CompetitorPost Model + Migration</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>database/models.py</code> — add CompetitorPost class after CompetitorSnapshot</li>
+<li>Create: <code>database/migrations/versions/002_competitor_posts.py</code></li>
+<li>Test: <code>tests/unit/test_competitor_post_model.py</code></li>
+</ul>
+
+<h3>Step 1: Write the failing test</h3>
+<pre>
+# tests/unit/test_competitor_post_model.py
+from database.models import CompetitorPost
+from datetime import datetime
+
+def test_competitor_post_creation():
+    post = CompetitorPost(
+        competitor_handle="biblesociety",
+        platform_media_id="17890012345678",
+        media_type="VIDEO",
+        caption="Trust in the Lord #faith",
+        hashtags=["faith", "bible"],
+        posted_at=datetime(2026, 3, 7, 12, 0),
+        permalink="https://www.instagram.com/p/abc123/",
+    )
+    assert post.competitor_handle == "biblesociety"
+    assert post.media_type == "VIDEO"
+    assert post.hashtags == ["faith", "bible"]
+
+def test_competitor_post_defaults():
+    post = CompetitorPost(
+        competitor_handle="test",
+        platform_media_id="123",
+        media_type="IMAGE",
+    )
+    assert post.caption is None
+    assert post.hashtags == []
+    assert post.permalink is None
+</pre>
+
+<h3>Step 2: Run test to verify it fails</h3>
+<pre>pytest tests/unit/test_competitor_post_model.py -v</pre>
+<p>Expected: FAIL — ImportError: cannot import name 'CompetitorPost'</p>
+
+<h3>Step 3: Add CompetitorPost model to database/models.py</h3>
+<p>Insert after the CompetitorSnapshot class (around line 341):</p>
+<pre>
+class CompetitorPost(Base):
+    """Individual posts scraped from competitor accounts."""
+    __tablename__ = "competitor_posts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    competitor_handle = Column(String(100), nullable=False, index=True)
+    platform_media_id = Column(String(100), unique=True, nullable=False)
+    media_type = Column(String(20), nullable=False)  # IMAGE, VIDEO, CAROUSEL_ALBUM
+    caption = Column(Text)
+    hashtags = Column(JSON, default=list)
+    posted_at = Column(DateTime)
+    permalink = Column(String(2000))
+    scraped_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_comp_posts_handle_date", "competitor_handle", "posted_at"),
+    )
+</pre>
+
+<h3>Step 4: Run test to verify it passes</h3>
+<pre>pytest tests/unit/test_competitor_post_model.py -v</pre>
+
+<h3>Step 5: Create Alembic migration</h3>
+<pre>
+# database/migrations/versions/002_competitor_posts.py
+"""Add competitor_posts table.
+
+Revision ID: 002
+Revises: 001
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = "002"
+down_revision = "001"
+
+def upgrade():
+    op.create_table(
+        "competitor_posts",
+        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
+        sa.Column("competitor_handle", sa.String(100), nullable=False, index=True),
+        sa.Column("platform_media_id", sa.String(100), unique=True, nullable=False),
+        sa.Column("media_type", sa.String(20), nullable=False),
+        sa.Column("caption", sa.Text),
+        sa.Column("hashtags", sa.JSON, server_default="[]"),
+        sa.Column("posted_at", sa.DateTime),
+        sa.Column("permalink", sa.String(2000)),
+        sa.Column("scraped_at", sa.DateTime, nullable=False, server_default=sa.func.now()),
+    )
+    op.create_index("ix_comp_posts_handle_date", "competitor_posts", ["competitor_handle", "posted_at"])
+
+def downgrade():
+    op.drop_table("competitor_posts")
+</pre>
+
+<h3>Step 6: Commit</h3>
+<pre>
+git add database/models.py database/migrations/versions/002_competitor_posts.py tests/unit/test_competitor_post_model.py
+git commit -m "feat: add CompetitorPost model + migration"
+</pre>
+</div>
+
+<h2>Task 2: Competitor Content Scraper</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>core/scraper/competitor_content.py</code></li>
+<li>Test: <code>tests/unit/test_competitor_content.py</code></li>
+</ul>
+
+<h3>Step 1: Write the failing test</h3>
+<pre>
+# tests/unit/test_competitor_content.py
+import pytest
+from unittest.mock import MagicMock, patch
+from datetime import datetime
+from core.scraper.competitor_content import CompetitorContentScraper, extract_hashtags
+
+
+def test_extract_hashtags():
+    caption = "Trust the Lord with all your heart #faith #bible #christian"
+    result = extract_hashtags(caption)
+    assert result == ["faith", "bible", "christian"]
+
+
+def test_extract_hashtags_empty():
+    assert extract_hashtags("No hashtags here") == []
+    assert extract_hashtags(None) == []
+    assert extract_hashtags("") == []
+
+
+def test_parse_business_discovery_response():
+    """Test parsing Instagram Business Discovery API response."""
+    mock_response = {
+        "business_discovery": {
+            "media": {
+                "data": [
+                    {
+                        "id": "17890012345678",
+                        "caption": "Morning verse #faith #bible",
+                        "media_type": "VIDEO",
+                        "timestamp": "2026-03-07T12:00:00+0000",
+                        "permalink": "https://www.instagram.com/p/abc123/",
+                    },
+                    {
+                        "id": "17890012345679",
+                        "caption": "Marriage tip #marriage",
+                        "media_type": "CAROUSEL_ALBUM",
+                        "timestamp": "2026-03-06T08:00:00+0000",
+                        "permalink": "https://www.instagram.com/p/def456/",
+                    },
+                ]
+            }
+        }
+    }
+
+    db = MagicMock()
+    scraper = CompetitorContentScraper(db)
+    posts = scraper._parse_media_response(mock_response, "biblesociety")
+
+    assert len(posts) == 2
+    assert posts[0].competitor_handle == "biblesociety"
+    assert posts[0].media_type == "VIDEO"
+    assert posts[0].hashtags == ["faith", "bible"]
+    assert posts[1].media_type == "CAROUSEL_ALBUM"
+    assert posts[1].hashtags == ["marriage"]
+
+
+def test_parse_empty_response():
+    db = MagicMock()
+    scraper = CompetitorContentScraper(db)
+    posts = scraper._parse_media_response({}, "test")
+    assert posts == []
+
+
+@patch("core.scraper.competitor_content.httpx.Client")
+def test_scrape_competitor_api_call(mock_client_cls):
+    """Test that scrape_competitor makes correct API call."""
+    mock_client = MagicMock()
+    mock_client_cls.return_value.__enter__ = MagicMock(return_value=mock_client)
+    mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"business_discovery": {"media": {"data": []}}}
+    mock_client.get.return_value = mock_response
+
+    db = MagicMock()
+    scraper = CompetitorContentScraper(db)
+
+    with patch.object(scraper, "_get_access_token", return_value="test_token"):
+        with patch.object(scraper, "_get_ig_user_id", return_value="12345"):
+            scraper.scrape_competitor("biblesociety", limit=10)
+
+    mock_client.get.assert_called_once()
+    call_args = mock_client.get.call_args
+    assert "business_discovery" in call_args[1].get("params", {}).get("fields", "")
+
+
+def test_get_format_distribution():
+    db = MagicMock()
+    scraper = CompetitorContentScraper(db)
+
+    posts = [
+        MagicMock(media_type="VIDEO"),
+        MagicMock(media_type="VIDEO"),
+        MagicMock(media_type="VIDEO"),
+        MagicMock(media_type="IMAGE"),
+        MagicMock(media_type="CAROUSEL_ALBUM"),
+    ]
+    dist = scraper.get_format_distribution(posts)
+    assert dist == {"VIDEO": 60.0, "IMAGE": 20.0, "CAROUSEL_ALBUM": 20.0}
+
+
+def test_get_format_distribution_empty():
+    db = MagicMock()
+    scraper = CompetitorContentScraper(db)
+    assert scraper.get_format_distribution([]) == {}
+</pre>
+
+<h3>Step 2: Run test to verify it fails</h3>
+<pre>pytest tests/unit/test_competitor_content.py -v</pre>
+
+<h3>Step 3: Implement competitor_content.py</h3>
+<pre>
+# core/scraper/competitor_content.py
+"""Competitor content scraper using Instagram Business Discovery API.
+
+Fetches recent posts from competitor business/creator accounts including
+captions, media types, timestamps, and hashtags. Falls back to public
+HTML scraping if Business Discovery is unavailable.
+"""
+
+import logging
+import re
+from datetime import datetime
+from typing import Optional
+
+import httpx
+from sqlalchemy.orm import Session
+
+from core.config import settings
+from database.models import CompetitorPost
+
+logger = logging.getLogger(__name__)
+
+# Same competitors as competitor_tracker.py
+COMPETITOR_HANDLES = [
+    "biblesociety",
+    "dailyverses.net",
+    "proverbs31ministries",
+    "womenoffaith",
+    "faithward_org",
+]
+
+
+def extract_hashtags(caption: Optional[str]) -> list[str]:
+    """Extract hashtags from a caption string."""
+    if not caption:
+        return []
+    return re.findall(r"#(\w+)", caption)
+
+
+class CompetitorContentScraper:
+    """Scrapes competitor post data via Instagram Business Discovery API."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def _get_access_token(self) -> str:
+        return settings.instagram_access_token
+
+    def _get_ig_user_id(self) -> str:
+        return settings.instagram_account_id
+
+    def scrape_all(self, limit: int = 10) -> int:
+        """Scrape recent posts from all competitors.
+
+        Returns total posts scraped across all competitors.
+        """
+        total = 0
+        for handle in COMPETITOR_HANDLES:
+            try:
+                count = self.scrape_competitor(handle, limit=limit)
+                total += count
+                logger.info(f"Scraped {count} posts from @{handle}")
+            except Exception as e:
+                logger.warning(f"Failed to scrape @{handle}: {e}")
+                continue
+
+        self.db.flush()
+        return total
+
+    def scrape_competitor(self, handle: str, limit: int = 10) -> int:
+        """Scrape recent posts from a single competitor.
+
+        Uses Instagram Business Discovery API. Falls back to HTML
+        scraping if the API call fails.
+
+        Returns number of new posts stored.
+        """
+        token = self._get_access_token()
+        ig_user_id = self._get_ig_user_id()
+
+        fields = (
+            f"business_discovery.fields("
+            f"media.limit({limit})"
+            f"{{id,caption,media_type,timestamp,permalink}}"
+            f").username({handle})"
+        )
+
+        url = f"https://graph.facebook.com/v19.0/{ig_user_id}"
+        params = {"fields": fields, "access_token": token}
+
+        with httpx.Client(timeout=15.0) as client:
+            response = client.get(url, params=params)
+
+        if response.status_code != 200:
+            logger.warning(
+                f"Business Discovery API failed for @{handle}: "
+                f"{response.status_code} {response.text[:200]}"
+            )
+            return 0
+
+        data = response.json()
+        posts = self._parse_media_response(data, handle)
+        return self._store_posts(posts)
+
+    def _parse_media_response(
+        self, data: dict, handle: str
+    ) -> list[CompetitorPost]:
+        """Parse Business Discovery API response into CompetitorPost objects."""
+        media_data = (
+            data.get("business_discovery", {})
+            .get("media", {})
+            .get("data", [])
+        )
+
+        posts = []
+        for item in media_data:
+            caption = item.get("caption", "")
+            posted_at = None
+            ts = item.get("timestamp")
+            if ts:
+                try:
+                    posted_at = datetime.fromisoformat(
+                        ts.replace("+0000", "+00:00")
+                    ).replace(tzinfo=None)
+                except (ValueError, AttributeError):
+                    pass
+
+            post = CompetitorPost(
+                competitor_handle=handle,
+                platform_media_id=str(item.get("id", "")),
+                media_type=item.get("media_type", "IMAGE"),
+                caption=caption,
+                hashtags=extract_hashtags(caption),
+                posted_at=posted_at,
+                permalink=item.get("permalink"),
+            )
+            posts.append(post)
+
+        return posts
+
+    def _store_posts(self, posts: list[CompetitorPost]) -> int:
+        """Store posts, skipping duplicates by platform_media_id."""
+        stored = 0
+        for post in posts:
+            existing = (
+                self.db.query(CompetitorPost)
+                .filter(CompetitorPost.platform_media_id == post.platform_media_id)
+                .first()
+            )
+            if existing:
+                # Update caption/hashtags in case they changed
+                existing.caption = post.caption
+                existing.hashtags = post.hashtags
+                existing.scraped_at = datetime.utcnow()
+            else:
+                self.db.add(post)
+                stored += 1
+
+        self.db.flush()
+        return stored
+
+    @staticmethod
+    def get_format_distribution(posts: list) -> dict[str, float]:
+        """Calculate media type distribution as percentages."""
+        if not posts:
+            return {}
+        counts: dict[str, int] = {}
+        for post in posts:
+            mt = post.media_type
+            counts[mt] = counts.get(mt, 0) + 1
+        total = len(posts)
+        return {k: round(v / total * 100, 1) for k, v in counts.items()}
+</pre>
+
+<h3>Step 4: Run tests</h3>
+<pre>pytest tests/unit/test_competitor_content.py -v</pre>
+
+<h3>Step 5: Commit</h3>
+<pre>
+git add core/scraper/competitor_content.py tests/unit/test_competitor_content.py
+git commit -m "feat: competitor content scraper with Business Discovery API"
+</pre>
+</div>
+
+<h2>Task 3: Performance Analyzer (Rules Engine)</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>core/analytics/performance_analyzer.py</code></li>
+<li>Test: <code>tests/unit/test_performance_analyzer.py</code></li>
+</ul>
+
+<h3>Step 1: Write the failing test</h3>
+<pre>
+# tests/unit/test_performance_analyzer.py
+import pytest
+from unittest.mock import MagicMock
+from core.analytics.performance_analyzer import PerformanceAnalyzer
+
+
+def _make_type_row(content_type, avg_engagement, avg_reach, avg_saves, post_count):
+    """Create a mock row matching the query result shape."""
+    row = MagicMock()
+    row.content_type = content_type
+    row.avg_engagement = avg_engagement
+    row.avg_reach = avg_reach
+    row.avg_saves = avg_saves
+    row.avg_shares = 0.0
+    row.avg_likes = 0.0
+    row.post_count = post_count
+    return row
+
+
+def _make_format_row(media_format, avg_engagement, avg_reach, avg_saves, post_count):
+    row = MagicMock()
+    row.media_format = media_format
+    row.avg_engagement = avg_engagement
+    row.avg_reach = avg_reach
+    row.avg_saves = avg_saves
+    row.avg_shares = 0.0
+    row.post_count = post_count
+    return row
+
+
+def _make_time_row(hour, avg_engagement, avg_reach, post_count):
+    row = MagicMock()
+    row.hour = hour
+    row.avg_engagement = avg_engagement
+    row.avg_reach = avg_reach
+    row.post_count = post_count
+    return row
+
+
+class TestRecommendationRules:
+
+    def test_top_content_type_recommendation(self):
+        """If one content type has 2x+ avg engagement, recommend more of it."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        type_data = [
+            _make_type_row("faith_friday", 0.08, 50.0, 2.0, 4),
+            _make_type_row("daily_verse", 0.02, 100.0, 0.5, 10),
+            _make_type_row("encouragement", 0.03, 60.0, 1.0, 5),
+        ]
+        recs = analyzer._content_type_recommendations(type_data)
+        assert len(recs) >= 1
+        assert any("faith_friday" in r["title"].lower() or "faith_friday" in r["why"].lower() for r in recs)
+
+    def test_underperformer_recommendation(self):
+        """If one content type is well below average, recommend reducing it."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        type_data = [
+            _make_type_row("faith_friday", 0.08, 50.0, 2.0, 4),
+            _make_type_row("daily_verse", 0.01, 30.0, 0.0, 10),
+            _make_type_row("encouragement", 0.06, 60.0, 1.0, 5),
+        ]
+        recs = analyzer._content_type_recommendations(type_data)
+        assert any("daily_verse" in r["why"].lower() for r in recs)
+
+    def test_format_recommendation(self):
+        """If one format has 2x+ reach, recommend shifting to it."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        format_data = [
+            _make_format_row("reel", 0.05, 200.0, 3.0, 5),
+            _make_format_row("image", 0.03, 80.0, 1.0, 8),
+            _make_format_row("carousel", 0.06, 150.0, 4.0, 2),
+        ]
+        recs = analyzer._format_recommendations(format_data)
+        assert len(recs) >= 1
+
+    def test_time_slot_recommendation(self):
+        """If morning outperforms noon by 30%+, recommend time shift."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        time_data = [
+            _make_time_row(6, 0.06, 120.0, 10),
+            _make_time_row(12, 0.03, 60.0, 10),
+        ]
+        recs = analyzer._time_recommendations(time_data)
+        assert len(recs) >= 1
+        assert any("morning" in r["title"].lower() or "6" in r["why"] for r in recs)
+
+    def test_no_recommendation_when_similar(self):
+        """No time recommendation when slots perform similarly."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        time_data = [
+            _make_time_row(6, 0.05, 100.0, 10),
+            _make_time_row(12, 0.045, 95.0, 10),
+        ]
+        recs = analyzer._time_recommendations(time_data)
+        assert len(recs) == 0
+
+    def test_competitor_format_shift_recommendation(self):
+        """Flag when competitor shifts format distribution significantly."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        current = {"biblesociety": {"VIDEO": 60.0, "IMAGE": 20.0, "CAROUSEL_ALBUM": 20.0}}
+        previous = {"biblesociety": {"VIDEO": 30.0, "IMAGE": 50.0, "CAROUSEL_ALBUM": 20.0}}
+        recs = analyzer._competitor_recommendations(current, previous)
+        assert len(recs) >= 1
+        assert any("biblesociety" in r["why"].lower() or "reel" in r["title"].lower() or "video" in r["why"].lower() for r in recs)
+
+    def test_recommendation_confidence(self):
+        """High confidence when 10+ posts, medium for 5-9, low for &lt;5."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        assert analyzer._confidence(15) == "high"
+        assert analyzer._confidence(7) == "medium"
+        assert analyzer._confidence(3) == "low"
+
+    def test_minimum_data_threshold(self):
+        """No recommendations when fewer than 3 posts total."""
+        analyzer = PerformanceAnalyzer.__new__(PerformanceAnalyzer)
+        type_data = [
+            _make_type_row("daily_verse", 0.08, 100.0, 2.0, 2),
+        ]
+        recs = analyzer._content_type_recommendations(type_data)
+        assert len(recs) == 0
+</pre>
+
+<h3>Step 2: Run test to verify it fails</h3>
+<pre>pytest tests/unit/test_performance_analyzer.py -v</pre>
+
+<h3>Step 3: Implement performance_analyzer.py</h3>
+<pre>
+# core/analytics/performance_analyzer.py
+"""Performance analysis engine.
+
+Pure Python rules engine — no LLM calls. Analyzes own content performance
+and competitor activity to generate actionable recommendations.
+"""
+
+import logging
+from datetime import datetime, timedelta
+from typing import Optional
+
+from sqlalchemy import func, extract
+from sqlalchemy.orm import Session
+
+from database.models import (
+    AnalyticsSnapshot,
+    GeneratedContent,
+    GeneratedImage,
+    PostingLog,
+    CompetitorPost,
+    Platform,
+    PostingStatus,
+    ImageFormat,
+)
+
+logger = logging.getLogger(__name__)
+
+# Minimum posts required before generating recommendations
+MIN_POSTS_FOR_RECS = 3
+
+# Thresholds for flagging standout performance
+OUTPERFORM_RATIO = 2.0     # 2x avg engagement = recommend more
+UNDERPERFORM_RATIO = 0.5   # below 50% avg = flag as underperformer
+TIME_ADVANTAGE_RATIO = 1.3  # 30% better = recommend time shift
+FORMAT_SHIFT_THRESHOLD = 20.0  # 20% change in competitor format mix
+
+
+class PerformanceAnalyzer:
+    """Generates data-driven content recommendations."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_content_type_performance(self, days: int = 30) -> list[dict]:
+        """Average metrics grouped by content type."""
+        since = datetime.utcnow() - timedelta(days=days)
+        latest_snap = self._latest_snapshots_subquery(since)
+
+        results = (
+            self.db.query(
+                GeneratedContent.content_type,
+                func.count(AnalyticsSnapshot.id).label("post_count"),
+                func.avg(AnalyticsSnapshot.engagement_rate).label("avg_engagement"),
+                func.avg(AnalyticsSnapshot.reach).label("avg_reach"),
+                func.avg(AnalyticsSnapshot.saves).label("avg_saves"),
+                func.avg(AnalyticsSnapshot.shares).label("avg_shares"),
+                func.avg(AnalyticsSnapshot.likes).label("avg_likes"),
+            )
+            .join(latest_snap, AnalyticsSnapshot.id == latest_snap.c.max_id)
+            .join(GeneratedContent, GeneratedContent.id == AnalyticsSnapshot.content_id)
+            .group_by(GeneratedContent.content_type)
+            .all()
+        )
+
+        return [
+            {
+                "content_type": r.content_type.value if hasattr(r.content_type, 'value') else str(r.content_type),
+                "post_count": r.post_count,
+                "avg_engagement": round(float(r.avg_engagement or 0), 4),
+                "avg_reach": round(float(r.avg_reach or 0), 1),
+                "avg_saves": round(float(r.avg_saves or 0), 1),
+                "avg_shares": round(float(r.avg_shares or 0), 1),
+                "avg_likes": round(float(r.avg_likes or 0), 1),
+            }
+            for r in results
+        ]
+
+    def get_format_performance(self, days: int = 30) -> list[dict]:
+        """Average metrics grouped by media format (reel/carousel/image)."""
+        since = datetime.utcnow() - timedelta(days=days)
+        latest_snap = self._latest_snapshots_subquery(since)
+
+        # Determine format: if reel_9x16 image exists = reel,
+        # if multiple images exist = carousel, else = image
+        results = []
+        for fmt_label, fmt_filter in [
+            ("reel", ImageFormat.reel_9x16),
+            ("image", ImageFormat.feed_4x5),
+        ]:
+            # Get content IDs with this image format
+            content_ids = (
+                self.db.query(GeneratedImage.content_id)
+                .filter(GeneratedImage.format == fmt_filter)
+                .distinct()
+                .subquery()
+            )
+
+            row = (
+                self.db.query(
+                    func.count(AnalyticsSnapshot.id).label("post_count"),
+                    func.avg(AnalyticsSnapshot.engagement_rate).label("avg_engagement"),
+                    func.avg(AnalyticsSnapshot.reach).label("avg_reach"),
+                    func.avg(AnalyticsSnapshot.saves).label("avg_saves"),
+                    func.avg(AnalyticsSnapshot.shares).label("avg_shares"),
+                )
+                .join(latest_snap, AnalyticsSnapshot.id == latest_snap.c.max_id)
+                .filter(AnalyticsSnapshot.content_id.in_(content_ids))
+                .first()
+            )
+
+            if row and row.post_count:
+                results.append({
+                    "media_format": fmt_label,
+                    "post_count": row.post_count,
+                    "avg_engagement": round(float(row.avg_engagement or 0), 4),
+                    "avg_reach": round(float(row.avg_reach or 0), 1),
+                    "avg_saves": round(float(row.avg_saves or 0), 1),
+                    "avg_shares": round(float(row.avg_shares or 0), 1),
+                })
+
+        return results
+
+    def get_time_slot_performance(self, days: int = 30) -> list[dict]:
+        """Average metrics grouped by scheduled hour."""
+        since = datetime.utcnow() - timedelta(days=days)
+        latest_snap = self._latest_snapshots_subquery(since)
+
+        results = (
+            self.db.query(
+                extract("hour", GeneratedContent.scheduled_at).label("hour"),
+                func.count(AnalyticsSnapshot.id).label("post_count"),
+                func.avg(AnalyticsSnapshot.engagement_rate).label("avg_engagement"),
+                func.avg(AnalyticsSnapshot.reach).label("avg_reach"),
+            )
+            .join(latest_snap, AnalyticsSnapshot.id == latest_snap.c.max_id)
+            .join(GeneratedContent, GeneratedContent.id == AnalyticsSnapshot.content_id)
+            .filter(GeneratedContent.scheduled_at.isnot(None))
+            .group_by(extract("hour", GeneratedContent.scheduled_at))
+            .all()
+        )
+
+        return [
+            {
+                "hour": int(r.hour),
+                "label": "Morning (6:30 AM)" if int(r.hour) < 10 else "Noon (12:00 PM)",
+                "post_count": r.post_count,
+                "avg_engagement": round(float(r.avg_engagement or 0), 4),
+                "avg_reach": round(float(r.avg_reach or 0), 1),
+            }
+            for r in results
+        ]
+
+    def get_competitor_activity(self, days: int = 14) -> list[dict]:
+        """Summarize competitor posting activity."""
+        since = datetime.utcnow() - timedelta(days=days)
+
+        competitors = {}
+        posts = (
+            self.db.query(CompetitorPost)
+            .filter(CompetitorPost.scraped_at >= since)
+            .order_by(CompetitorPost.posted_at.desc())
+            .all()
+        )
+
+        for post in posts:
+            handle = post.competitor_handle
+            if handle not in competitors:
+                competitors[handle] = {"posts": [], "format_counts": {}}
+            competitors[handle]["posts"].append({
+                "media_type": post.media_type,
+                "caption_preview": (post.caption or "")[:100],
+                "hashtag_count": len(post.hashtags or []),
+                "posted_at": post.posted_at.isoformat() if post.posted_at else None,
+                "permalink": post.permalink,
+            })
+            mt = post.media_type
+            competitors[handle]["format_counts"][mt] = (
+                competitors[handle]["format_counts"].get(mt, 0) + 1
+            )
+
+        result = []
+        for handle, data in competitors.items():
+            total = sum(data["format_counts"].values())
+            format_distribution = {
+                k: round(v / total * 100, 1)
+                for k, v in data["format_counts"].items()
+            } if total > 0 else {}
+
+            posts_per_week = len(data["posts"]) / max(days / 7, 1)
+
+            result.append({
+                "handle": handle,
+                "post_count": len(data["posts"]),
+                "posts_per_week": round(posts_per_week, 1),
+                "format_distribution": format_distribution,
+                "recent_posts": data["posts"][:10],
+            })
+
+        return result
+
+    def generate_recommendations(self, days: int = 30) -> list[dict]:
+        """Generate ranked list of 3-5 actionable recommendations.
+
+        Combines content type, format, time, and competitor analysis.
+        Pure rules engine — no LLM calls.
+        """
+        all_recs = []
+
+        # Content type analysis
+        type_data = self.get_content_type_performance(days)
+        type_rows = [_dict_to_mock(d, "content_type") for d in type_data]
+        all_recs.extend(self._content_type_recommendations(type_rows))
+
+        # Format analysis
+        format_data = self.get_format_performance(days)
+        format_rows = [_dict_to_mock(d, "media_format") for d in format_data]
+        all_recs.extend(self._format_recommendations(format_rows))
+
+        # Time slot analysis
+        time_data = self.get_time_slot_performance(days)
+        time_rows = [_dict_to_mock(d, "hour") for d in time_data]
+        all_recs.extend(self._time_recommendations(time_rows))
+
+        # Competitor analysis
+        comp_data = self.get_competitor_activity(days)
+        current_dist = {c["handle"]: c["format_distribution"] for c in comp_data}
+        # Compare against older data for shift detection
+        older_data = self.get_competitor_activity(days * 2)
+        previous_dist = {c["handle"]: c["format_distribution"] for c in older_data}
+        all_recs.extend(self._competitor_recommendations(current_dist, previous_dist))
+
+        # Sort by confidence priority (high > medium > low), then source
+        priority = {"high": 0, "medium": 1, "low": 2}
+        all_recs.sort(key=lambda r: priority.get(r.get("confidence", "low"), 2))
+
+        return all_recs[:5]
+
+    # ── Recommendation Rules ──
+
+    def _content_type_recommendations(self, type_data: list) -> list[dict]:
+        """Rules for content type performance."""
+        recs = []
+        total_posts = sum(getattr(r, "post_count", 0) for r in type_data)
+        if total_posts < MIN_POSTS_FOR_RECS:
+            return recs
+
+        avg_engagement = (
+            sum(getattr(r, "avg_engagement", 0) for r in type_data) / len(type_data)
+            if type_data else 0
+        )
+
+        for r in type_data:
+            eng = getattr(r, "avg_engagement", 0)
+            ct = getattr(r, "content_type", "unknown")
+            ct_label = str(ct).replace("_", " ").title()
+            count = getattr(r, "post_count", 0)
+
+            if eng >= avg_engagement * OUTPERFORM_RATIO and count >= 2:
+                recs.append({
+                    "title": f"Double down on {ct_label}",
+                    "why": (
+                        f"{ct_label} averages {eng:.1%} engagement vs "
+                        f"{avg_engagement:.1%} overall — {eng/avg_engagement:.1f}x above average."
+                    ),
+                    "confidence": self._confidence(count),
+                    "source": "performance",
+                })
+
+            if eng <= avg_engagement * UNDERPERFORM_RATIO and count >= 3:
+                recs.append({
+                    "title": f"Rethink {ct_label} approach",
+                    "why": (
+                        f"{ct_label} averages only {eng:.1%} engagement "
+                        f"({avg_engagement:.1%} overall). Consider refreshing the format or reducing frequency."
+                    ),
+                    "confidence": self._confidence(count),
+                    "source": "performance",
+                })
+
+        return recs
+
+    def _format_recommendations(self, format_data: list) -> list[dict]:
+        """Rules for media format performance."""
+        recs = []
+        if not format_data:
+            return recs
+
+        total_posts = sum(getattr(r, "post_count", 0) for r in format_data)
+        if total_posts < MIN_POSTS_FOR_RECS:
+            return recs
+
+        avg_reach = (
+            sum(getattr(r, "avg_reach", 0) for r in format_data) / len(format_data)
+            if format_data else 0
+        )
+
+        for r in format_data:
+            reach = getattr(r, "avg_reach", 0)
+            fmt = getattr(r, "media_format", "unknown")
+            fmt_label = str(fmt).title()
+            count = getattr(r, "post_count", 0)
+            saves = getattr(r, "avg_saves", 0)
+
+            if reach >= avg_reach * OUTPERFORM_RATIO and count >= 2:
+                recs.append({
+                    "title": f"Produce more {fmt_label}s",
+                    "why": (
+                        f"{fmt_label}s average {reach:.0f} reach vs {avg_reach:.0f} overall "
+                        f"({reach/avg_reach:.1f}x). Also averaging {saves:.1f} saves per post."
+                    ),
+                    "confidence": self._confidence(count),
+                    "source": "performance",
+                })
+
+        return recs
+
+    def _time_recommendations(self, time_data: list) -> list[dict]:
+        """Rules for posting time performance."""
+        recs = []
+        if len(time_data) < 2:
+            return recs
+
+        total_posts = sum(getattr(r, "post_count", 0) for r in time_data)
+        if total_posts < MIN_POSTS_FOR_RECS:
+            return recs
+
+        # Compare best vs worst time slot
+        sorted_by_eng = sorted(time_data, key=lambda r: getattr(r, "avg_engagement", 0), reverse=True)
+        best = sorted_by_eng[0]
+        worst = sorted_by_eng[-1]
+
+        best_eng = getattr(best, "avg_engagement", 0)
+        worst_eng = getattr(worst, "avg_engagement", 0)
+        best_hour = getattr(best, "hour", 0)
+        worst_hour = getattr(worst, "hour", 0)
+
+        if worst_eng > 0 and best_eng / worst_eng >= TIME_ADVANTAGE_RATIO:
+            best_label = "Morning" if int(best_hour) < 10 else "Noon"
+            recs.append({
+                "title": f"{best_label} posts outperform",
+                "why": (
+                    f"Posts at {int(best_hour)}:00 average {best_eng:.1%} engagement vs "
+                    f"{worst_eng:.1%} at {int(worst_hour)}:00 — "
+                    f"{best_eng/worst_eng:.1f}x better."
+                ),
+                "confidence": self._confidence(
+                    min(getattr(best, "post_count", 0), getattr(worst, "post_count", 0))
+                ),
+                "source": "performance",
+            })
+
+        return recs
+
+    def _competitor_recommendations(
+        self,
+        current: dict[str, dict],
+        previous: dict[str, dict],
+    ) -> list[dict]:
+        """Flag significant format shifts in competitor posting."""
+        recs = []
+        format_labels = {"VIDEO": "Reels", "IMAGE": "Images", "CAROUSEL_ALBUM": "Carousels"}
+
+        for handle, curr_dist in current.items():
+            prev_dist = previous.get(handle, {})
+            if not prev_dist:
+                continue
+
+            for fmt, curr_pct in curr_dist.items():
+                prev_pct = prev_dist.get(fmt, 0)
+                shift = curr_pct - prev_pct
+                fmt_label = format_labels.get(fmt, fmt)
+
+                if shift >= FORMAT_SHIFT_THRESHOLD:
+                    recs.append({
+                        "title": f"Competitor shifting to {fmt_label}",
+                        "why": (
+                            f"@{handle} increased {fmt_label} from {prev_pct:.0f}% to "
+                            f"{curr_pct:.0f}% of posts (+{shift:.0f}pp)."
+                        ),
+                        "confidence": "medium",
+                        "source": "competitor",
+                    })
+
+        return recs
+
+    @staticmethod
+    def _confidence(post_count: int) -> str:
+        """Determine confidence level based on data volume."""
+        if post_count >= 10:
+            return "high"
+        elif post_count >= 5:
+            return "medium"
+        return "low"
+
+    def _latest_snapshots_subquery(self, since: datetime):
+        """Subquery for latest analytics snapshot per content item."""
+        return (
+            self.db.query(
+                AnalyticsSnapshot.content_id,
+                func.max(AnalyticsSnapshot.id).label("max_id"),
+            )
+            .filter(AnalyticsSnapshot.captured_at >= since)
+            .group_by(AnalyticsSnapshot.content_id)
+            .subquery()
+        )
+
+
+def _dict_to_mock(d: dict, key_field: str):
+    """Convert dict to object with attribute access for rule methods."""
+    class Row:
+        pass
+    row = Row()
+    for k, v in d.items():
+        setattr(row, k, v)
+    return row
+</pre>
+
+<h3>Step 4: Run tests</h3>
+<pre>pytest tests/unit/test_performance_analyzer.py -v</pre>
+
+<h3>Step 5: Commit</h3>
+<pre>
+git add core/analytics/performance_analyzer.py tests/unit/test_performance_analyzer.py
+git commit -m "feat: performance analyzer rules engine for content recommendations"
+</pre>
+</div>
+
+<h2>Task 4: API Endpoints for Insights</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>api/routes/insights.py</code></li>
+<li>Modify: <code>api/main.py</code> — register insights router</li>
+<li>Test: <code>tests/integration/test_insights_api.py</code></li>
+</ul>
+
+<h3>Step 1: Write the failing test</h3>
+<pre>
+# tests/integration/test_insights_api.py
+import pytest
+from unittest.mock import patch, MagicMock
+
+
+def test_recommendations_endpoint_exists():
+    """Verify the recommendations endpoint is registered."""
+    from api.main import app
+    routes = [r.path for r in app.routes]
+    assert "/api/analytics/insights/recommendations" in routes
+
+
+def test_content_type_performance_endpoint_exists():
+    from api.main import app
+    routes = [r.path for r in app.routes]
+    assert "/api/analytics/insights/content-type-performance" in routes
+
+
+def test_format_performance_endpoint_exists():
+    from api.main import app
+    routes = [r.path for r in app.routes]
+    assert "/api/analytics/insights/format-performance" in routes
+
+
+def test_time_performance_endpoint_exists():
+    from api.main import app
+    routes = [r.path for r in app.routes]
+    assert "/api/analytics/insights/time-performance" in routes
+
+
+def test_competitor_activity_endpoint_exists():
+    from api.main import app
+    routes = [r.path for r in app.routes]
+    assert "/api/analytics/insights/competitor-activity" in routes
+</pre>
+
+<h3>Step 2: Run test to verify it fails</h3>
+<pre>pytest tests/integration/test_insights_api.py -v</pre>
+
+<h3>Step 3: Implement insights router</h3>
+<pre>
+# api/routes/insights.py
+"""Insights API routes — performance analysis + competitor activity."""
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from database.session import get_db_dependency
+from core.analytics.performance_analyzer import PerformanceAnalyzer
+
+router = APIRouter()
+
+
+@router.get("/recommendations")
+def get_recommendations(
+    days: int = Query(default=30, le=90),
+    db: Session = Depends(get_db_dependency),
+):
+    """Get top 3-5 actionable recommendations."""
+    analyzer = PerformanceAnalyzer(db)
+    return analyzer.generate_recommendations(days)
+
+
+@router.get("/content-type-performance")
+def get_content_type_performance(
+    days: int = Query(default=30, le=90),
+    db: Session = Depends(get_db_dependency),
+):
+    """Get performance breakdown by content type."""
+    analyzer = PerformanceAnalyzer(db)
+    return analyzer.get_content_type_performance(days)
+
+
+@router.get("/format-performance")
+def get_format_performance(
+    days: int = Query(default=30, le=90),
+    db: Session = Depends(get_db_dependency),
+):
+    """Get performance breakdown by media format."""
+    analyzer = PerformanceAnalyzer(db)
+    return analyzer.get_format_performance(days)
+
+
+@router.get("/time-performance")
+def get_time_performance(
+    days: int = Query(default=30, le=90),
+    db: Session = Depends(get_db_dependency),
+):
+    """Get performance breakdown by posting time."""
+    analyzer = PerformanceAnalyzer(db)
+    return analyzer.get_time_slot_performance(days)
+
+
+@router.get("/competitor-activity")
+def get_competitor_activity(
+    days: int = Query(default=14, le=90),
+    db: Session = Depends(get_db_dependency),
+):
+    """Get competitor posting activity summary."""
+    analyzer = PerformanceAnalyzer(db)
+    return analyzer.get_competitor_activity(days)
+</pre>
+
+<h3>Step 4: Register router in api/main.py</h3>
+<p>Add import and include_router after the existing analytics router registration:</p>
+<pre>
+from api.routes import insights
+app.include_router(insights.router, prefix="/api/analytics/insights", tags=["insights"])
+</pre>
+
+<h3>Step 5: Run tests</h3>
+<pre>pytest tests/integration/test_insights_api.py -v</pre>
+
+<h3>Step 6: Commit</h3>
+<pre>
+git add api/routes/insights.py api/main.py tests/integration/test_insights_api.py
+git commit -m "feat: insights API endpoints for recommendations + performance data"
+</pre>
+</div>
+
+<h2>Task 5: Celery Tasks + Beat Schedule</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>workers/daily_tasks.py</code> — add scrape_competitor_content task</li>
+<li>Modify: <code>workers/celery_app.py</code> — add Mon/Thu beat entries</li>
+</ul>
+
+<h3>Step 1: Add Celery task to workers/daily_tasks.py</h3>
+<p>Add after the existing <code>run_competitor_scrape</code> task:</p>
+<pre>
+@app.task
+def scrape_competitor_content():
+    """Scrape recent posts from competitor accounts.
+
+    Runs Mon + Thu at 5:00 AM EST. Uses Instagram Business Discovery API
+    to fetch last 10 posts per competitor (captions, media types, hashtags).
+    """
+    from database.session import get_db
+    from core.config import settings
+
+    if not settings.has_instagram:
+        return {"status": "skipped", "reason": "Instagram not configured"}
+
+    logger.info("Scraping competitor content...")
+
+    with get_db() as db:
+        try:
+            from core.scraper.competitor_content import CompetitorContentScraper
+            scraper = CompetitorContentScraper(db)
+            total = scraper.scrape_all(limit=10)
+            return {"status": "success", "posts_scraped": total}
+        except Exception as e:
+            logger.error(f"Competitor content scrape error: {e}")
+            return {"status": "error", "error": str(e)}
+</pre>
+
+<h3>Step 2: Add beat entries to workers/celery_app.py</h3>
+<p>Add after the existing <code>weekly-competitor-scrape</code> entry:</p>
+<pre>
+"competitor-content-monday": {
+    "task": "workers.daily_tasks.scrape_competitor_content",
+    "schedule": crontab(hour=5, minute=0, day_of_week="monday"),
+},
+"competitor-content-thursday": {
+    "task": "workers.daily_tasks.scrape_competitor_content",
+    "schedule": crontab(hour=5, minute=0, day_of_week="thursday"),
+},
+</pre>
+
+<h3>Step 3: Commit</h3>
+<pre>
+git add workers/daily_tasks.py workers/celery_app.py
+git commit -m "feat: celery tasks for competitor content scraping (Mon + Thu)"
+</pre>
+</div>
+
+<h2>Task 6: Dashboard API Client + Mock Data</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: <code>dashboard/src/lib/api.js</code> — add insights API functions</li>
+<li>Modify: <code>dashboard/src/lib/mockData.js</code> — add insights mock data</li>
+</ul>
+
+<h3>Step 1: Add API functions to api.js</h3>
+<p>Add after the existing analytics exports block:</p>
+<pre>
+// ── Insights ──
+
+export const fetchInsightsRecommendations = withMock(
+  (days = 30) => request(`/analytics/insights/recommendations?days=${days}`),
+  () => mock.insightsRecommendations(),
+);
+
+export const fetchInsightsContentType = withMock(
+  (days = 30) => request(`/analytics/insights/content-type-performance?days=${days}`),
+  () => mock.insightsContentType(),
+);
+
+export const fetchInsightsFormat = withMock(
+  (days = 30) => request(`/analytics/insights/format-performance?days=${days}`),
+  () => mock.insightsFormat(),
+);
+
+export const fetchInsightsTime = withMock(
+  (days = 30) => request(`/analytics/insights/time-performance?days=${days}`),
+  () => mock.insightsTime(),
+);
+
+export const fetchInsightsCompetitors = withMock(
+  (days = 14) => request(`/analytics/insights/competitor-activity?days=${days}`),
+  () => mock.insightsCompetitors(),
+);
+</pre>
+
+<h3>Step 2: Add mock data to mockData.js</h3>
+<p>Add mock data functions for fallback when backend is down. Match the API response shapes from insights.py.</p>
+
+<h3>Step 3: Commit</h3>
+<pre>
+git add dashboard/src/lib/api.js dashboard/src/lib/mockData.js
+git commit -m "feat: insights API client + mock fallback data"
+</pre>
+</div>
+
+<h2>Task 7: InsightsPage React Component</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Create: <code>dashboard/src/pages/InsightsPage.jsx</code></li>
+<li>Modify: <code>dashboard/src/App.jsx</code> — add route + nav item</li>
+</ul>
+
+<h3>Step 1: Create InsightsPage.jsx</h3>
+<p>Three sections matching the design:</p>
+<ul>
+<li><strong>Section 1</strong>: Recommendations — cards with title, why, confidence badge, source icon</li>
+<li><strong>Section 2</strong>: Three performance panels (content type, format, time) using Recharts horizontal BarChart, shared days selector</li>
+<li><strong>Section 3</strong>: Competitor activity — collapsible cards with format distribution stacked bars and recent posts table</li>
+</ul>
+
+<p>Component structure:</p>
+<pre>
+InsightsPage
+  ├── DaySelector (7/30/60/90 shared state)
+  ├── RecommendationCards (fetchInsightsRecommendations)
+  │     └── Card: title, why, confidence badge, source icon
+  ├── PerformanceBreakdown (3-col grid)
+  │     ├── ContentTypeChart (fetchInsightsContentType, horizontal BarChart)
+  │     ├── FormatChart (fetchInsightsFormat, horizontal BarChart)
+  │     └── TimeChart (fetchInsightsTime, simple comparison)
+  └── CompetitorActivity (fetchInsightsCompetitors)
+        └── CompetitorCard (collapsible, per competitor)
+              ├── Summary: handle, posts/week, dominant format
+              ├── FormatBar (stacked horizontal bar)
+              └── PostsTable (timestamp, media_type, caption preview)
+</pre>
+
+<p>Use existing patterns from AnalyticsPage.jsx: useQuery hooks, Recharts, MetricCard, Tailwind card/badge classes.</p>
+
+<p>Confidence badge colors: high = green, medium = yellow, low = gray.</p>
+<p>Source icons: performance = TrendingUp, competitor = Users, both = Layers (from lucide-react).</p>
+
+<h3>Step 2: Add route + nav to App.jsx</h3>
+<p>Import InsightsPage and Lightbulb icon. Add to NAV_ITEMS after Analytics:</p>
+<pre>
+{ to: '/insights', icon: Lightbulb, label: 'Insights' },
+</pre>
+<p>Add Route:</p>
+<pre>
+&lt;Route path="/insights" element={&lt;InsightsPage /&gt;} /&gt;
+</pre>
+
+<h3>Step 3: Verify in browser</h3>
+<p>Start dashboard: <code>docker compose up -d dashboard</code>, open http://localhost:5175/insights</p>
+
+<h3>Step 4: Commit</h3>
+<pre>
+git add dashboard/src/pages/InsightsPage.jsx dashboard/src/App.jsx
+git commit -m "feat: Insights dashboard page with recommendations + performance charts"
+</pre>
+</div>
+
+<h2>Task 8: Integration Test + Deploy</h2>
+<div class="task">
+<p><strong>Files:</strong></p>
+<ul>
+<li>Modify: All services need rebuild</li>
+</ul>
+
+<h3>Step 1: Run full test suite</h3>
+<pre>pytest --tb=short -q</pre>
+
+<h3>Step 2: Rebuild and deploy</h3>
+<pre>
+docker compose build api celery-worker celery-beat
+docker compose up -d api celery-worker celery-beat dashboard
+</pre>
+
+<h3>Step 3: Run initial competitor content scrape</h3>
+<pre>
+docker compose exec api python -c "
+from workers.daily_tasks import scrape_competitor_content
+result = scrape_competitor_content.apply()
+print(result.result)
+"
+</pre>
+
+<h3>Step 4: Verify insights API returns data</h3>
+<pre>curl http://localhost:8000/api/analytics/insights/recommendations?days=30</pre>
+
+<h3>Step 5: Verify dashboard shows Insights tab</h3>
+<p>Open http://localhost:5175/insights and verify all three sections render.</p>
+
+<h3>Step 6: Final commit</h3>
+<pre>
+git add -A
+git commit -m "feat: Research &amp; Insights dashboard — competitor scraping + performance analyzer"
+</pre>
+</div>
+
+<h2>Task Order &amp; Dependencies</h2>
+<table>
+<tr><th>Task</th><th>Depends On</th><th>Can Parallel</th></tr>
+<tr><td>1. DB Model + Migration</td><td>—</td><td>—</td></tr>
+<tr><td>2. Competitor Scraper</td><td>Task 1</td><td>With Task 3</td></tr>
+<tr><td>3. Performance Analyzer</td><td>Task 1</td><td>With Task 2</td></tr>
+<tr><td>4. API Endpoints</td><td>Tasks 2, 3</td><td>—</td></tr>
+<tr><td>5. Celery Tasks</td><td>Task 2</td><td>With Task 4</td></tr>
+<tr><td>6. API Client + Mocks</td><td>Task 4</td><td>With Task 5</td></tr>
+<tr><td>7. InsightsPage</td><td>Task 6</td><td>—</td></tr>
+<tr><td>8. Integration + Deploy</td><td>All above</td><td>—</td></tr>
+</table>
+
+</body>
+</html>

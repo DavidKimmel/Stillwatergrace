@@ -437,6 +437,98 @@ export function competitors() {
   ];
 }
 
+// ── Insights ──
+
+export function insightsRecommendations() {
+  return [
+    {
+      title: 'Double down on Carousels',
+      why: 'Carousels average 5.8% engagement vs 2.9% overall — 2.0x above average.',
+      confidence: 'medium',
+      source: 'performance',
+    },
+    {
+      title: 'Morning posts outperform',
+      why: 'Posts at 6:00 average 4.2% engagement vs 2.8% at 12:00 — 1.5x better.',
+      confidence: 'high',
+      source: 'performance',
+    },
+    {
+      title: 'Competitor shifting to Reels',
+      why: '@proverbs31ministries increased Reels from 30% to 55% of posts (+25pp).',
+      confidence: 'medium',
+      source: 'competitor',
+    },
+    {
+      title: 'Rethink Fill In Blank approach',
+      why: 'Fill In Blank averages only 1.2% engagement (2.9% overall). Consider refreshing the format or reducing frequency.',
+      confidence: 'high',
+      source: 'performance',
+    },
+  ];
+}
+
+export function insightsContentType() {
+  return [
+    { content_type: 'faith_friday', post_count: 4, avg_engagement: 0.058, avg_reach: 89, avg_saves: 2.5, avg_shares: 1.0, avg_likes: 5.0 },
+    { content_type: 'carousel', post_count: 3, avg_engagement: 0.052, avg_reach: 105, avg_saves: 3.0, avg_shares: 0.5, avg_likes: 3.0 },
+    { content_type: 'encouragement', post_count: 5, avg_engagement: 0.041, avg_reach: 72, avg_saves: 1.5, avg_shares: 0.8, avg_likes: 4.0 },
+    { content_type: 'daily_verse', post_count: 10, avg_engagement: 0.029, avg_reach: 65, avg_saves: 0.8, avg_shares: 0.3, avg_likes: 2.0 },
+    { content_type: 'marriage_monday', post_count: 4, avg_engagement: 0.035, avg_reach: 55, avg_saves: 1.0, avg_shares: 0.5, avg_likes: 2.5 },
+    { content_type: 'parenting_wednesday', post_count: 4, avg_engagement: 0.033, avg_reach: 48, avg_saves: 0.8, avg_shares: 0.3, avg_likes: 1.5 },
+    { content_type: 'fill_in_blank', post_count: 4, avg_engagement: 0.012, avg_reach: 35, avg_saves: 0.2, avg_shares: 0.1, avg_likes: 1.0 },
+  ];
+}
+
+export function insightsFormat() {
+  return [
+    { media_format: 'reel', post_count: 8, avg_engagement: 0.045, avg_reach: 95, avg_saves: 2.0, avg_shares: 1.2 },
+    { media_format: 'image', post_count: 12, avg_engagement: 0.028, avg_reach: 52, avg_saves: 0.8, avg_shares: 0.3 },
+  ];
+}
+
+export function insightsTime() {
+  return [
+    { hour: 6, label: 'Morning (6:30 AM)', post_count: 14, avg_engagement: 0.042, avg_reach: 78 },
+    { hour: 12, label: 'Noon (12:00 PM)', post_count: 14, avg_engagement: 0.028, avg_reach: 55 },
+  ];
+}
+
+export function insightsCompetitors() {
+  return [
+    {
+      handle: 'proverbs31ministries',
+      post_count: 10,
+      posts_per_week: 5.0,
+      format_distribution: { VIDEO: 55.0, IMAGE: 25.0, CAROUSEL_ALBUM: 20.0 },
+      recent_posts: [
+        { media_type: 'VIDEO', caption_preview: 'When God is silent, He is not absent...', hashtag_count: 12, posted_at: subDays(today(), 1).toISOString(), permalink: null },
+        { media_type: 'CAROUSEL_ALBUM', caption_preview: '5 truths to anchor your soul this week...', hashtag_count: 15, posted_at: subDays(today(), 2).toISOString(), permalink: null },
+        { media_type: 'VIDEO', caption_preview: 'Your feelings are valid but they are not final...', hashtag_count: 10, posted_at: subDays(today(), 3).toISOString(), permalink: null },
+      ],
+    },
+    {
+      handle: 'biblesociety',
+      post_count: 8,
+      posts_per_week: 4.0,
+      format_distribution: { IMAGE: 50.0, VIDEO: 37.5, CAROUSEL_ALBUM: 12.5 },
+      recent_posts: [
+        { media_type: 'IMAGE', caption_preview: 'The Word of God is alive and active...', hashtag_count: 8, posted_at: subDays(today(), 1).toISOString(), permalink: null },
+        { media_type: 'VIDEO', caption_preview: 'How do you start your morning with Scripture?', hashtag_count: 6, posted_at: subDays(today(), 3).toISOString(), permalink: null },
+      ],
+    },
+    {
+      handle: 'faithward_org',
+      post_count: 6,
+      posts_per_week: 3.0,
+      format_distribution: { IMAGE: 66.7, CAROUSEL_ALBUM: 33.3 },
+      recent_posts: [
+        { media_type: 'CAROUSEL_ALBUM', caption_preview: 'What does it mean to walk by faith?', hashtag_count: 10, posted_at: subDays(today(), 2).toISOString(), permalink: null },
+      ],
+    },
+  ];
+}
+
 // ── Monetization ──
 
 export function revenueSummary() {

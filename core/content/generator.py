@@ -116,9 +116,31 @@ class ContentGenerator:
         return content
 
     def _generate_for_slot(self, slot: dict) -> Optional[GeneratedContent]:
-        """Generate content for a specific calendar slot."""
+        """Generate content for a specific calendar slot.
+
+        Skips generation if content already exists for this slot
+        (prevents duplicates when generate-week and daily cron overlap).
+        """
         content_type_str = slot["content_type"]
         content_type = ContentType(content_type_str)
+        scheduled_at = slot.get("scheduled_at")
+
+        # Dedup: skip if content already exists for this slot
+        if scheduled_at:
+            existing = (
+                self.db.query(GeneratedContent)
+                .filter(
+                    GeneratedContent.content_type == content_type,
+                    GeneratedContent.scheduled_at == scheduled_at,
+                )
+                .first()
+            )
+            if existing:
+                logger.info(
+                    f"Skipping {content_type.value} at {scheduled_at} — "
+                    f"content #{existing.id} already exists ({existing.status.value})"
+                )
+                return None
 
         # Get a verse for verse-based content
         verse = None

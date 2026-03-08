@@ -44,7 +44,7 @@ class CompetitorContentScraper:
         return settings.instagram_access_token
 
     def _get_ig_user_id(self) -> str:
-        return settings.instagram_account_id
+        return settings.instagram_business_account_id
 
     def scrape_all(self, limit: int = 10) -> int:
         """Scrape recent posts from all competitors. Returns total posts scraped."""

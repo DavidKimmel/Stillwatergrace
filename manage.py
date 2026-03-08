@@ -407,7 +407,8 @@ def token_status():
 
     print(f"  Valid:          {health.get('valid')}")
     print(f"  Expires at:     {health.get('expires_at', 'unknown')}")
-    print(f"  Days remaining: {health.get('days_remaining', 'unknown')}")
+    days = health.get("days_remaining")
+    print(f"  Days remaining: {'never expires' if days is None else days}")
     print(f"  Scopes:         {', '.join(health.get('scopes', []))}")
 
     if len(sys.argv) > 2 and sys.argv[2] == "--refresh":
@@ -418,8 +419,10 @@ def token_status():
             print("  .env updated successfully")
         else:
             print("  Refresh FAILED")
-    elif health.get("days_remaining", 0) < 14:
+    elif days is not None and days < 14:
         print(f"\n  Token expiring soon! Run: python manage.py token-status --refresh")
+    elif days is None:
+        print("\n  Token is never-expiring. No refresh needed.")
 
 
 def purge_local_media():

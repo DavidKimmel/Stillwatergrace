@@ -128,6 +128,89 @@ class InsightsCollector:
             engagement_rate=round(engagement_rate, 6),
         )
 
+    def refresh_recent(self, days: int = 7) -> int:
+        """Collect fresh analytics for all posts from the last N days.
+
+        Unlike collect_for_age (which targets a specific post age window),
+        this updates ALL recent posts — catching missed collection windows
+        after Docker downtime and keeping metrics current.
+
+        Creates or updates snapshots using the actual hours since posting.
+        """
+        if not self.client:
+            logger.warning("Instagram not configured, skipping refresh")
+            return 0
+
+        try:
+            import zoneinfo
+            tz = zoneinfo.ZoneInfo("America/New_York")
+            now = datetime.now(tz).replace(tzinfo=None)
+        except Exception:
+            now = datetime.utcnow()
+
+        cutoff = now - timedelta(days=days)
+
+        posts = (
+            self.db.query(PostingLog)
+            .filter(
+                PostingLog.platform == Platform.instagram,
+                PostingLog.status == PostingStatus.success,
+                PostingLog.platform_media_id.isnot(None),
+                PostingLog.posted_at >= cutoff,
+            )
+            .all()
+        )
+
+        collected = 0
+        for post in posts:
+            try:
+                insights = self.client.get_media_insights(post.platform_media_id)
+                if not insights:
+                    continue
+
+                hours = (
+                    int((now - post.posted_at).total_seconds() / 3600)
+                    if post.posted_at
+                    else 0
+                )
+
+                # Update existing latest snapshot or create new one
+                existing = (
+                    self.db.query(AnalyticsSnapshot)
+                    .filter(
+                        AnalyticsSnapshot.content_id == post.content_id,
+                        AnalyticsSnapshot.platform == Platform.instagram,
+                    )
+                    .order_by(AnalyticsSnapshot.captured_at.desc())
+                    .first()
+                )
+
+                if existing:
+                    # Update with fresh data
+                    existing.likes = insights.get("likes", 0)
+                    existing.comments = insights.get("comments", 0)
+                    existing.saves = insights.get("saved", 0)
+                    existing.shares = insights.get("shares", 0)
+                    existing.reach = insights.get("reach", 0)
+                    existing.impressions = insights.get("impressions", 0)
+                    existing.hours_after_post = hours
+                    existing.captured_at = now
+                    reach = existing.reach
+                    existing.engagement_rate = round(
+                        (existing.likes + existing.comments + existing.saves + existing.shares) / reach, 6
+                    ) if reach > 0 else 0.0
+                else:
+                    snapshot = self._create_snapshot(post, insights, hours)
+                    self.db.add(snapshot)
+
+                collected += 1
+            except Exception as e:
+                logger.error(f"Failed to refresh insights for post {post.id}: {e}")
+
+        self.db.flush()
+        logger.info(f"Refreshed analytics for {collected} recent posts")
+        return collected
+
     def backfill_all(self) -> int:
         """Collect analytics for all posts that are missing snapshots.
 
