@@ -5,6 +5,7 @@ import {
   Calendar,
   BarChart3,
   Users,
+  Lightbulb,
   DollarSign,
   Settings,
 } from 'lucide-react';
@@ -15,12 +16,14 @@ import CalendarPage from './pages/CalendarPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import CompetitorsPage from './pages/CompetitorsPage';
 import MonetizationPage from './pages/MonetizationPage';
+import InsightsPage from './pages/InsightsPage';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/queue', icon: ListChecks, label: 'Content Queue' },
   { to: '/calendar', icon: Calendar, label: 'Calendar' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/insights', icon: Lightbulb, label: 'Insights' },
   { to: '/competitors', icon: Users, label: 'Competitors' },
   { to: '/monetization', icon: DollarSign, label: 'Monetization' },
 ];
@@ -70,6 +73,7 @@ export default function App() {
             <Route path="/queue" element={<QueuePage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/insights" element={<InsightsPage />} />
             <Route path="/competitors" element={<CompetitorsPage />} />
             <Route path="/monetization" element={<MonetizationPage />} />
           </Routes>
