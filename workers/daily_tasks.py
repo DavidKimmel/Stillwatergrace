@@ -159,6 +159,34 @@ def backfill_analytics():
 
 
 @app.task
+def refresh_recent_analytics():
+    """Refresh analytics for all posts from the last 7 days.
+
+    Runs daily to catch posts missed during Docker downtime and to
+    keep engagement metrics up to date. Unlike collect_for_age (which
+    targets a specific post age window), this collects fresh data for
+    ALL recent posts regardless of existing snapshots.
+    """
+    from database.session import get_db
+    from core.config import settings
+
+    if not settings.has_instagram:
+        return {"status": "skipped", "reason": "Instagram not configured"}
+
+    logger.info("Refreshing analytics for recent posts...")
+
+    with get_db() as db:
+        try:
+            from core.analytics.instagram_insights import InsightsCollector
+            collector = InsightsCollector(db)
+            collected = collector.refresh_recent(days=7)
+            return {"status": "success", "refreshed": collected}
+        except Exception as e:
+            logger.error(f"Analytics refresh error: {e}")
+            return {"status": "error", "error": str(e)}
+
+
+@app.task
 def run_competitor_scrape():
     """Weekly competitor data collection."""
     from database.session import get_db
@@ -173,6 +201,32 @@ def run_competitor_scrape():
             return {"status": "success", "competitors_scraped": scraped}
         except Exception as e:
             logger.error(f"Competitor scrape error: {e}")
+            return {"status": "error", "error": str(e)}
+
+
+@app.task
+def scrape_competitor_content():
+    """Scrape recent posts from competitor accounts.
+
+    Runs Mon + Thu at 5:00 AM EST. Uses Instagram Business Discovery API
+    to fetch last 10 posts per competitor (captions, media types, hashtags).
+    """
+    from database.session import get_db
+    from core.config import settings
+
+    if not settings.has_instagram:
+        return {"status": "skipped", "reason": "Instagram not configured"}
+
+    logger.info("Scraping competitor content...")
+
+    with get_db() as db:
+        try:
+            from core.scraper.competitor_content import CompetitorContentScraper
+            scraper = CompetitorContentScraper(db)
+            total = scraper.scrape_all(limit=10)
+            return {"status": "success", "posts_scraped": total}
+        except Exception as e:
+            logger.error(f"Competitor content scrape error: {e}")
             return {"status": "error", "error": str(e)}
 
 
@@ -215,7 +269,11 @@ def refresh_instagram_token_task():
             logger.error("Instagram token is invalid!")
             return {"status": "error", "health": health}
 
-        days = health.get("days_remaining", -1)
+        days = health.get("days_remaining")
+
+        if days is None:
+            logger.info("Token is never-expiring, no refresh needed")
+            return {"status": "healthy", "days_remaining": "never"}
 
         if days < 14:
             logger.info(f"Token expires in {days} days, refreshing...")

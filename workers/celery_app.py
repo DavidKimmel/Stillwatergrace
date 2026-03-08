@@ -84,10 +84,24 @@ app.conf.update(
             "args": (168,),
         },
 
+        # ── Analytics Recovery (catch missed windows after downtime) ──
+        "daily-analytics-refresh": {
+            "task": "workers.daily_tasks.refresh_recent_analytics",
+            "schedule": crontab(hour=14, minute=0),  # 2 PM EST — refresh all recent posts
+        },
+
         # ── Weekly Tasks ──
         "weekly-competitor-scrape": {
             "task": "workers.daily_tasks.run_competitor_scrape",
             "schedule": crontab(hour=5, minute=0, day_of_week="sunday"),
+        },
+        "competitor-content-monday": {
+            "task": "workers.daily_tasks.scrape_competitor_content",
+            "schedule": crontab(hour=5, minute=0, day_of_week="monday"),
+        },
+        "competitor-content-thursday": {
+            "task": "workers.daily_tasks.scrape_competitor_content",
+            "schedule": crontab(hour=5, minute=0, day_of_week="thursday"),
         },
         "weekly-report": {
             "task": "workers.daily_tasks.generate_weekly_report",
