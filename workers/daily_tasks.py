@@ -259,10 +259,8 @@ def run_weekly_content_generation(self):
 
             # Generate for the upcoming Monday through Sunday
             today = datetime.utcnow()
-            # Next Monday: if today IS Monday, skip to next week
+            # Nearest upcoming Monday (0 if today is Monday)
             days_until_monday = (7 - today.weekday()) % 7
-            if days_until_monday == 0:
-                days_until_monday = 7  # If today is Monday, generate for NEXT Monday
             monday = today + timedelta(days=days_until_monday)
             monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
 
