@@ -97,10 +97,14 @@ def generate_week():
         img_pipeline = ImagePipeline(db)
         cal = ContentCalendar(db)
 
-        # Start from Monday of this week
+        # Start from NEXT Monday (generate for the upcoming week, not the current one)
         today = datetime.utcnow()
-        monday = today - timedelta(days=today.weekday())
+        days_until_monday = (7 - today.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7  # If today is Monday, generate for next week
+        monday = today + timedelta(days=days_until_monday)
         monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+        print(f"Generating content for week of {monday.date()} (Mon-Sun)")
 
         total = 0
         for day_offset in range(7):
