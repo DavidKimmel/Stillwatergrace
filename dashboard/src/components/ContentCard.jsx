@@ -24,6 +24,7 @@ const TYPE_LABELS = {
   marriage_challenge: 'Marriage Challenge',
   carousel: 'Carousel',
   reel: 'Reel',
+  christian_quote: 'Christian Quote',
 };
 
 export default function ContentCard({
@@ -49,6 +50,11 @@ export default function ContentCard({
 
   const feedImage = content.images?.find((img) => img.format === 'feed_4x5');
   const allImages = content.images || [];
+
+  // Check if this post missed its scheduled window
+  const isMissed = content.scheduled_at
+    && (content.status === 'approved' || content.status === 'pending')
+    && new Date(content.scheduled_at) < new Date();
 
   return (
     <div className={`card transition-all ${selected ? 'ring-2 ring-brand-gold' : ''}`}>
@@ -93,8 +99,13 @@ export default function ContentCard({
                 {content.emotional_tone}
               </span>
             )}
+            {isMissed && (
+              <span className="badge bg-amber-100 text-amber-700 text-xs font-semibold">
+                Missed
+              </span>
+            )}
             {content.scheduled_at && (
-              <span className="text-xs text-gray-400 flex items-center gap-1 ml-auto">
+              <span className={`text-xs flex items-center gap-1 ml-auto ${isMissed ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
                 <Clock size={12} />
                 {format(new Date(content.scheduled_at), 'MMM d, h:mm a')}
               </span>

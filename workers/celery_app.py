@@ -61,12 +61,6 @@ app.conf.update(
             "schedule": crontab(hour=12, minute=0),
             "args": ("noon",),
         },
-        # ── Catch-up (posts missed while offline) ──
-        "catchup-missed-posts": {
-            "task": "workers.posting_tasks.post_missed_content",
-            "schedule": crontab(minute="*/30"),
-        },
-
         # ── Analytics Collection ──
         "analytics-1hr": {
             "task": "workers.daily_tasks.collect_analytics",
