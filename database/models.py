@@ -66,6 +66,7 @@ class ImageProvider(str, enum.Enum):
     leonardo = "leonardo"
     unsplash = "unsplash"
     canva = "canva"
+    fal = "fal"
     pil_fallback = "pil_fallback"
 
 

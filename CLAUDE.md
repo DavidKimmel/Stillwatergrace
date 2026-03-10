@@ -80,7 +80,7 @@ templates/devotional/ WeasyPrint HTML/CSS templates for devotional PDF
 workers/              Celery app, daily_tasks, posting_tasks
 audio/                Mixkit royalty-free tracks (gitignored), narration cache (gitignored)
 output/devotionals/   Generated devotional PDFs
-manage.py             CLI: generate-week, test-render, generate-audio, generate-devotional, etc.
+manage.py             CLI: generate-week, test-render, generate-audio, generate-devotional, regenerate-image, etc.
 ```
 
 ## Key Technical Details
@@ -91,6 +91,12 @@ manage.py             CLI: generate-week, test-render, generate-audio, generate-
 - API proxy: Dashboard Vite config proxies `/api` to the backend
 - Mock fallback: `dashboard/src/lib/api.js` falls back to mock data when backend is down
 - Leonardo removed — enum kept in DB for compat, all code deleted
+- **imagegen integration**: `C:\imagegen\src` mounted at `/imagegen-src` in Docker API container
+  - `POST /content/{id}/ai-image` — generates fal.ai images alongside Unsplash (ai_ prefix files/R2 keys)
+  - `POST /content/{id}/swap-reel` — re-renders reel with AI background (local ffmpeg, no tokens)
+  - Both versions kept for comparison; dashboard shows provider badges (unsplash vs fal)
+  - CLI: `python manage.py regenerate-image --content-id=N`
+  - Migration 005: `fal` added to `imageprovider` enum
 - Reel pipeline: Unsplash bg -> Ken Burns zoompan -> transparent PNG overlay composite -> TTS + music mix
 - FFmpeg: eof_action=repeat (overlay), amix duration=longest (audio), -t for duration cap
 - Deleting content requires deleting GeneratedImage rows first (FK constraint)
@@ -115,7 +121,7 @@ pytest --cov=core            # With coverage
 - `.env` has all API keys — never commit secrets
 - Docker overrides DATABASE_URL and REDIS_URL to use service names (db, redis)
 - Local dev uses localhost defaults from .env
-- Active APIs: Anthropic, ElevenLabs ($5/mo), Unsplash, Instagram/Meta, Cloudflare R2
+- Active APIs: Anthropic, ElevenLabs ($5/mo), Unsplash, Instagram/Meta, Cloudflare R2, fal.ai (on-demand AI images)
 - Cancelled: Leonardo.ai (removed from codebase)
 
 ## Meta/Facebook Setup (IMPORTANT)

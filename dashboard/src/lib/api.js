@@ -86,6 +86,18 @@ export const postNow = (id) => {
   return request(`/content/${id}/post-now`, { method: 'POST' });
 };
 
+export const regenerateContent = (id) => {
+  return request(`/content/${id}/regenerate`, { method: 'POST' });
+};
+
+export const generateAiImage = (id) => {
+  return request(`/content/${id}/ai-image`, { method: 'POST' });
+};
+
+export const swapReelImage = (id) => {
+  return request(`/content/${id}/swap-reel`, { method: 'POST' });
+};
+
 export const rescheduleContent = (id, scheduledAt) => {
   return request(`/content/${id}/reschedule?scheduled_at=${scheduledAt}`, { method: 'POST' });
 };

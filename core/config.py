@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Unsplash
     unsplash_access_key: str = ""
 
+    # fal.ai (AI image generation via imagegen package)
+    fal_api_key: str = ""
+
     # ElevenLabs (TTS narration + music generation)
     elevenlabs_api_key: str = Field(
         default="",
@@ -110,6 +113,10 @@ class Settings(BaseSettings):
     @property
     def has_elevenlabs(self) -> bool:
         return bool(self.elevenlabs_api_key)
+
+    @property
+    def has_fal(self) -> bool:
+        return bool(self.fal_api_key)
 
     @property
     def has_reddit(self) -> bool:

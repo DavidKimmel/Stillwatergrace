@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchContentQueue, approveContent, rejectContent, bulkApprove, postNow } from '../lib/api';
+import { fetchContentQueue, approveContent, rejectContent, bulkApprove, postNow, regenerateContent, generateAiImage, swapReelImage } from '../lib/api';
 import ContentCard from '../components/ContentCard';
 import { Check, X, Filter } from 'lucide-react';
 
@@ -59,6 +59,21 @@ export default function QueuePage() {
 
   const postNowMut = useMutation({
     mutationFn: (id) => postNow(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content-queue'] }),
+  });
+
+  const regenerateMut = useMutation({
+    mutationFn: (id) => regenerateContent(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content-queue'] }),
+  });
+
+  const aiImageMut = useMutation({
+    mutationFn: (id) => generateAiImage(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content-queue'] }),
+  });
+
+  const swapReelMut = useMutation({
+    mutationFn: (id) => swapReelImage(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content-queue'] }),
   });
 
@@ -134,9 +149,15 @@ export default function QueuePage() {
               onApprove={() => approveMut.mutate(item.id)}
               onReject={() => rejectMut.mutate(item.id)}
               onPostNow={() => postNowMut.mutate(item.id)}
+              onRegenerate={() => regenerateMut.mutate(item.id)}
+              onAiImage={() => aiImageMut.mutate(item.id)}
+              onSwapReel={() => swapReelMut.mutate(item.id)}
               isApproving={approveMut.isPending}
               isRejecting={rejectMut.isPending}
               isPosting={postNowMut.isPending}
+              isRegenerating={regenerateMut.isPending}
+              isGeneratingAi={aiImageMut.isPending}
+              isSwappingReel={swapReelMut.isPending}
             />
           ))}
         </div>

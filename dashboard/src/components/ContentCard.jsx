@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Check, X, Copy, ChevronDown, ChevronUp, Clock, Image as ImageIcon, ChevronLeft, ChevronRight, ZoomIn, Play, Send } from 'lucide-react';
+import { Check, X, Copy, ChevronDown, ChevronUp, Clock, Image as ImageIcon, ChevronLeft, ChevronRight, ZoomIn, Play, Send, RefreshCw, Sparkles, Film } from 'lucide-react';
 import { format } from 'date-fns';
 
 const STATUS_BADGE = {
@@ -34,9 +34,15 @@ export default function ContentCard({
   onApprove,
   onReject,
   onPostNow,
+  onRegenerate,
+  onAiImage,
+  onSwapReel,
   isApproving,
   isRejecting,
   isPosting,
+  isRegenerating,
+  isGeneratingAi,
+  isSwappingReel,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState('');
@@ -288,14 +294,42 @@ export default function ContentCard({
             </>
           )}
           {(content.status === 'pending' || content.status === 'approved') && (
-            <button
-              onClick={onPostNow}
-              disabled={isPosting}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-brand-gold text-white rounded-lg hover:bg-brand-gold/90 disabled:opacity-50 transition-colors"
-            >
-              <Send size={14} />
-              {isPosting ? 'Posting...' : 'Post Now'}
-            </button>
+            <>
+              <button
+                onClick={onRegenerate}
+                disabled={isRegenerating}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw size={14} className={isRegenerating ? 'animate-spin' : ''} />
+                {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+              </button>
+              <button
+                onClick={onAiImage}
+                disabled={isGeneratingAi}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-purple-300 text-purple-600 rounded-lg hover:bg-purple-50 disabled:opacity-50 transition-colors"
+              >
+                <Sparkles size={14} className={isGeneratingAi ? 'animate-pulse' : ''} />
+                {isGeneratingAi ? 'Generating...' : 'AI Image'}
+              </button>
+              {allImages.some((img) => img.provider === 'fal') && (
+                <button
+                  onClick={onSwapReel}
+                  disabled={isSwappingReel}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-teal-300 text-teal-600 rounded-lg hover:bg-teal-50 disabled:opacity-50 transition-colors"
+                >
+                  <Film size={14} className={isSwappingReel ? 'animate-spin' : ''} />
+                  {isSwappingReel ? 'Swapping...' : 'Swap Reel'}
+                </button>
+              )}
+              <button
+                onClick={onPostNow}
+                disabled={isPosting}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-brand-gold text-white rounded-lg hover:bg-brand-gold/90 disabled:opacity-50 transition-colors"
+              >
+                <Send size={14} />
+                {isPosting ? 'Posting...' : 'Post Now'}
+              </button>
+            </>
           )}
         </div>
       </div>

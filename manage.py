@@ -21,6 +21,7 @@ Usage:
     python manage.py list-quotes          Browse stored quotes (--author=lewis)
     python manage.py generate-quote-content  Generate Instagram caption from a random quote
     python manage.py test-phrase-reel     Generate a phrase-pop reel (--content-id=N or --text="...")
+    python manage.py regenerate-image    Regenerate images with AI (--content-id=N [--prompt="..."] [--preset=feed])
 """
 
 import sys
@@ -833,6 +834,185 @@ def test_phrase_reel():
         print("\n  Reel generation FAILED. Check logs above.")
 
 
+def regenerate_image():
+    """Regenerate images for a content piece using AI (fal.ai/FLUX via imagegen).
+
+    Replaces existing Unsplash/PIL images with AI-generated backgrounds,
+    then applies the same PIL text overlay pipeline.
+
+    Usage:
+        python manage.py regenerate-image --content-id=42
+        python manage.py regenerate-image --content-id=42 --preset=story
+        python manage.py regenerate-image --content-id=42 --prompt="custom scene description"
+    """
+    from pathlib import Path
+    from database.session import get_db
+    from database.models import GeneratedContent, GeneratedImage, ImageFormat, ImageProvider
+    from core.config import settings
+    from core.images.image_processor import (
+        ImagePipeline,
+        TARGET_SIZES,
+        IMAGES_PROCESSED_DIR,
+    )
+
+    # Parse args
+    content_id = None
+    custom_prompt = None
+    preset_override = None
+    for arg in sys.argv[2:]:
+        if arg.startswith("--content-id="):
+            content_id = int(arg.split("=", 1)[1])
+        elif arg.startswith("--prompt="):
+            custom_prompt = arg.split("=", 1)[1]
+        elif arg.startswith("--preset="):
+            preset_override = arg.split("=", 1)[1]
+
+    if content_id is None:
+        print("Usage: python manage.py regenerate-image --content-id=42 [--prompt=\"...\"] [--preset=feed]")
+        return
+
+    if not settings.fal_api_key:
+        print("Error: FAL_API_KEY not set in .env")
+        return
+
+    # Map content types to imagegen presets
+    CONTENT_TYPE_PRESETS = {
+        "daily_verse": "feed",
+        "marriage_monday": "feed",
+        "parenting_wednesday": "feed",
+        "faith_friday": "feed",
+        "encouragement": "feed",
+        "prayer_prompt": "feed",
+        "gratitude": "feed",
+        "fill_in_blank": "square",
+        "this_or_that": "square",
+        "conviction_quote": "feed",
+        "christian_quote": "feed",
+        "carousel": "square",
+        "reel": "reel-bg",
+    }
+
+    with get_db() as db:
+        content = db.query(GeneratedContent).filter_by(id=content_id).first()
+        if not content:
+            print(f"Error: Content #{content_id} not found")
+            return
+
+        content_type = content.content_type.value
+        prompt_text = custom_prompt or content.image_prompt or f"{content_type} background"
+        preset = preset_override or CONTENT_TYPE_PRESETS.get(content_type, "feed")
+
+        print(f"\n== AI Image Regeneration ==\n")
+        print(f"  Content ID:   #{content_id}")
+        print(f"  Content type: {content_type}")
+        print(f"  Preset:       {preset}")
+        print(f"  Prompt:       {prompt_text[:80]}{'...' if len(prompt_text) > 80 else ''}")
+
+        # Call imagegen
+        print(f"\n  Generating with fal.ai/FLUX...")
+
+        # Import imagegen -- installed from C:\imagegen
+        sys.path.insert(0, r"C:\imagegen\src")
+        from imagegen import generate_image
+
+        raw_dir = Path("images/raw")
+        raw_dir.mkdir(parents=True, exist_ok=True)
+
+        result = generate_image(
+            prompt=prompt_text,
+            preset=preset,
+            brand="stillwatergrace",
+            background_only=True,
+            output_path=str(raw_dir),
+            provider="fal",
+        )
+
+        if not result["success"]:
+            print(f"\n  FAILED: {result['error']}")
+            print("  Existing images unchanged. Unsplash/PIL still available.")
+            return
+
+        raw_path = result["image_paths"][0]
+        print(f"  AI image saved: {raw_path}")
+
+        # Keep existing images for comparison (Unsplash vs AI side-by-side)
+        existing = db.query(GeneratedImage).filter_by(content_id=content_id).all()
+        existing_count = len([img for img in existing if img.format != ImageFormat.reel_9x16])
+        if existing_count:
+            print(f"\n  Keeping {existing_count} existing image(s) for comparison")
+
+        # Process through PIL overlay pipeline with ai_ prefix filenames
+        print(f"\n  Applying PIL overlays...")
+        from PIL import Image as PILImage
+        from core.images.image_processor import _apply_feed_overlay
+
+        IMAGES_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+        pipeline = ImagePipeline(db)
+        new_images = []
+
+        try:
+            raw_img = PILImage.open(raw_path)
+            if raw_img.mode != "RGB":
+                raw_img = raw_img.convert("RGB")
+        except Exception as e:
+            print(f"\n  FAILED to open AI image: {e}")
+            return
+
+        for img_format, target_size in TARGET_SIZES.items():
+            try:
+                img = ImagePipeline._resize_and_crop(raw_img.copy(), target_size)
+
+                content_type_val = content.content_type.value if content.content_type else "encouragement"
+                if img_format == ImageFormat.story_9x16 and content.story_text:
+                    img = pipeline._add_text_overlay(img, content.story_text)
+                elif img_format in (ImageFormat.feed_4x5, ImageFormat.feed_1x1):
+                    hook_text = content.hook or content.caption_short or ""
+                    words = hook_text.split()
+                    if len(words) > 15:
+                        hook_text = " ".join(words[:15]) + "..."
+
+                    verse_text = ""
+                    verse_ref = ""
+                    verse_translation = ""
+                    if content.verse:
+                        verse_text = content.verse.text or ""
+                        verse_ref = content.verse.reference or ""
+                        verse_translation = content.verse.translation or "WEB"
+
+                    if hook_text or verse_text:
+                        img = _apply_feed_overlay(
+                            img, hook_text, content.id, content_type_val,
+                            verse_text=verse_text,
+                            verse_ref=verse_ref,
+                            verse_translation=verse_translation,
+                        )
+
+                output_path = IMAGES_PROCESSED_DIR / f"ai_{content.id}_{img_format.value}.jpg"
+                img.save(str(output_path), "JPEG", quality=92, optimize=True)
+
+                final_url = pipeline._upload_to_storage(str(output_path), content.id, img_format)
+
+                image_record = GeneratedImage(
+                    content_id=content.id,
+                    provider=ImageProvider.fal,
+                    format=img_format,
+                    raw_url=raw_path,
+                    final_url=final_url,
+                    r2_key=f"content/{content.id}/ai_{img_format.value}.jpg",
+                    width=target_size[0],
+                    height=target_size[1],
+                )
+                db.add(image_record)
+                new_images.append(image_record)
+                print(f"    {img_format.value}: {final_url or output_path}")
+            except Exception as e:
+                print(f"    {img_format.value}: FAILED - {e}")
+
+        print(f"\n  Done! {len(new_images)} images regenerated with AI.")
+        if result.get("prompt_path"):
+            print(f"  Prompt saved: {result['prompt_path']}")
+
+
 COMMANDS = {
     "init-db": init_db,
     "seed": seed,
@@ -854,6 +1034,7 @@ COMMANDS = {
     "list-quotes": list_quotes_cmd,
     "generate-quote-content": generate_quote_content,
     "test-phrase-reel": test_phrase_reel,
+    "regenerate-image": regenerate_image,
 }
 
 
