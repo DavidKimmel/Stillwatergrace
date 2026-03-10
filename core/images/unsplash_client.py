@@ -226,7 +226,7 @@ class UnsplashClient:
         # Filter out photos we've already downloaded to avoid repetition
         used_ids = {
             p.stem.replace("unsplash_", "")
-            for p in IMAGES_RAW_DIR.glob("unsplash_*.jpg")
+            for p in IMAGES_RAW_DIR.rglob("unsplash_*.jpg")
         }
         fresh = [r for r in results if r["id"] not in used_ids]
         pool = fresh if fresh else results  # fall back to all if everything used
@@ -243,12 +243,29 @@ class UnsplashClient:
         if not download_url:
             return None
 
-        local_path = self._download(download_url, photo_id)
+        # Determine theme and download into themed folder
+        from core.images.catalog import ImageCatalog, theme_for_content_type
+        theme = theme_for_content_type(content_type)
+        local_path = self._download(download_url, photo_id, theme=theme)
 
         # Build attribution (required by Unsplash TOS)
         photographer = photo.get("user", {}).get("name", "Unknown")
         photo_url = photo.get("links", {}).get("html", "")
         attribution = f"Photo by {photographer} on Unsplash ({photo_url})"
+
+        # Register in image catalog
+        if local_path:
+            catalog = ImageCatalog()
+            catalog.register(
+                image_id=f"unsplash_{photo_id}",
+                provider="unsplash",
+                theme=theme,
+                filename=f"{theme}/unsplash_{photo_id}.jpg",
+                content_type=content_type,
+                prompt_or_query=query,
+                photographer=photographer,
+                attribution=attribution,
+            )
 
         # Trigger download tracking (required by Unsplash TOS)
         self._track_download(photo)
@@ -264,8 +281,8 @@ class UnsplashClient:
             "color": photo.get("color"),
         }
 
-    def _download(self, url: str, photo_id: str) -> Optional[Path]:
-        """Download photo to local storage."""
+    def _download(self, url: str, photo_id: str, theme: str = "") -> Optional[Path]:
+        """Download photo to local storage, organized by theme."""
         try:
             response = self.client.get(url, follow_redirects=True)
             response.raise_for_status()
@@ -273,7 +290,15 @@ class UnsplashClient:
             logger.error(f"Failed to download Unsplash photo: {e}")
             return None
 
-        path = IMAGES_RAW_DIR / f"unsplash_{photo_id}.jpg"
+        filename = f"unsplash_{photo_id}.jpg"
+        if theme:
+            from core.images.catalog import ImageCatalog
+            catalog = ImageCatalog()
+            path = catalog.get_save_path(theme, filename)
+        else:
+            path = IMAGES_RAW_DIR / filename
+
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(response.content)
         logger.info(f"Downloaded Unsplash photo to {path}")
         return path

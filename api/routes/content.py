@@ -330,6 +330,28 @@ def generate_ai_image(
 
     raw_path = result["image_paths"][0]
 
+    # Move into themed folder and register in catalog
+    import shutil
+    from core.images.catalog import ImageCatalog, theme_for_content_type
+
+    catalog = ImageCatalog()
+    theme = theme_for_content_type(content_type)
+    raw_filename = Path(raw_path).name
+    themed_filename = f"ai_{raw_filename}"
+    dest_path = catalog.get_save_path(theme, themed_filename)
+    shutil.move(raw_path, str(dest_path))
+    raw_path = str(dest_path)
+
+    catalog.register(
+        image_id=f"fal_{Path(raw_filename).stem}",
+        provider="fal",
+        theme=theme,
+        filename=f"{theme}/{themed_filename}",
+        content_type=content_type,
+        content_id=content_id,
+        prompt_or_query=prompt_text,
+    )
+
     # Process AI image through PIL overlay pipeline with separate output filenames
     # (normal pipeline saves to {id}_{format}.jpg — we use ai_{id}_{format}.jpg to avoid overwriting)
     from PIL import Image as PILImage
