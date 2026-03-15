@@ -56,10 +56,20 @@ app.conf.update(
             "schedule": crontab(hour=6, minute=30),
             "args": ("morning",),
         },
+        "mid-morning-post": {
+            "task": "workers.posting_tasks.post_scheduled_content",
+            "schedule": crontab(hour=7, minute=30),
+            "args": ("mid_morning",),
+        },
         "noon-post": {
             "task": "workers.posting_tasks.post_scheduled_content",
             "schedule": crontab(hour=12, minute=0),
             "args": ("noon",),
+        },
+        # ── Catch-up for any missed posts ──
+        "catch-missed-posts": {
+            "task": "workers.posting_tasks.post_missed_content",
+            "schedule": crontab(minute="*/30"),  # Every 30 minutes
         },
         # ── Analytics Collection ──
         "analytics-1hr": {
@@ -99,9 +109,13 @@ app.conf.update(
             "task": "workers.daily_tasks.scrape_competitor_content",
             "schedule": crontab(hour=5, minute=0, day_of_week="monday"),
         },
-        "competitor-content-thursday": {
+        "competitor-content-wednesday": {
             "task": "workers.daily_tasks.scrape_competitor_content",
-            "schedule": crontab(hour=5, minute=0, day_of_week="thursday"),
+            "schedule": crontab(hour=5, minute=0, day_of_week="wednesday"),
+        },
+        "competitor-content-friday": {
+            "task": "workers.daily_tasks.scrape_competitor_content",
+            "schedule": crontab(hour=5, minute=0, day_of_week="friday"),
         },
         "weekly-report": {
             "task": "workers.daily_tasks.generate_weekly_report",

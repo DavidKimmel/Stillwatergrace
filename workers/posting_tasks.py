@@ -10,9 +10,10 @@ logger = logging.getLogger(__name__)
 
 # Time slot windows (EST)
 TIME_SLOTS = {
-    "morning": (6, 30),   # 6:30 AM
-    "noon": (12, 0),      # 12:00 PM
-    "evening": (19, 30),  # 7:30 PM
+    "morning": (6, 30),       # 6:30 AM
+    "mid_morning": (7, 30),   # 7:30 AM
+    "noon": (12, 0),          # 12:00 PM
+    "evening": (19, 30),      # 7:30 PM
 }
 
 
@@ -61,6 +62,35 @@ def post_scheduled_content(self, time_slot: str):
         if not content_items:
             logger.info(f"No content scheduled for {time_slot} window")
             return {"status": "no_content", "time_slot": time_slot}
+
+        # Filter by is_selected when multiple posts compete for the same slot.
+        # Group by scheduled_at to detect competing posts.
+        from collections import defaultdict
+        slot_groups: dict[datetime, list] = defaultdict(list)
+        for item in content_items:
+            slot_groups[item.scheduled_at].append(item)
+
+        filtered_items = []
+        for scheduled_at, group in slot_groups.items():
+            if len(group) == 1:
+                # Single post for this slot — backward compat, post regardless
+                filtered_items.append(group[0])
+            else:
+                # Multiple posts — only post the selected one
+                selected = [c for c in group if c.is_selected]
+                if selected:
+                    filtered_items.append(selected[0])
+                else:
+                    logger.info(
+                        f"Skipping slot {scheduled_at}: {len(group)} candidates "
+                        f"but none has is_selected=True"
+                    )
+
+        content_items = filtered_items
+
+        if not content_items:
+            logger.info(f"No selected content for {time_slot} window after filtering")
+            return {"status": "no_selected_content", "time_slot": time_slot}
 
         results = []
         for content in content_items:

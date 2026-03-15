@@ -25,39 +25,40 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 # Day of week (0=Monday) → content type mapping
-# 12 slots/week: morning + noon only. Reels and carousels determined by content type.
-# Reels auto-generate for any verse-backed content via FFmpeg pipeline.
-# Optimized for reach based on analytics data (2026-03-08):
-# Top performers: carousel (108 avg reach), daily_verse (79), encouragement (74)
-# Dropped: gratitude (3), prayer_prompt (2), parenting_wednesday (5)
-# Kept 1x: marriage_monday (brand identity), faith_friday (brand identity)
+# Smart content mix rules:
+# - Max 3x daily_verse/week (down from 5+)
+# - Never same content type in adjacent slots (Mon noon ≠ Tue morning)
+# - Alternate emotional tones through the week
+# - 3 posting windows: morning (6:30), mid-morning (7:30), noon (12:00)
+# - Top performers get prime slots: carousel (108 avg reach), encouragement (74)
+# - Brand pillars anchored: marriage_monday, faith_friday
 WEEKLY_SCHEDULE = {
     0: {  # Monday
         "morning": {"type": ContentType.marriage_monday, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
+        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.reflective},
     },
     1: {  # Tuesday
-        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
-    },
-    2: {  # Wednesday
         "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
         "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
+    },
+    2: {  # Wednesday
+        "morning": {"type": ContentType.encouragement, "tone": EmotionalTone.challenging},
+        "mid_morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
+        "noon": {"type": ContentType.christian_quote, "tone": EmotionalTone.reflective},
     },
     3: {  # Thursday
         "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.christian_quote, "tone": EmotionalTone.reflective},
+        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.reflective},
     },
     4: {  # Friday
         "morning": {"type": ContentType.faith_friday, "tone": EmotionalTone.reflective},
-        "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
+        "noon": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
     },
-    5: {  # Saturday
-        "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.reflective},
+    5: {  # Saturday — lighter posting day, cozy weekend devotional
+        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective, "preset": "coffee_verse"},
     },
     6: {  # Sunday
-        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
+        "mid_morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
         "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
     },
 }
@@ -65,6 +66,7 @@ WEEKLY_SCHEDULE = {
 # Posting times (EST)
 POSTING_TIMES = {
     "morning": time(6, 30),
+    "mid_morning": time(7, 30),
     "noon": time(12, 0),
 }
 
@@ -115,6 +117,7 @@ class ContentCalendar:
                 "scheduled_at": scheduled_at,
                 "theme": "",
                 "age_group": "general",
+                "preset": config.get("preset", ""),
             }
 
             # Add theme based on content type

@@ -34,6 +34,7 @@ CONTENT_TYPE_PRESET_MAP: dict[str, str] = {
     "encouragement": "encouragement",
     "prayer_prompt": "verse_card",
     "gratitude": "verse_card",
+    "coffee_verse": "coffee_verse",
     # Series content → narrated reel with script
     "marriage_monday": "stillwatergrace",
     "parenting_wednesday": "stillwatergrace",
@@ -171,8 +172,16 @@ def generate_reel_for_content(
         output_dir = os.path.join("images", "processed")
     os.makedirs(output_dir, exist_ok=True)
 
+    # Coffee verse uses a fixed background image
+    if preset_name == "coffee_verse":
+        fixed_bg = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "assets", "backgrounds", "coffee_verse_bg.png")
+        if os.path.exists(fixed_bg):
+            background_path = fixed_bg
+            logger.info("Using fixed coffee_verse background: %s", fixed_bg)
+
     try:
-        if render_mode == "verse_card":
+        if render_mode in ("verse_card", "music_reel"):
             return _render_verse_card(
                 preset=preset,
                 verse_text=verse_text,

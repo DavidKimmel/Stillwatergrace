@@ -15,11 +15,17 @@ if [ -d "/reelcreate" ] && [ -f "/reelcreate/pyproject.toml" ]; then
   echo "Installing ReelCreate..."
   pip install -q -e /reelcreate 2>/dev/null || echo "ReelCreate install skipped"
 
-  # Install Remotion npm packages if not already installed
-  if [ -d "/reelcreate/rendering/remotion" ] && [ ! -d "/reelcreate/rendering/remotion/node_modules/remotion" ]; then
-    echo "Installing Remotion dependencies..."
-    cd /reelcreate/rendering/remotion && npm install --silent 2>/dev/null || echo "Remotion install skipped"
-    cd /app
+  # Install Remotion npm packages (rebuild if native bindings are for wrong platform)
+  if [ -d "/reelcreate/rendering/remotion" ]; then
+    REMOTION_DIR="/reelcreate/rendering/remotion"
+    RSPACK_LINUX="$REMOTION_DIR/node_modules/@rspack/binding-linux-x64-gnu"
+    if [ ! -d "$REMOTION_DIR/node_modules/remotion" ] || [ ! -d "$RSPACK_LINUX" ]; then
+      echo "Installing Remotion dependencies (Linux bindings)..."
+      cd "$REMOTION_DIR" && npm install --silent 2>/dev/null || echo "Remotion install skipped"
+      cd /app
+    else
+      echo "Remotion dependencies OK (Linux bindings present)."
+    fi
   fi
 fi
 

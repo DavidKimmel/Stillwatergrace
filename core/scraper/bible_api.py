@@ -1,9 +1,11 @@
-"""Bible API client — fetches verses from bible-api.com (free, no key required).
+"""Bible API client — fetches verses from API.Bible (rest.api.bible).
 
-Uses the World English Bible (WEB) translation which is public domain.
+Uses NIV translation by default via the ReelCreate BibleClient.
+Falls back to bible-api.com (WEB) if API.Bible key is unavailable.
 """
 
 import logging
+import os
 import random
 from datetime import datetime, timedelta
 from typing import Optional
@@ -15,6 +17,7 @@ from database.models import BibleVerse
 
 logger = logging.getLogger(__name__)
 
+# Legacy fallback URL (WEB translation)
 BASE_URL = "https://bible-api.com"
 
 # Curated list of books and chapters with strong encouragement/family content.
@@ -92,6 +95,7 @@ class BibleAPIClient:
         """Fetch a specific verse by reference (e.g., 'John 3:16').
 
         Returns cached version if available, otherwise fetches from API.
+        Uses API.Bible (NIV) when key is available, falls back to bible-api.com (WEB).
         """
         # Check cache first
         cached = (
@@ -99,10 +103,68 @@ class BibleAPIClient:
             .filter(BibleVerse.reference == reference)
             .first()
         )
-        if cached:
+        if cached and cached.translation == "NIV":
             return cached
 
-        # Fetch from API
+        # Try API.Bible (NIV) first
+        # Load RC's .env for the Bible API key if not already in env
+        api_key = os.environ.get("BIBLE_API_KEY", "")
+        if not api_key:
+            try:
+                from pathlib import Path
+                from dotenv import load_dotenv
+                import reelcreate
+                rc_env = Path(reelcreate._PROJECT_ROOT) / ".env"
+                if rc_env.exists():
+                    load_dotenv(rc_env, override=False)
+                    api_key = os.environ.get("BIBLE_API_KEY", "")
+            except Exception:
+                pass
+
+        if api_key:
+            try:
+                from reelcreate import BibleClient
+                client = BibleClient(translation="NIV", api_key=api_key)
+                result = client.fetch_verse(reference)
+
+                ref = result.reference
+                text = result.text
+                translation = "NIV"
+
+                book, chapter, verse_start, verse_end = self._parse_reference(ref)
+
+                # Update existing row to NIV or create new
+                existing = (
+                    self.db.query(BibleVerse)
+                    .filter(BibleVerse.reference == ref)
+                    .first()
+                )
+                if existing:
+                    existing.text = text
+                    existing.translation = translation
+                    self.db.flush()
+                    logger.info(f"Updated verse to NIV: {ref}")
+                    return existing
+
+                verse = BibleVerse(
+                    reference=ref,
+                    text=text,
+                    book=book,
+                    chapter=chapter,
+                    verse_start=verse_start,
+                    verse_end=verse_end,
+                    translation=translation,
+                )
+                self.db.add(verse)
+                self.db.flush()
+
+                logger.info(f"Cached new NIV verse: {ref}")
+                return verse
+
+            except Exception as e:
+                logger.warning(f"API.Bible (NIV) failed for '{reference}': {e}, falling back to WEB")
+
+        # Fallback: bible-api.com (WEB translation)
         try:
             response = self.client.get(f"{BASE_URL}/{reference}")
             response.raise_for_status()
@@ -115,14 +177,11 @@ class BibleAPIClient:
             logger.error(f"Bible API error for '{reference}': {data['error']}")
             return None
 
-        # Parse response
         text = data.get("text", "").strip()
         ref = data.get("reference", reference)
 
-        # Extract book/chapter/verse from reference
         book, chapter, verse_start, verse_end = self._parse_reference(ref)
 
-        # Check if canonical reference already exists (API may return different format)
         existing = (
             self.db.query(BibleVerse)
             .filter(BibleVerse.reference == ref)
@@ -143,7 +202,7 @@ class BibleAPIClient:
         self.db.add(verse)
         self.db.flush()
 
-        logger.info(f"Cached new verse: {ref}")
+        logger.info(f"Cached new WEB verse: {ref}")
         return verse
 
     def fetch_daily_verse(self) -> Optional[BibleVerse]:

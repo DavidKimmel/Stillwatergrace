@@ -7,6 +7,7 @@ const REEL_PRESETS = [
   { value: 'stillwatergrace', label: 'StillwaterGrace (narrated)' },
   { value: 'encouragement', label: 'Encouragement (word pop)' },
   { value: 'verse_card', label: 'Verse Card (typography)' },
+  { value: 'coffee_verse', label: 'Coffee Verse (morning devotional)' },
 ];
 
 const VOICE_OPTIONS = [

@@ -1022,8 +1022,21 @@ def regenerate_reel(
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
 
-    if not content.verse or not content.verse.text:
-        raise HTTPException(status_code=400, detail="Content has no verse text for reel generation")
+    # Determine verse text and reference — fall back to reel script or hook
+    if content.verse and content.verse.text:
+        verse_text = content.verse.text
+        verse_ref = content.verse.reference
+        translation = content.verse.translation or "NIV"
+    elif content.reel_script_15 or content.reel_script_30:
+        verse_text = content.reel_script_15 or content.reel_script_30
+        verse_ref = content.hook or content.content_type.value.replace("_", " ").title()
+        translation = "NIV"
+    elif content.hook:
+        verse_text = content.hook
+        verse_ref = content.content_type.value.replace("_", " ").title()
+        translation = "NIV"
+    else:
+        raise HTTPException(status_code=400, detail="Content has no text for reel generation")
 
     # Find an existing background image
     existing_img = (
@@ -1057,13 +1070,13 @@ def regenerate_reel(
 
     reel_path = generate_reel_for_content(
         background_path=bg_path,
-        verse_text=content.verse.text,
-        verse_ref=content.verse.reference,
+        verse_text=verse_text,
+        verse_ref=verse_ref,
         content_id=content.id,
         content_type=content.content_type.value,
         emotional_tone=content.emotional_tone.value if content.emotional_tone else None,
         reel_script=content.reel_script_15 or content.reel_script_30,
-        translation=content.verse.translation or "NIV",
+        translation=translation,
         force_preset=preset,
         force_voice=voice,
     )
