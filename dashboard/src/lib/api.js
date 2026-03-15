@@ -98,8 +98,31 @@ export const swapReelImage = (id) => {
   return request(`/content/${id}/swap-reel`, { method: 'POST' });
 };
 
+export const regenerateReel = (id, preset, voice) => {
+  const params = new URLSearchParams();
+  if (preset) params.set('preset', preset);
+  if (voice) params.set('voice', voice);
+  const query = params.toString() ? `?${params}` : '';
+  return request(`/content/${id}/regenerate-reel${query}`, { method: 'POST' });
+};
+
 export const rescheduleContent = (id, scheduledAt) => {
   return request(`/content/${id}/reschedule?scheduled_at=${scheduledAt}`, { method: 'POST' });
+};
+
+export const selectPost = (id) => {
+  return request(`/content/${id}/select`, { method: 'POST' });
+};
+
+export const movePost = (id, date, time) => {
+  return request(`/content/${id}/move`, {
+    method: 'POST',
+    body: JSON.stringify({ date, time }),
+  });
+};
+
+export const deletePost = (id) => {
+  return request(`/content/${id}`, { method: 'DELETE' });
 };
 
 export const fetchWeeklyCalendar = withMock(
@@ -174,6 +197,16 @@ export const fetchInsightsCompetitors = withMock(
   () => mock.insightsCompetitors(),
 );
 
+// ── Competitor Top Posts ──
+
+export const getTopCompetitorPosts = withMock(
+  (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return request(`/competitors/top-posts?${query}`);
+  },
+  () => mock.competitorTopPosts(),
+);
+
 // ── Monetization ──
 
 export const fetchRevenueSummary = withMock(
@@ -198,6 +231,33 @@ export const fetchSubscriberStats = withMock(
   () => request('/monetization/subscribers'),
   () => mock.subscriberStats(),
 );
+
+// ── Content Generation ──
+
+export const generateContent = (days) =>
+  request('/content/generate', {
+    method: 'POST',
+    body: JSON.stringify({ days }),
+  });
+
+// ── Creator ──
+
+export const createPost = (data) =>
+  request('/content/create', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+export const generateText = (contentType) =>
+  request('/content/generate-text', {
+    method: 'POST',
+    body: JSON.stringify({ content_type: contentType }),
+  });
+
+export const getImageLibrary = (params = {}) => {
+  const query = new URLSearchParams(params).toString();
+  return request(`/images/library?${query}`);
+};
 
 // ── Dashboard ──
 

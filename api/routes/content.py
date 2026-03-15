@@ -1,10 +1,10 @@
 """Content management API routes."""
 
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from database.session import get_db_dependency
@@ -12,6 +12,7 @@ from database.models import (
     GeneratedContent,
     ContentStatus,
     ContentType,
+    EmotionalTone,
     GeneratedImage,
     ImageFormat,
     ImageProvider,
@@ -53,6 +54,358 @@ def get_content_queue(
     return {
         "total": total,
         "items": [_serialize_content(item, include_images=True) for item in items],
+    }
+
+
+@router.post("/generate")
+def generate_content_on_demand(
+    body: dict = Body(...),
+    db: Session = Depends(get_db_dependency),
+):
+    """Generate content for the next N days (1-7). Dispatches generation for each empty slot."""
+    days = min(max(body.get("days", 1), 1), 7)
+
+    from core.content.calendar_logic import ContentCalendar, WEEKLY_SCHEDULE, POSTING_TIMES
+    from core.content.generator import ContentGenerator
+    from core.images.image_processor import ImagePipeline
+
+    cal = ContentCalendar(db)
+    gen = ContentGenerator(db)
+    img_pipeline = ImagePipeline(db)
+
+    start = date.today() + timedelta(days=1)  # Start from tomorrow
+    slots_created = 0
+    slots_skipped = 0
+
+    for day_offset in range(days):
+        target_date = start + timedelta(days=day_offset)
+        weekday = target_date.weekday()  # 0=Monday
+
+        day_schedule = WEEKLY_SCHEDULE.get(weekday, {})
+        if not day_schedule:
+            continue
+
+        for time_slot, config in day_schedule.items():
+            if config is None:
+                continue
+
+            content_type = config["type"]
+            posting_time = POSTING_TIMES[time_slot]
+            scheduled_at = datetime.combine(target_date, posting_time)
+
+            # Build slot dict matching the format _generate_for_slot expects
+            slot = {
+                "date": target_date.isoformat(),
+                "time_slot": time_slot,
+                "content_type": content_type.value,
+                "emotional_tone": config["tone"].value,
+                "scheduled_at": scheduled_at,
+                "theme": "",
+                "age_group": "general",
+            }
+
+            # Add themes based on content type
+            if content_type == ContentType.marriage_monday:
+                slot["theme"] = cal.series.get_marriage_theme()
+            elif content_type == ContentType.faith_friday:
+                slot["theme"] = cal.series.get_hardship_topic()
+
+            try:
+                content = gen._generate_for_slot(slot)
+                if content:
+                    slots_created += 1
+                    try:
+                        img_pipeline.generate_images_for_content(content)
+                    except Exception:
+                        pass  # Images can be generated later
+                else:
+                    slots_skipped += 1  # Dedup: slot already has content
+            except Exception:
+                slots_skipped += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "days": days,
+        "slots_created": slots_created,
+        "slots_skipped": slots_skipped,
+    }
+
+
+@router.post("/generate-text")
+def generate_text(
+    body: dict = Body(...),
+    db: Session = Depends(get_db_dependency),
+) -> dict:
+    """Generate text content using Claude API for the creator sandbox.
+
+    Accepts a content_type and returns AI-generated text suitable for that type.
+    """
+    import anthropic as _anthropic
+
+    from core.config import settings
+
+    content_type = body.get("content_type", "daily_verse")
+
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="Anthropic API key not configured")
+
+    # Content-type-specific prompts for the creator sandbox
+    type_prompts: dict[str, str] = {
+        "daily_verse": (
+            "Generate a short, powerful Bible verse with its reference. "
+            "Format: the verse text followed by ' - ' and the reference (e.g. Book Chapter:Verse). "
+            "Choose an uplifting or reflective verse. Return ONLY the verse and reference, nothing else."
+        ),
+        "encouragement": (
+            "Write a short, heartfelt Christian encouragement message (2-3 sentences). "
+            "It should feel personal and uplifting, like a friend speaking hope into someone's day. "
+            "Return ONLY the message text, nothing else."
+        ),
+        "marriage_monday": (
+            "Write a short, warm message about marriage and faith (2-3 sentences). "
+            "Focus on love, partnership, and God's design for marriage. "
+            "Return ONLY the message text, nothing else."
+        ),
+        "faith_friday": (
+            "Write a short, powerful message about persevering through hardship with faith (2-3 sentences). "
+            "It should acknowledge real struggle while pointing to hope in God. "
+            "Return ONLY the message text, nothing else."
+        ),
+        "christian_quote": (
+            "Share a famous Christian quote from a well-known theologian, pastor, or Christian author. "
+            "Format: the quote in quotation marks, followed by ' - ' and the author's name. "
+            "Return ONLY the quote and attribution, nothing else."
+        ),
+        "carousel": (
+            "Write a short, insightful Bible teaching point (2-3 sentences) suitable for a carousel post. "
+            "Include a relevant Bible verse reference at the end. "
+            "Return ONLY the text, nothing else."
+        ),
+    }
+
+    prompt = type_prompts.get(content_type, type_prompts["daily_verse"])
+
+    try:
+        client = _anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        generated_text = ""
+        for block in response.content:
+            if block.type == "text":
+                generated_text += block.text
+        generated_text = generated_text.strip()
+    except _anthropic.APIError as e:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {e}")
+
+    if not generated_text:
+        raise HTTPException(status_code=502, detail="Claude returned empty response")
+
+    return {"text": generated_text, "content_type": content_type}
+
+
+@router.post("/create")
+def create_custom_content(
+    body: dict = Body(...),
+    db: Session = Depends(get_db_dependency),
+):
+    """Creator sandbox: create a custom post with user-provided text and image.
+
+    Creates a GeneratedContent record with status=pending and no scheduled_at,
+    so it sits in the sandbox until the user assigns it to a calendar slot via /move.
+    """
+    content_type = body.get("content_type", "daily_verse")
+    text = body.get("text", "")
+    image_source = body.get("image_source", "library")  # library, ai, unsplash
+    image_id = body.get("image_id")  # catalog image ID or None
+    narration = body.get("narration", True)
+    reel_style = body.get("reel_style", "classic")
+    ai_prompt = body.get("ai_prompt")  # for AI image generation
+    overlay_style = body.get("overlay_style", "creator")  # creator (no card) or card
+    font_size = body.get("font_size")  # optional explicit font size (24-80)
+    font_family = body.get("font_family")  # optional: georgia, playfair, lato, calibri
+    text_color = body.get("text_color")  # optional hex color e.g. "#FFFFFF"
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Text content is required")
+
+    # Resolve content_type string to enum
+    try:
+        resolved_type = ContentType[content_type] if isinstance(content_type, str) else content_type
+    except KeyError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid content_type: {content_type}. "
+                   f"Valid values: {[t.name for t in ContentType]}",
+        )
+
+    # Build posting caption: text + CTA + hashtags
+    from random import sample
+    from core.scraper.hashtag_research import HASHTAGS_LARGE, HASHTAGS_MEDIUM, HASHTAGS_NICHE
+
+    CREATOR_CTAS = [
+        "Double-tap if this speaks to you.",
+        "Tag someone who needs this today.",
+        "Save this for when you need a reminder.",
+        "Share this with someone who needs encouragement.",
+        "Comment 'Amen' if you believe this.",
+        "Follow @stillwatergrace for daily faith.",
+    ]
+
+    cta = CREATOR_CTAS[hash(text) % len(CREATOR_CTAS)]
+    caption_long = f"{text}\n\n{cta}"
+
+    # Select hashtags: 3 large + 4 medium + 4 niche + branded
+    ht_large = sample(HASHTAGS_LARGE, min(3, len(HASHTAGS_LARGE)))
+    ht_medium = sample(HASHTAGS_MEDIUM, min(4, len(HASHTAGS_MEDIUM)))
+    ht_niche = sample(HASHTAGS_NICHE, min(4, len(HASHTAGS_NICHE)))
+
+    content = GeneratedContent(
+        content_type=resolved_type,
+        status=ContentStatus.pending,
+        hook=text[:80],
+        caption_short=text if len(text) <= 150 else text[:150],
+        caption_medium=text if len(text) <= 300 else text[:300],
+        caption_long=caption_long,
+        reel_script_15=text if len(text) <= 200 else text[:200],
+        reel_script_30=text,
+        emotional_tone=EmotionalTone.reflective,
+        image_prompt=ai_prompt,
+        is_selected=False,
+        hashtags_large=ht_large,
+        hashtags_medium=ht_medium,
+        hashtags_niche=ht_niche,
+    )
+    db.add(content)
+    db.commit()
+    db.refresh(content)
+
+    import logging
+    from pathlib import Path
+
+    logger = logging.getLogger(__name__)
+
+    # Resolve the background image path based on source
+    reel_url = None
+    image_url = None
+    raw_path = None
+
+    if image_source == "library" and image_id:
+        # Use the selected library image directly
+        try:
+            from core.images.catalog import ImageCatalog
+            catalog = ImageCatalog()
+            entry = catalog.find_by_id(image_id)
+            if entry:
+                lib_path = Path("images/raw") / entry["filename"]
+                if lib_path.exists():
+                    raw_path = str(lib_path)
+                    # Create a GeneratedImage record for the library image
+                    lib_record = GeneratedImage(
+                        content_id=content.id,
+                        provider=ImageProvider.fal if entry.get("provider") == "fal" else ImageProvider.unsplash,
+                        format=ImageFormat.feed_4x5,
+                        raw_url=raw_path,
+                        final_url=f"/static/library/{entry['filename']}",
+                        width=1080,
+                        height=1350,
+                    )
+                    db.add(lib_record)
+                    db.commit()
+                    image_url = lib_record.final_url
+        except Exception as e:
+            logger.error(f"Creator library image failed: {e}")
+
+    elif image_source == "ai" and ai_prompt:
+        # Generate AI image via fal.ai
+        try:
+            ai_result = generate_ai_image(content.id, prompt=ai_prompt, preset=None, db=db)
+            if ai_result.get("images"):
+                image_url = ai_result["images"][0].get("url")
+            # Find the raw image for reel rendering
+            fal_img = (
+                db.query(GeneratedImage)
+                .filter_by(content_id=content.id, provider=ImageProvider.fal)
+                .filter(GeneratedImage.raw_url.isnot(None))
+                .first()
+            )
+            if fal_img:
+                raw_path = fal_img.raw_url
+        except Exception as e:
+            logger.error(f"Creator AI image generation failed: {e}")
+
+    else:
+        # Default (unsplash or no image selected): use Unsplash image pipeline
+        try:
+            # Set image_prompt so Unsplash pipeline has something to search
+            if not content.image_prompt:
+                content.image_prompt = f"{content_type} faith background"
+                db.flush()
+            from core.images.image_processor import ImagePipeline
+            pipeline = ImagePipeline(db)
+            pipeline.generate_images_for_content(content)
+            db.commit()
+            # Find the raw image
+            unsplash_img = (
+                db.query(GeneratedImage)
+                .filter_by(content_id=content.id)
+                .filter(GeneratedImage.raw_url.isnot(None))
+                .first()
+            )
+            if unsplash_img:
+                raw_path = unsplash_img.raw_url
+        except Exception as e:
+            logger.error(f"Creator image pipeline failed: {e}")
+
+    # Generate reel from the background image
+    if raw_path and Path(raw_path).exists():
+        try:
+            from core.images.reel_generator import generate_reel
+            reel_path = generate_reel(
+                background_path=raw_path,
+                verse_text=text,
+                verse_ref="",
+                content_id=content.id,
+                content_type=content_type,
+                translation="",
+                overlay_style=overlay_style,
+                font_size_override=font_size,
+                raw_narration=True,
+                font_family=font_family,
+                text_color=text_color,
+            )
+            if reel_path:
+                r2_key = f"content/{content.id}/reel_9x16.mp4"
+                reel_url = _upload_ai_reel(reel_path, r2_key)
+
+                reel_record = GeneratedImage(
+                    content_id=content.id,
+                    provider=ImageProvider.unsplash,
+                    format=ImageFormat.reel_9x16,
+                    raw_url=raw_path,
+                    final_url=reel_url,
+                    r2_key=r2_key,
+                    width=1080,
+                    height=1920,
+                )
+                db.add(reel_record)
+                db.commit()
+        except Exception as e:
+            logger.error(f"Creator reel generation failed: {e}")
+
+    db.refresh(content)
+    return {
+        "success": True,
+        "content_id": content.id,
+        "id": content.id,
+        "status": "pending",
+        "image_source": image_source,
+        "reel_url": reel_url,
+        "image_url": image_url,
     }
 
 
@@ -138,6 +491,90 @@ def post_content_now(
         raise HTTPException(status_code=400, detail=result["error"])
 
     return result
+
+
+@router.post("/{content_id}/select")
+def select_post(content_id: int, db: Session = Depends(get_db_dependency)):
+    """Select this post as the active one for its time slot.
+
+    Deselects all other posts in the same 1-hour window and marks this one as selected.
+    """
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    if not content.scheduled_at:
+        raise HTTPException(status_code=400, detail="Content has no scheduled time")
+
+    # Deselect all other posts in the same time slot (same date + same hour)
+    slot_start = content.scheduled_at.replace(minute=0, second=0, microsecond=0)
+    slot_end = slot_start + timedelta(hours=1)
+
+    db.query(GeneratedContent).filter(
+        GeneratedContent.scheduled_at >= slot_start,
+        GeneratedContent.scheduled_at < slot_end,
+        GeneratedContent.id != content_id,
+    ).update({"is_selected": False})
+
+    content.is_selected = True
+    db.commit()
+    return {"success": True, "selected_id": content_id}
+
+
+SLOT_TIMES = {"morning": (6, 30), "noon": (12, 0)}
+
+
+@router.post("/{content_id}/move")
+def move_post(content_id: int, body: dict = Body(...), db: Session = Depends(get_db_dependency)):
+    """Move a post to a different day/time (for drag-and-drop in the calendar).
+
+    Accepts either:
+      - ``time``: explicit HH:MM string (e.g. "16:00") -- preferred
+      - ``time_slot``: legacy slot name ("morning" or "noon") -- backward compat
+    """
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    target_date = date.fromisoformat(body["date"])
+
+    # Prefer explicit time, fall back to legacy time_slot
+    time_str: Optional[str] = body.get("time")
+    if time_str:
+        try:
+            parts = time_str.split(":")
+            hour = int(parts[0])
+            minute = int(parts[1]) if len(parts) > 1 else 0
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError("out of range")
+        except (ValueError, IndexError):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid time format: '{time_str}'. Use HH:MM (e.g. '16:00').",
+            )
+    else:
+        time_slot = body.get("time_slot", "morning")
+        hour, minute = SLOT_TIMES.get(time_slot, (6, 30))
+
+    content.scheduled_at = datetime.combine(target_date, time(hour, minute))
+    content.is_selected = False  # Reset selection when moved
+    db.commit()
+    return {"success": True, "new_scheduled_at": content.scheduled_at.isoformat()}
+
+
+@router.delete("/{content_id}")
+def delete_post(content_id: int, db: Session = Depends(get_db_dependency)):
+    """Delete a post and its associated images. Cannot delete posted content."""
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    if content.status == ContentStatus.posted:
+        raise HTTPException(status_code=400, detail="Cannot delete posted content")
+
+    # Delete images first (FK constraint)
+    db.query(GeneratedImage).filter(GeneratedImage.content_id == content_id).delete()
+    db.delete(content)
+    db.commit()
+    return {"success": True, "deleted_id": content_id}
 
 
 @router.post("/{content_id}/regenerate")
@@ -565,6 +1002,112 @@ def _upload_ai_reel(local_path: str, r2_key: str) -> str:
         return f"file://{local_path}"
 
 
+@router.post("/{content_id}/regenerate-reel")
+def regenerate_reel(
+    content_id: int,
+    preset: str = Query(default=None, description="ReelCreate preset name"),
+    voice: str = Query(default=None, description="ElevenLabs voice ID"),
+    db: Session = Depends(get_db_dependency),
+):
+    """Regenerate a reel using the ReelCreate bridge with a specific preset and voice.
+
+    If no preset is specified, auto-selects based on content type.
+    Uses the existing Unsplash background or fetches a new one.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    if not content.verse or not content.verse.text:
+        raise HTTPException(status_code=400, detail="Content has no verse text for reel generation")
+
+    # Find an existing background image
+    existing_img = (
+        db.query(GeneratedImage)
+        .filter_by(content_id=content_id)
+        .filter(GeneratedImage.raw_url.isnot(None))
+        .first()
+    )
+
+    bg_path = existing_img.raw_url if existing_img else None
+
+    # If background doesn't exist on disk, fetch a fresh one
+    import os
+    if not bg_path or not os.path.exists(bg_path):
+        try:
+            from core.images.unsplash_client import UnsplashClient
+            unsplash = UnsplashClient()
+            result = unsplash.search_and_download(
+                content_type=content.content_type.value, high_res=True,
+            )
+            if result and result.get("local_path"):
+                bg_path = result["local_path"]
+        except Exception as e:
+            logger.warning(f"Unsplash fetch failed: {e}")
+
+    if not bg_path or not os.path.exists(bg_path):
+        raise HTTPException(status_code=404, detail="No background image available")
+
+    # Call the ReelCreate bridge
+    from core.content.reelcreate_bridge import generate_reel_for_content
+
+    reel_path = generate_reel_for_content(
+        background_path=bg_path,
+        verse_text=content.verse.text,
+        verse_ref=content.verse.reference,
+        content_id=content.id,
+        content_type=content.content_type.value,
+        emotional_tone=content.emotional_tone.value if content.emotional_tone else None,
+        reel_script=content.reel_script_15 or content.reel_script_30,
+        translation=content.verse.translation or "NIV",
+        force_preset=preset,
+        force_voice=voice,
+    )
+
+    if not reel_path:
+        raise HTTPException(status_code=502, detail="Reel generation failed")
+
+    # Upload to R2
+    r2_key = f"content/{content.id}/reel_9x16.mp4"
+    final_url = _upload_ai_reel(reel_path, r2_key)
+
+    # Update or create the reel image record
+    reel_record = (
+        db.query(GeneratedImage)
+        .filter_by(content_id=content_id, format=ImageFormat.reel_9x16)
+        .first()
+    )
+    if reel_record:
+        reel_record.final_url = final_url
+        reel_record.raw_url = bg_path
+        reel_record.r2_key = r2_key
+    else:
+        reel_record = GeneratedImage(
+            content_id=content.id,
+            provider=ImageProvider.unsplash,
+            format=ImageFormat.reel_9x16,
+            raw_url=bg_path,
+            final_url=final_url,
+            r2_key=r2_key,
+            width=1080,
+            height=1920,
+        )
+        db.add(reel_record)
+
+    db.commit()
+    logger.info(f"Reel regenerated for content #{content_id} (preset={preset})")
+
+    return {
+        "content_id": content_id,
+        "reel_url": final_url,
+        "preset": preset or "auto",
+    }
+
+
 @router.post("/{content_id}/reschedule")
 def reschedule_content(
     content_id: int,
@@ -641,6 +1184,7 @@ def _serialize_content(content: GeneratedContent, include_images: bool = False) 
         "hashtags_niche": content.hashtags_niche,
         "image_prompt": content.image_prompt,
         "status": content.status.value if content.status else None,
+        "is_selected": content.is_selected,
         "scheduled_at": content.scheduled_at.isoformat() if content.scheduled_at else None,
         "created_at": content.created_at.isoformat() if content.created_at else None,
     }

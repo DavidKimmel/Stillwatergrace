@@ -36,6 +36,7 @@ services:
     volumes:
       - .:/app
       - ../imagegen/src:/imagegen-src
+      - ../reelcreate:/reelcreate
     env_file:
       - .env
     environment:
@@ -54,6 +55,7 @@ services:
     command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
     volumes:
       - .:/app
+      - ../reelcreate:/reelcreate
     env_file:
       - .env
     environment:

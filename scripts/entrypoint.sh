@@ -10,6 +10,19 @@ until pg_isready -h db -U faithpage -q 2>/dev/null; do
 done
 echo "Postgres is ready."
 
+# Install ReelCreate if available (mounted at /reelcreate)
+if [ -d "/reelcreate" ] && [ -f "/reelcreate/pyproject.toml" ]; then
+  echo "Installing ReelCreate..."
+  pip install -q -e /reelcreate 2>/dev/null || echo "ReelCreate install skipped"
+
+  # Install Remotion npm packages if not already installed
+  if [ -d "/reelcreate/rendering/remotion" ] && [ ! -d "/reelcreate/rendering/remotion/node_modules/remotion" ]; then
+    echo "Installing Remotion dependencies..."
+    cd /reelcreate/rendering/remotion && npm install --silent 2>/dev/null || echo "Remotion install skipped"
+    cd /app
+  fi
+fi
+
 # Only the API service runs migrations (avoid race conditions with workers)
 if echo "$@" | grep -q "uvicorn"; then
   echo "Running database migrations..."

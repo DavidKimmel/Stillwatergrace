@@ -168,43 +168,10 @@ class ImagePipeline:
             except Exception as e:
                 logger.warning(f"Unsplash fallback also failed: {e}")
 
-        # Process for each format
-        for img_format, target_size in TARGET_SIZES.items():
-            try:
-                if raw_path:
-                    processed_path = self._process_image(
-                        raw_path=raw_path,
-                        target_size=target_size,
-                        content=content,
-                        img_format=img_format,
-                    )
-                else:
-                    # PIL-only: generate a simple branded image
-                    processed_path = self._generate_branded_image(
-                        target_size=target_size,
-                        content=content,
-                        img_format=img_format,
-                    )
-
-                if processed_path:
-                    # Upload to R2 (or store locally in dev)
-                    final_url = self._upload_to_storage(processed_path, content.id, img_format)
-
-                    image_record = GeneratedImage(
-                        content_id=content.id,
-                        provider=provider,
-                        format=img_format,
-                        raw_url=raw_path,
-                        final_url=final_url,
-                        r2_key=f"content/{content.id}/{img_format.value}.jpg",
-                        width=target_size[0],
-                        height=target_size[1],
-                    )
-                    self.db.add(image_record)
-                    images.append(image_record)
-
-            except Exception as e:
-                logger.error(f"Failed to process {img_format.value} for content #{content.id}: {e}")
+        # Static feed image generation skipped — reels only (2026-03-10)
+        # TARGET_SIZES definitions kept for reference / future use.
+        # for img_format, target_size in TARGET_SIZES.items():
+        #     ... (static PIL overlay generation removed to save processing time and storage)
 
         # Generate phrase-pop reel for christian_quote content
         if raw_path and content.content_type == ContentType.christian_quote and content.quote:
@@ -239,35 +206,63 @@ class ImagePipeline:
 
         # Generate animated reel if content has a verse (non-quote content)
         elif raw_path and content.verse and content.verse.text:
+            reel_path = None
+
+            # Try ReelCreate bridge first (Remotion-based, higher quality)
             try:
-                from core.images.reel_generator import generate_reel
-                reel_path = generate_reel(
+                from core.content.reelcreate_bridge import generate_reel_for_content
+                reel_path = generate_reel_for_content(
                     background_path=raw_path,
                     verse_text=content.verse.text,
                     verse_ref=content.verse.reference,
                     content_id=content.id,
-                    translation=content.verse.translation or "WEB",
                     content_type=content.content_type.value,
+                    emotional_tone=(
+                        content.emotional_tone.value
+                        if content.emotional_tone else None
+                    ),
+                    reel_script=content.reel_script_15 or content.reel_script_30,
+                    translation=content.verse.translation or "NIV",
                 )
                 if reel_path:
-                    final_url = self._upload_to_storage(
-                        reel_path, content.id, ImageFormat.reel_9x16,
-                    )
-                    reel_record = GeneratedImage(
-                        content_id=content.id,
-                        provider=provider,
-                        format=ImageFormat.reel_9x16,
-                        raw_url=raw_path,
-                        final_url=final_url,
-                        r2_key=f"content/{content.id}/reel_9x16.mp4",
-                        width=1080,
-                        height=1920,
-                    )
-                    self.db.add(reel_record)
-                    images.append(reel_record)
-                    logger.info(f"Reel generated for content #{content.id}")
+                    logger.info(f"ReelCreate reel generated for content #{content.id}")
             except Exception as e:
-                logger.error(f"Reel generation failed for content #{content.id}: {e}")
+                logger.warning(f"ReelCreate bridge failed for content #{content.id}: {e}")
+
+            # Fallback to legacy reel generator
+            if not reel_path:
+                try:
+                    from core.images.reel_generator import generate_reel
+                    reel_path = generate_reel(
+                        background_path=raw_path,
+                        verse_text=content.verse.text,
+                        verse_ref=content.verse.reference,
+                        content_id=content.id,
+                        translation=content.verse.translation or "ASV",
+                        content_type=content.content_type.value,
+                    )
+                    if reel_path:
+                        logger.info(f"Legacy reel generated for content #{content.id}")
+                except Exception as e:
+                    logger.error(f"Legacy reel generation also failed for content #{content.id}: {e}")
+
+            if reel_path:
+                final_url = self._upload_to_storage(
+                    reel_path, content.id, ImageFormat.reel_9x16,
+                )
+                reel_record = GeneratedImage(
+                    content_id=content.id,
+                    provider=provider,
+                    format=ImageFormat.reel_9x16,
+                    raw_url=raw_path,
+                    final_url=final_url,
+                    r2_key=f"content/{content.id}/reel_9x16.mp4",
+                    width=1080,
+                    height=1920,
+                )
+                self.db.add(reel_record)
+                images.append(reel_record)
+                logger.info(f"Reel stored for content #{content.id}")
 
         # Generate carousel slides if content type is carousel
         if content.content_type and content.content_type.value == "carousel":
@@ -363,7 +358,7 @@ class ImagePipeline:
             if content.verse:
                 verse_text = content.verse.text or ""
                 verse_ref = content.verse.reference or ""
-                verse_translation = content.verse.translation or "WEB"
+                verse_translation = content.verse.translation or "ASV"
 
             if hook_text or verse_text:
                 img = _apply_feed_overlay(
@@ -1490,7 +1485,7 @@ def _overlay_bible_page(
     img: Image.Image,
     verse_text: str,
     verse_ref: str,
-    translation: str = "WEB",
+    translation: str = "ASV",
 ) -> Image.Image:
     """White Bible-page card over scenic photo with highlighted verse text.
 
