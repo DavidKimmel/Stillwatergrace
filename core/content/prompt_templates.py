@@ -116,6 +116,20 @@ class PromptTemplateEngine:
             trending_topic=trending_topic,
         )
 
+    def render_daily_devotional(
+        self,
+        verse_text: str,
+        verse_reference: str,
+        book_name: str = "",
+    ) -> str:
+        """Render the daily devotional generation prompt."""
+        return self.render(
+            "daily_devotional",
+            verse_text=verse_text,
+            verse_reference=verse_reference,
+            book_name=book_name,
+        )
+
     def render_christian_quote(
         self,
         quote_text: str,

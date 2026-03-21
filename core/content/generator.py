@@ -34,7 +34,7 @@ MODEL = "claude-sonnet-4-6"
 COST_PER_INPUT_TOKEN = 3.0 / 1_000_000   # $3 per 1M input tokens
 COST_PER_OUTPUT_TOKEN = 15.0 / 1_000_000  # $15 per 1M output tokens
 
-# Required keys in generated content JSON
+# Required keys in generated content JSON (legacy content types)
 REQUIRED_KEYS = {
     "hook", "caption_short", "caption_medium", "caption_long",
     "story_text", "reel_script_15", "reel_script_30",
@@ -43,6 +43,18 @@ REQUIRED_KEYS = {
     "image_prompt", "alt_text",
     "emotional_tone",
 }
+
+# Required keys for daily_devotional content type
+DAILY_DEVOTIONAL_KEYS = {
+    "narration_script",
+    "verse_text",
+    "verse_reference",
+    "caption",
+    "unsplash_query",
+    "music_mood",
+}
+
+VALID_MUSIC_MOODS = {"peaceful", "reflective", "hopeful", "reverent"}
 
 # Content type choices for daily verse
 CONTENT_TYPE_CHOICES = ["encouragement", "challenge", "reflection", "prayer prompt", "devotional"]
@@ -146,7 +158,7 @@ class ContentGenerator:
 
         # Get a verse for verse-based content
         verse = None
-        if content_type in {ContentType.daily_verse, ContentType.encouragement, ContentType.gratitude, ContentType.prayer_prompt, ContentType.carousel}:
+        if content_type in {ContentType.daily_verse, ContentType.encouragement, ContentType.gratitude, ContentType.prayer_prompt, ContentType.carousel, ContentType.daily_devotional}:
             from core.scraper.bible_api import BibleAPIClient
             bible = BibleAPIClient(self.db)
             verse = bible.fetch_daily_verse()
@@ -225,6 +237,17 @@ class ContentGenerator:
                 quote_text=quote.quote_text,
                 author=quote.author,
                 trending_topic=trending_topic,
+            )
+
+        elif content_type == ContentType.daily_devotional:
+            if not verse:
+                logger.warning("No verse available for daily_devotional")
+                return None
+            book_name = verse.book if verse.book else verse.reference.split()[0]
+            return self.templates.render_daily_devotional(
+                verse_text=verse.text,
+                verse_reference=verse.reference,
+                book_name=book_name,
             )
 
         elif content_type in {
@@ -310,13 +333,6 @@ class ContentGenerator:
         if isinstance(data, list):
             data = data[0] if data else {}
 
-        # Map emotional tone
-        tone_str = data.get("emotional_tone", "hopeful")
-        try:
-            tone = EmotionalTone(tone_str)
-        except ValueError:
-            tone = EmotionalTone.hopeful
-
         # Calculate cost
         cost = 0.0
         if usage:
@@ -325,36 +341,100 @@ class ContentGenerator:
                 + usage.get("output_tokens", 0) * COST_PER_OUTPUT_TOKEN
             )
 
-        content = GeneratedContent(
-            verse_id=verse.id if verse else None,
-            quote_id=quote.id if quote else None,
-            content_type=content_type,
-            series_type=self._get_series_type(content_type),
-            emotional_tone=tone,
-            weekly_theme=theme,
-            hook=data.get("hook", ""),
-            caption_short=data.get("caption_short", ""),
-            caption_medium=data.get("caption_medium", ""),
-            caption_long=data.get("caption_long", ""),
-            story_text=data.get("story_text", ""),
-            reel_script_15=data.get("reel_script_15", ""),
-            reel_script_30=data.get("reel_script_30", ""),
-            pinterest_description=data.get("pinterest_description", ""),
-            facebook_variation=data.get("facebook_variation", ""),
-            alt_text=data.get("alt_text", ""),
-            content_series_fit=data.get("content_series_fit", ""),
-            hashtags_large=data.get("hashtags_large", []),
-            hashtags_medium=data.get("hashtags_medium", []),
-            hashtags_niche=data.get("hashtags_niche", []),
-            image_prompt=data.get("image_prompt", ""),
-            scheduled_at=scheduled_at,
-            status=ContentStatus.pending,
-            model_used=usage.get("model", MODEL) if usage else MODEL,
-            prompt_template_version=self.templates.version,
-            input_tokens=usage.get("input_tokens") if usage else None,
-            output_tokens=usage.get("output_tokens") if usage else None,
-            generation_cost_usd=round(cost, 6),
-        )
+        # Build column values based on content type
+        if content_type == ContentType.daily_devotional:
+            # Validate daily_devotional keys
+            missing = DAILY_DEVOTIONAL_KEYS - set(data.keys())
+            if missing:
+                logger.warning(f"Daily devotional response missing keys: {missing}")
+
+            # Validate music_mood value
+            music_mood = data.get("music_mood", "peaceful")
+            if music_mood not in VALID_MUSIC_MOODS:
+                logger.warning(
+                    f"Invalid music_mood '{music_mood}', defaulting to 'peaceful'"
+                )
+                music_mood = "peaceful"
+
+            # Map music_mood to EmotionalTone (closest match)
+            mood_to_tone = {
+                "peaceful": EmotionalTone.hopeful,
+                "reflective": EmotionalTone.reflective,
+                "hopeful": EmotionalTone.hopeful,
+                "reverent": EmotionalTone.reflective,
+            }
+            tone = mood_to_tone.get(music_mood, EmotionalTone.hopeful)
+
+            content = GeneratedContent(
+                verse_id=verse.id if verse else None,
+                quote_id=quote.id if quote else None,
+                content_type=content_type,
+                series_type=None,
+                emotional_tone=tone,
+                weekly_theme=music_mood,
+                # Map daily_devotional fields to existing columns
+                hook=data.get("verse_reference", ""),
+                caption_short=data.get("caption", ""),
+                caption_medium=data.get("caption", ""),
+                caption_long=data.get("caption", ""),
+                story_text=data.get("verse_text", ""),
+                reel_script_15=data.get("narration_script", ""),
+                reel_script_30=data.get("narration_script", ""),
+                image_prompt=data.get("unsplash_query", ""),
+                alt_text=data.get("verse_reference", ""),
+                # Unused legacy columns left empty
+                pinterest_description="",
+                facebook_variation="",
+                content_series_fit="",
+                hashtags_large=[],
+                hashtags_medium=[],
+                hashtags_niche=[],
+                scheduled_at=scheduled_at,
+                status=ContentStatus.pending,
+                model_used=usage.get("model", MODEL) if usage else MODEL,
+                prompt_template_version=self.templates.version,
+                input_tokens=usage.get("input_tokens") if usage else None,
+                output_tokens=usage.get("output_tokens") if usage else None,
+                generation_cost_usd=round(cost, 6),
+            )
+        else:
+            # Legacy content types — original mapping
+            tone_str = data.get("emotional_tone", "hopeful")
+            try:
+                tone = EmotionalTone(tone_str)
+            except ValueError:
+                tone = EmotionalTone.hopeful
+
+            content = GeneratedContent(
+                verse_id=verse.id if verse else None,
+                quote_id=quote.id if quote else None,
+                content_type=content_type,
+                series_type=self._get_series_type(content_type),
+                emotional_tone=tone,
+                weekly_theme=theme,
+                hook=data.get("hook", ""),
+                caption_short=data.get("caption_short", ""),
+                caption_medium=data.get("caption_medium", ""),
+                caption_long=data.get("caption_long", ""),
+                story_text=data.get("story_text", ""),
+                reel_script_15=data.get("reel_script_15", ""),
+                reel_script_30=data.get("reel_script_30", ""),
+                pinterest_description=data.get("pinterest_description", ""),
+                facebook_variation=data.get("facebook_variation", ""),
+                alt_text=data.get("alt_text", ""),
+                content_series_fit=data.get("content_series_fit", ""),
+                hashtags_large=data.get("hashtags_large", []),
+                hashtags_medium=data.get("hashtags_medium", []),
+                hashtags_niche=data.get("hashtags_niche", []),
+                image_prompt=data.get("image_prompt", ""),
+                scheduled_at=scheduled_at,
+                status=ContentStatus.pending,
+                model_used=usage.get("model", MODEL) if usage else MODEL,
+                prompt_template_version=self.templates.version,
+                input_tokens=usage.get("input_tokens") if usage else None,
+                output_tokens=usage.get("output_tokens") if usage else None,
+                generation_cost_usd=round(cost, 6),
+            )
 
         self.db.add(content)
         self.db.flush()
