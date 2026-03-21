@@ -74,9 +74,10 @@ def render_devotional_reel(
         # Calculate frame count
         total_frames = int(duration_seconds * FPS)
 
-        # Call Remotion render
+        # Call Remotion render (v4 requires entry point as first positional arg)
         cmd = [
             "npx", "remotion", "render",
+            "src/Root.tsx",
             "DevotionalReel",
             output_path,
             "--props", str(props_file),

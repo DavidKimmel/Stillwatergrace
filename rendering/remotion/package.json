@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "render": "npx remotion render DevotionalReel out/reel.mp4",
-    "preview": "npx remotion preview"
+    "render": "npx remotion render src/Root.tsx DevotionalReel out/reel.mp4",
+    "preview": "npx remotion preview src/Root.tsx"
   },
   "dependencies": {
     "@remotion/cli": "4.0.262",

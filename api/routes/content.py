@@ -65,6 +65,10 @@ def generate_content_on_demand(
     """Generate content for the next N days (1-7). Dispatches generation for each empty slot."""
     days = min(max(body.get("days", 1), 1), 7)
 
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     from core.content.calendar_logic import ContentCalendar, WEEKLY_SCHEDULE, POSTING_TIMES
     from core.content.generator import ContentGenerator
     from core.images.image_processor import ImagePipeline
@@ -76,6 +80,7 @@ def generate_content_on_demand(
     start = date.today() + timedelta(days=1)  # Start from tomorrow
     slots_created = 0
     slots_skipped = 0
+    image_errors: list[str] = []
 
     for day_offset in range(days):
         target_date = start + timedelta(days=day_offset)
@@ -116,11 +121,17 @@ def generate_content_on_demand(
                     slots_created += 1
                     try:
                         img_pipeline.generate_images_for_content(content)
-                    except Exception:
-                        pass  # Images can be generated later
+                        db.commit()
+                    except Exception as img_err:
+                        logger.error(
+                            f"Image/reel pipeline failed for content #{content.id}: {img_err}",
+                            exc_info=True,
+                        )
+                        image_errors.append(f"#{content.id}: {img_err}")
                 else:
                     slots_skipped += 1  # Dedup: slot already has content
-            except Exception:
+            except Exception as gen_err:
+                logger.error(f"Content generation failed for slot {slot}: {gen_err}", exc_info=True)
                 slots_skipped += 1
 
     db.commit()
@@ -130,6 +141,7 @@ def generate_content_on_demand(
         "days": days,
         "slots_created": slots_created,
         "slots_skipped": slots_skipped,
+        "image_errors": image_errors,
     }
 
 
