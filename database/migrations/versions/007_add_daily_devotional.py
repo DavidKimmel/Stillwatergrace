@@ -14,6 +14,7 @@ depends_on = None
 
 def upgrade():
     op.execute("ALTER TYPE contenttype ADD VALUE IF NOT EXISTS 'daily_devotional'")
+    op.execute("ALTER TYPE imageformat ADD VALUE IF NOT EXISTS 'reel_9x16'")
 
 
 def downgrade():

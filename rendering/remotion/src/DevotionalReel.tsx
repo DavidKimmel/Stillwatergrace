@@ -3,6 +3,7 @@ import {
   Audio,
   Img,
   interpolate,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -227,7 +228,7 @@ export const DevotionalReel: React.FC<ReelProps> = ({
         }}
       >
         <Img
-          src={imageSrc}
+          src={staticFile(imageSrc)}
           style={{
             width: "100%",
             height: "100%",
@@ -264,7 +265,7 @@ export const DevotionalReel: React.FC<ReelProps> = ({
       <Branding />
 
       {/* Audio */}
-      <Audio src={audioSrc} />
+      <Audio src={staticFile(audioSrc)} />
     </AbsoluteFill>
   );
 };
