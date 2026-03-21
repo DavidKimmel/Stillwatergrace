@@ -7,91 +7,64 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import type { ReelProps, WordTimestamp } from "./types";
+import type { ReelProps } from "./types";
 
-/** Group words into phrases of 3-5 words for display */
-function groupIntoPhrases(words: WordTimestamp[]): WordTimestamp[][] {
-  const phrases: WordTimestamp[][] = [];
-  let current: WordTimestamp[] = [];
-
-  for (const word of words) {
-    current.push(word);
-    const endsWithPunctuation = /[.!?,;:]$/.test(word.word);
-
-    if (current.length >= 4 || (current.length >= 3 && endsWithPunctuation)) {
-      phrases.push([...current]);
-      current = [];
-    }
-  }
-
-  if (current.length > 0) {
-    phrases.push(current);
-  }
-
-  return phrases;
-}
-
-function PhraseCaption({
-  phrases,
+/** Static full verse text display with fade in/out */
+function VerseTextDisplay({
+  verseText,
+  durationInSeconds,
 }: {
-  phrases: WordTimestamp[][];
+  verseText: string;
+  durationInSeconds: number;
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
+  // Fade in over the first 1.5 seconds
+  const fadeIn = interpolate(
+    currentTime,
+    [0.5, 2.0],
+    [0, 1],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
+  // Fade out during the last 1.5 seconds
+  const fadeOut = interpolate(
+    currentTime,
+    [durationInSeconds - 1.5, durationInSeconds],
+    [1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
+  );
+
   return (
     <div
       style={{
         position: "absolute",
-        bottom: 340,
-        left: 80,
-        right: 80,
+        top: "50%",
+        left: 60,
+        right: 60,
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
-        gap: 12,
+        justifyContent: "center",
+        opacity: fadeIn * fadeOut,
       }}
     >
-      {phrases.map((phrase, i) => {
-        const phraseStart = phrase[0].start;
-        const phraseEnd = phrase[phrase.length - 1].end;
-        const isActive = currentTime >= phraseStart && currentTime <= phraseEnd + 0.8;
-        const fadeIn = interpolate(
-          currentTime,
-          [phraseStart - 0.15, phraseStart],
-          [0, 1],
-          { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-        );
-        const fadeOut = interpolate(
-          currentTime,
-          [phraseEnd + 0.5, phraseEnd + 0.8],
-          [1, 0],
-          { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
-        );
-
-        if (!isActive && currentTime > phraseEnd + 0.8) return null;
-        if (currentTime < phraseStart - 0.15) return null;
-
-        return (
-          <div
-            key={i}
-            style={{
-              opacity: fadeIn * fadeOut,
-              fontFamily: "'Georgia', 'Times New Roman', serif",
-              fontSize: 52,
-              fontWeight: 400,
-              color: "#FFF8F0",
-              textAlign: "center",
-              lineHeight: 1.4,
-              textShadow: "0 2px 12px rgba(0,0,0,0.7), 0 1px 4px rgba(0,0,0,0.5)",
-              letterSpacing: 0.5,
-            }}
-          >
-            {phrase.map((w) => w.word).join(" ")}
-          </div>
-        );
-      })}
+      <div
+        style={{
+          fontFamily: "'Georgia', 'Times New Roman', serif",
+          fontSize: 48,
+          fontWeight: 400,
+          color: "#FFF8F0",
+          textAlign: "center",
+          lineHeight: 1.5,
+          textShadow:
+            "0 2px 12px rgba(0,0,0,0.7), 0 1px 4px rgba(0,0,0,0.5)",
+          letterSpacing: 0.5,
+        }}
+      >
+        {verseText}
+      </div>
     </div>
   );
 }
@@ -196,7 +169,7 @@ function Branding() {
 export const DevotionalReel: React.FC<ReelProps> = ({
   imageSrc,
   audioSrc,
-  words,
+  verseText,
   verseReference,
   durationInSeconds,
 }) => {
@@ -213,8 +186,6 @@ export const DevotionalReel: React.FC<ReelProps> = ({
   const translateY = interpolate(frame, [0, totalFrames], [0, -15], {
     extrapolateRight: "clamp",
   });
-
-  const phrases = groupIntoPhrases(words);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000" }}>
@@ -252,8 +223,11 @@ export const DevotionalReel: React.FC<ReelProps> = ({
         }}
       />
 
-      {/* Phrase-synced captions */}
-      <PhraseCaption phrases={phrases} />
+      {/* Static full verse text */}
+      <VerseTextDisplay
+        verseText={verseText}
+        durationInSeconds={durationInSeconds}
+      />
 
       {/* Verse reference */}
       <VerseReference

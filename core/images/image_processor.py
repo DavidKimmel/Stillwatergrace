@@ -350,6 +350,11 @@ class ImagePipeline:
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, f"reel_{content.id}.mp4")
 
+            # Extract the raw verse text for static on-screen display
+            display_verse_text = (
+                content.verse.text if content.verse and content.verse.text else narration_text
+            )
+
             reel_path = render_devotional_reel(
                 image_path=raw_path,
                 audio_path=mixed_audio_path,
@@ -357,6 +362,7 @@ class ImagePipeline:
                 verse_reference=verse_ref,
                 duration_seconds=duration,
                 output_path=output_path,
+                verse_text=display_verse_text,
             )
 
             if reel_path:

@@ -9,5 +9,6 @@ export interface ReelProps {
   audioSrc: string;
   words: WordTimestamp[];
   verseReference: string;
+  verseText: string;
   durationInSeconds: number;
 }

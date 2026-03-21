@@ -27,6 +27,7 @@ class TestBuildRenderProps:
         assert props["audioSrc"] == "mixed.mp3"
         assert props["words"] == words
         assert props["verseReference"] == "Psalm 46:10 NIV"
+        assert props["verseText"] == ""
         assert props["durationInSeconds"] == 15.0
 
     def test_duration_rounds_up(self):

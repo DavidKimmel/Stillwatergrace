@@ -304,6 +304,7 @@ def test_render():
                     verse_reference=verse.reference,
                     duration_seconds=dur,
                     output_path=out,
+                    verse_text=verse.text,
                 )
         except Exception as e:
             print(f"   Reel pipeline error: {e}")

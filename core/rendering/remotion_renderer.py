@@ -21,6 +21,7 @@ def build_render_props(
     words: list[dict[str, Any]],
     verse_reference: str,
     duration_seconds: float,
+    verse_text: str = "",
 ) -> dict[str, Any]:
     """Build the props dict that Remotion will receive."""
     return {
@@ -28,6 +29,7 @@ def build_render_props(
         "audioSrc": Path(audio_path).name,
         "words": words,
         "verseReference": verse_reference,
+        "verseText": verse_text,
         "durationInSeconds": duration_seconds,
     }
 
@@ -39,6 +41,7 @@ def render_devotional_reel(
     verse_reference: str,
     duration_seconds: float,
     output_path: str,
+    verse_text: str = "",
 ) -> str | None:
     """Render a devotional reel using Remotion.
 
@@ -49,6 +52,7 @@ def render_devotional_reel(
         verse_reference: e.g., "Psalm 46:10 NIV"
         duration_seconds: Total reel duration.
         output_path: Where to save the rendered MP4.
+        verse_text: The full verse text to display on screen.
 
     Returns:
         The output path on success, None on failure.
@@ -67,6 +71,7 @@ def render_devotional_reel(
             words=words,
             verse_reference=verse_reference,
             duration_seconds=duration_seconds,
+            verse_text=verse_text,
         )
         props_file = REMOTION_PROJECT_DIR / "render-props.json"
         props_file.write_text(json.dumps(props, indent=2))

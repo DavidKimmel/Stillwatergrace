@@ -400,6 +400,7 @@ def create_custom_content(
                     words=word_timestamps, verse_reference="",
                     duration_seconds=duration,
                     output_path=_os.path.join(output_dir, f"reel_{content.id}.mp4"),
+                    verse_text=text,
                 )
                 if reel_path:
                     r2_key = f"content/{content.id}/reel_9x16.mp4"
@@ -961,10 +962,14 @@ def swap_reel_image(
     import os as _os
     output_dir = _os.path.join("images", "processed")
     _os.makedirs(output_dir, exist_ok=True)
+    display_verse_text = (
+        content.verse.text if content.verse and content.verse.text else narration_text
+    )
     reel_path = render_devotional_reel(
         image_path=raw_path, audio_path=mixed_audio or narration_path,
         words=word_timestamps, verse_reference=verse_ref,
         duration_seconds=duration, output_path=_os.path.join(output_dir, f"reel_{content.id}.mp4"),
+        verse_text=display_verse_text,
     )
 
     if not reel_path:
@@ -1120,11 +1125,15 @@ def regenerate_reel(
 
     output_dir = os.path.join("images", "processed")
     os.makedirs(output_dir, exist_ok=True)
+    display_verse = (
+        content.verse.text if content.verse and content.verse.text else verse_text
+    )
     reel_path = render_devotional_reel(
         image_path=bg_path, audio_path=mixed_audio or narration_path,
         words=word_timestamps, verse_reference=verse_ref,
         duration_seconds=duration,
         output_path=os.path.join(output_dir, f"reel_{content.id}.mp4"),
+        verse_text=display_verse,
     )
 
     if not reel_path:

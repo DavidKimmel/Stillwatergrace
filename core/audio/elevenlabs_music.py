@@ -497,9 +497,9 @@ def select_ambient_sound(content_type: str, content_id: int) -> Optional[Path]:
 
 NARRATION_DIR = AUDIO_DIR / "narration"
 
-# Single brand voice — Ian Cartwell (Suspense and Mystery)
-NARRATION_VOICE_ID = "e5WNhrdI30aXpS2RSGm1"
-NARRATION_VOICE_NAME = "Ian Cartwell"
+# Single brand voice — Suzanne (Casual, Female)
+NARRATION_VOICE_ID = "3AvFKjwBVQoGCFjmz5ib"
+NARRATION_VOICE_NAME = "Suzanne"
 
 
 def generate_narration(
@@ -510,7 +510,7 @@ def generate_narration(
 ) -> Optional[Path]:
     """Generate TTS narration of a Bible verse using ElevenLabs.
 
-    Uses the single brand voice (Ian Cartwell) for all content.
+    Uses the single brand voice (Suzanne) for all content.
 
     Args:
         verse_text: The verse text to narrate.
@@ -699,7 +699,7 @@ def generate_narration_with_timestamps(
 ) -> tuple[str | None, list[dict[str, str | float]]]:
     """Generate TTS audio with word-level timestamps using ElevenLabs.
 
-    Uses the single brand voice (Ian Cartwell) and the convert_with_timestamps
+    Uses the single brand voice (Suzanne) and the convert_with_timestamps
     endpoint which returns character-level alignment data. Converts character
     timestamps to word boundaries.
 
