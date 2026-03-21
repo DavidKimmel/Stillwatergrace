@@ -56,21 +56,6 @@ app.conf.update(
             "schedule": crontab(hour=6, minute=30),
             "args": ("morning",),
         },
-        "mid-morning-post": {
-            "task": "workers.posting_tasks.post_scheduled_content",
-            "schedule": crontab(hour=7, minute=30),
-            "args": ("mid_morning",),
-        },
-        "noon-post": {
-            "task": "workers.posting_tasks.post_scheduled_content",
-            "schedule": crontab(hour=12, minute=0),
-            "args": ("noon",),
-        },
-        # ── Catch-up for any missed posts ──
-        "catch-missed-posts": {
-            "task": "workers.posting_tasks.post_missed_content",
-            "schedule": crontab(minute="*/30"),  # Every 30 minutes
-        },
         # ── Analytics Collection ──
         "analytics-1hr": {
             "task": "workers.daily_tasks.collect_analytics",
