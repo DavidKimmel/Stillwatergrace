@@ -25,58 +25,22 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 # Day of week (0=Monday) → content type mapping
-# Smart content mix rules:
-# - Max 3x daily_verse/week (down from 5+)
-# - Never same content type in adjacent slots (Mon noon ≠ Tue morning)
-# - Alternate emotional tones through the week
-# - 3 posting windows: morning (6:30), mid-morning (7:30), noon (12:00)
-# - Top performers get prime slots: carousel (108 avg reach), encouragement (74)
-# - Brand pillars anchored: marriage_monday, faith_friday
+# Simplified schedule: 1 daily_devotional post per day, every day
 WEEKLY_SCHEDULE = {
-    0: {  # Monday
-        "morning": {"type": ContentType.marriage_monday, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.reflective},
-    },
-    1: {  # Tuesday
-        "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
-    },
-    2: {  # Wednesday
-        "morning": {"type": ContentType.encouragement, "tone": EmotionalTone.challenging},
-        "mid_morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.christian_quote, "tone": EmotionalTone.reflective},
-    },
-    3: {  # Thursday
-        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.reflective},
-    },
-    4: {  # Friday
-        "morning": {"type": ContentType.faith_friday, "tone": EmotionalTone.reflective},
-        "noon": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
-    },
-    5: {  # Saturday — lighter posting day, cozy weekend devotional
-        "morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective, "preset": "coffee_verse"},
-    },
-    6: {  # Sunday
-        "mid_morning": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
-        "noon": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
-    },
+    0: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},   # Monday
+    1: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},  # Tuesday
+    2: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.challenging}},  # Wednesday
+    3: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},   # Thursday
+    4: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},  # Friday
+    5: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},   # Saturday
+    6: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},  # Sunday
 }
 
 # Posting times (EST)
 POSTING_TIMES = {
     "morning": time(6, 30),
-    "mid_morning": time(7, 30),
-    "noon": time(12, 0),
 }
 
-# Posts per day ramp — increase over time
-# Week 1-2: 1/day, Week 3-4: 2/day, Week 5+: 3/day
-POSTS_PER_DAY_BY_WEEK = {
-    1: 1, 2: 1,
-    3: 2, 4: 2,
-    5: 3, 6: 3,
-}
 
 
 class ContentCalendar:
