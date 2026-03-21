@@ -20,7 +20,6 @@ Usage:
     python manage.py scrape-quotes        Scrape Christian quotes (seed + APIs)
     python manage.py list-quotes          Browse stored quotes (--author=lewis)
     python manage.py generate-quote-content  Generate Instagram caption from a random quote
-    python manage.py test-phrase-reel     Generate a phrase-pop reel (--content-id=N or --text="...")
     python manage.py regenerate-image    Regenerate images with AI (--content-id=N [--prompt="..."] [--preset=feed])
 """
 
@@ -270,24 +269,50 @@ def test_render():
             except Exception as e:
                 print(f"   {img_format.value}: FAILED — {e}")
 
-        # 4. Generate reel
-        print(f"\n4. Generating reel (motion: {settings.reel_motion_style})...")
-        from core.images.reel_generator import generate_reel
-
-        reel_path = generate_reel(
-            background_path=raw_path,
-            verse_text=verse.text,
-            verse_ref=verse.reference,
-            content_id=test_id,
-            translation=verse.translation or "WEB",
-            content_type="daily_verse",
+        # 4. Generate reel via Remotion pipeline
+        print("\n4. Generating reel via Remotion...")
+        from core.audio.elevenlabs_music import (
+            generate_narration_with_timestamps,
+            premix_audio,
         )
+        from core.rendering.remotion_renderer import render_devotional_reel
+
+        reel_path = None
+        try:
+            narr_text = f"{verse.text} — {verse.reference}"
+            narr_path, word_ts = generate_narration_with_timestamps(
+                text=narr_text,
+                content_id=test_id,
+            )
+            if narr_path and word_ts:
+                last_end = max(w["end"] for w in word_ts)
+                dur = min(max(last_end + 3.0, 12.0), 30.0)
+
+                mixed = premix_audio(
+                    narration_path=narr_path,
+                    music_mood="daily_devotional",
+                    duration_seconds=dur,
+                    content_id=test_id,
+                )
+                audio = mixed or narr_path
+
+                out = str(IMAGES_PROCESSED_DIR / f"reel_{test_id}.mp4")
+                reel_path = render_devotional_reel(
+                    image_path=raw_path,
+                    audio_path=audio,
+                    words=word_ts,
+                    verse_reference=verse.reference,
+                    duration_seconds=dur,
+                    output_path=out,
+                )
+        except Exception as e:
+            print(f"   Reel pipeline error: {e}")
 
         if reel_path:
             reel_size_mb = Path(reel_path).stat().st_size / (1024 * 1024)
             print(f"   Reel: {reel_path} ({reel_size_mb:.1f} MB)")
         else:
-            print("   Reel: FAILED")
+            print("   Reel: FAILED (narration or Remotion unavailable)")
 
         # Summary
         print("\n== Output Files ==\n")
@@ -709,131 +734,6 @@ def generate_quote_content():
             print(f"Claude API error: {e}")
 
 
-def test_phrase_reel():
-    """Generate a phrase-pop reel from DB content or arbitrary text.
-
-    Usage:
-        python manage.py test-phrase-reel --content-id=63
-        python manage.py test-phrase-reel --text="Be still and know that I am God." --voice=0
-    """
-    from core.images.phrase_reel_generator import generate_phrase_reel
-
-    # Parse args
-    content_id_arg = None
-    text_arg = None
-    voice_arg = None
-    author_arg = None
-    for arg in sys.argv[2:]:
-        if arg.startswith("--content-id="):
-            content_id_arg = int(arg.split("=", 1)[1])
-        elif arg.startswith("--text="):
-            text_arg = arg.split("=", 1)[1]
-        elif arg.startswith("--voice="):
-            voice_arg = int(arg.split("=", 1)[1])
-        elif arg.startswith("--author="):
-            author_arg = arg.split("=", 1)[1]
-
-    if content_id_arg is None and text_arg is None:
-        print("Usage:")
-        print("  python manage.py test-phrase-reel --content-id=63")
-        print('  python manage.py test-phrase-reel --text="Be still and know." --voice=0')
-        return
-
-    background_path = None
-    text = text_arg or ""
-    content_id = content_id_arg or 0
-    content_type = "christian_quote" if author_arg else "daily_verse"
-
-    if content_id_arg is not None:
-        # Load from database
-        from database.session import get_db
-        from database.models import GeneratedContent, GeneratedImage, ImageFormat
-
-        with get_db() as db:
-            content = db.query(GeneratedContent).filter_by(id=content_id_arg).first()
-            if not content:
-                print(f"Content #{content_id_arg} not found in database")
-                return
-
-            # Get text from content
-            if content.verse_text:
-                text = content.verse_text
-                if content.verse_ref:
-                    text = f"{text} -- {content.verse_ref}"
-            elif content.caption_short:
-                text = content.caption_short
-            elif content.hook:
-                text = content.hook
-            else:
-                print(f"Content #{content_id_arg} has no text to narrate")
-                return
-
-            content_type = content.content_type.value if content.content_type else "daily_verse"
-            content_id = content.id
-
-            # Try to find an existing background image
-            image = (
-                db.query(GeneratedImage)
-                .filter_by(content_id=content_id_arg, image_format=ImageFormat.story_9x16)
-                .first()
-            )
-            if image and image.local_path:
-                from pathlib import Path as P
-                local = P(image.local_path)
-                if local.exists():
-                    background_path = str(local)
-
-    print(f"\n== Phrase Pop Reel Generator ==\n")
-    print(f"  Content ID: {content_id}")
-    print(f"  Text: {text[:80]}{'...' if len(text) > 80 else ''}")
-    if voice_arg is not None:
-        print(f"  Voice: {voice_arg}")
-    print(f"  Content type: {content_type}")
-
-    # If no background image, fetch one from Unsplash
-    if not background_path:
-        print("\n  Downloading background image from Unsplash...")
-        from core.config import settings as _settings
-        if _settings.unsplash_access_key:
-            try:
-                from core.images.unsplash_client import UnsplashClient
-                unsplash = UnsplashClient()
-                result = unsplash.search_and_download(
-                    content_type=content_type,
-                    high_res=True,
-                )
-                if result and result.get("local_path"):
-                    background_path = result["local_path"]
-                    print(f"  Background: {background_path}")
-            except Exception as e:
-                print(f"  Unsplash failed: {e}")
-
-    if not background_path:
-        print("\n  ERROR: No background image available")
-        return
-
-    if author_arg:
-        print(f"  Author: {author_arg}")
-
-    print(f"\n  Generating phrase-pop reel...")
-    reel_path = generate_phrase_reel(
-        background_path=background_path,
-        text=text,
-        content_id=content_id,
-        voice_index=voice_arg,
-        content_type=content_type,
-        author=author_arg,
-    )
-
-    if reel_path:
-        from pathlib import Path as P
-        size_mb = P(reel_path).stat().st_size / (1024 * 1024)
-        print(f"\n  Reel saved: {reel_path} ({size_mb:.1f} MB)")
-        print(f"\n  Open the file to preview the phrase-pop effect.")
-    else:
-        print("\n  Reel generation FAILED. Check logs above.")
-
-
 def regenerate_image():
     """Regenerate images for a content piece using AI (fal.ai/FLUX via imagegen).
 
@@ -1033,7 +933,6 @@ COMMANDS = {
     "scrape-quotes": scrape_quotes,
     "list-quotes": list_quotes_cmd,
     "generate-quote-content": generate_quote_content,
-    "test-phrase-reel": test_phrase_reel,
     "regenerate-image": regenerate_image,
 }
 
