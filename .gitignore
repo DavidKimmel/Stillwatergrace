@@ -42,6 +42,11 @@ docker-compose.override.yml
 dashboard/node_modules/
 dashboard/dist/
 
+# Node (remotion)
+rendering/remotion/node_modules/
+rendering/remotion/dist/
+rendering/remotion/out/
+
 # Database
 *.db
 *.sqlite3

@@ -1,0 +1,20 @@
+{
+  "name": "swg-remotion",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "render": "npx remotion render DevotionalReel out/reel.mp4",
+    "preview": "npx remotion preview"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.262",
+    "@remotion/player": "4.0.262",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "4.0.262"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "typescript": "^5.7.3"
+  }
+}
