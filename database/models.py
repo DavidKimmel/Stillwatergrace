@@ -53,6 +53,7 @@ class ContentType(str, enum.Enum):
     carousel = "carousel"
     reel = "reel"
     christian_quote = "christian_quote"
+    daily_devotional = "daily_devotional"
 
 
 class Platform(str, enum.Enum):
@@ -195,6 +196,7 @@ class GeneratedContent(Base):
     # Workflow
     status = Column(SAEnum(ContentStatus), default=ContentStatus.pending, index=True)
     scheduled_at = Column(DateTime, index=True)
+    is_selected = Column(Boolean, default=False, server_default='false')
     approved_at = Column(DateTime)
     rejected_reason = Column(Text)
 
