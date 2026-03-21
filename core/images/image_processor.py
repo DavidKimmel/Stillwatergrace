@@ -173,79 +173,9 @@ class ImagePipeline:
         # for img_format, target_size in TARGET_SIZES.items():
         #     ... (static PIL overlay generation removed to save processing time and storage)
 
-        # Generate phrase-pop reel for christian_quote content
-        if raw_path and content.content_type == ContentType.christian_quote and content.quote:
-            try:
-                from core.images.phrase_reel_generator import generate_phrase_reel
-                reel_path = generate_phrase_reel(
-                    background_path=raw_path,
-                    text=content.quote.quote_text,
-                    content_id=content.id,
-                    content_type="christian_quote",
-                    author=content.quote.author,
-                )
-                if reel_path:
-                    final_url = self._upload_to_storage(
-                        reel_path, content.id, ImageFormat.reel_9x16,
-                    )
-                    reel_record = GeneratedImage(
-                        content_id=content.id,
-                        provider=provider,
-                        format=ImageFormat.reel_9x16,
-                        raw_url=raw_path,
-                        final_url=final_url,
-                        r2_key=f"content/{content.id}/reel_9x16.mp4",
-                        width=1080,
-                        height=1920,
-                    )
-                    self.db.add(reel_record)
-                    images.append(reel_record)
-                    logger.info(f"Phrase-pop reel generated for content #{content.id}")
-            except Exception as e:
-                logger.error(f"Phrase reel generation failed for content #{content.id}: {e}")
-
-        # Generate animated reel if content has a verse (non-quote content)
-        elif raw_path and content.verse and content.verse.text:
-            reel_path = None
-
-            # Try ReelCreate bridge first (Remotion-based, higher quality)
-            try:
-                from core.content.reelcreate_bridge import generate_reel_for_content
-                reel_path = generate_reel_for_content(
-                    background_path=raw_path,
-                    verse_text=content.verse.text,
-                    verse_ref=content.verse.reference,
-                    content_id=content.id,
-                    content_type=content.content_type.value,
-                    emotional_tone=(
-                        content.emotional_tone.value
-                        if content.emotional_tone else None
-                    ),
-                    reel_script=content.reel_script_15 or content.reel_script_30,
-                    translation=content.verse.translation or "NIV",
-                )
-                if reel_path:
-                    logger.info(f"ReelCreate reel generated for content #{content.id}")
-            except Exception as e:
-                logger.warning(f"ReelCreate bridge failed for content #{content.id}: {e}")
-
-            # Fallback to legacy reel generator
-            if not reel_path:
-                try:
-                    from core.images.reel_generator import generate_reel
-                    reel_path = generate_reel(
-                        background_path=raw_path,
-                        verse_text=content.verse.text,
-                        verse_ref=content.verse.reference,
-                        content_id=content.id,
-                        translation=content.verse.translation or "ASV",
-                        content_type=content.content_type.value,
-                    )
-                    if reel_path:
-                        logger.info(f"Legacy reel generated for content #{content.id}")
-                except Exception as e:
-                    logger.error(f"Legacy reel generation also failed for content #{content.id}: {e}")
-
+        # Generate reel via Remotion pipeline
+        if raw_path and self._has_narration_text(content):
+            reel_path = self._render_remotion_reel(raw_path, content)
             if reel_path:
                 final_url = self._upload_to_storage(
                     reel_path, content.id, ImageFormat.reel_9x16,
@@ -262,7 +192,7 @@ class ImagePipeline:
                 )
                 self.db.add(reel_record)
                 images.append(reel_record)
-                logger.info(f"Reel stored for content #{content.id}")
+                logger.info(f"Remotion reel stored for content #{content.id}")
 
         # Generate carousel slides if content type is carousel
         if content.content_type and content.content_type.value == "carousel":
@@ -317,6 +247,125 @@ class ImagePipeline:
                     logger.info(f"Cleaned up narration: {path.name}")
                 except Exception as e:
                     logger.warning(f"Could not delete {path}: {e}")
+
+    @staticmethod
+    def _has_narration_text(content: GeneratedContent) -> bool:
+        """Check whether content has text suitable for reel narration."""
+        if content.verse and content.verse.text:
+            return True
+        if content.reel_script_15 or content.reel_script_30:
+            return True
+        if content.content_type == ContentType.christian_quote and content.quote:
+            return True
+        return False
+
+    @staticmethod
+    def _get_narration_text(content: GeneratedContent) -> tuple[str, str]:
+        """Extract narration text and verse reference from content.
+
+        Returns:
+            Tuple of (narration_text, verse_reference).
+        """
+        if content.content_type == ContentType.christian_quote and content.quote:
+            text = content.quote.quote_text
+            ref = content.quote.author or "Unknown"
+            return text, ref
+
+        # Prefer reel script (written by Claude for narration), fall back to verse
+        narration_text = (
+            content.reel_script_15
+            or content.reel_script_30
+            or (content.verse.text if content.verse else "")
+        )
+        verse_ref = content.verse.reference if content.verse else ""
+        translation = (content.verse.translation if content.verse else "NIV") or "NIV"
+        if verse_ref and translation:
+            verse_ref = f"{verse_ref} {translation}"
+        return narration_text, verse_ref
+
+    def _render_remotion_reel(
+        self,
+        raw_path: str,
+        content: GeneratedContent,
+    ) -> Optional[str]:
+        """Render a reel using Remotion with narration and pre-mixed audio.
+
+        Pipeline:
+        1. Generate narration with word-level timestamps (ElevenLabs)
+        2. Pre-mix narration + mood-matched background music
+        3. Render via Remotion (Ken Burns image + animated captions)
+
+        Returns:
+            Path to the rendered MP4 file, or None on failure.
+        """
+        from core.audio.elevenlabs_music import (
+            generate_narration_with_timestamps,
+            premix_audio,
+        )
+        from core.rendering.remotion_renderer import render_devotional_reel
+
+        narration_text, verse_ref = self._get_narration_text(content)
+        if not narration_text:
+            logger.warning(f"No narration text for content #{content.id}")
+            return None
+
+        content_type_val = (
+            content.content_type.value if content.content_type else "daily_devotional"
+        )
+
+        try:
+            # Step 1: Generate narration with timestamps
+            narration_path, word_timestamps = generate_narration_with_timestamps(
+                text=narration_text,
+                content_id=content.id,
+            )
+            if not narration_path:
+                logger.warning(f"Narration generation failed for content #{content.id}")
+                return None
+
+            # Step 2: Calculate duration from narration timestamps
+            duration = 15.0  # default
+            if word_timestamps:
+                last_word_end = max(w["end"] for w in word_timestamps)
+                duration = last_word_end + 3.0  # 3s buffer after last word
+                duration = max(duration, 12.0)  # minimum 12s
+                duration = min(duration, 30.0)  # maximum 30s
+
+            # Step 3: Pre-mix narration + background music
+            mixed_audio_path = premix_audio(
+                narration_path=narration_path,
+                music_mood=content_type_val,
+                duration_seconds=duration,
+                content_id=content.id,
+            )
+            if not mixed_audio_path:
+                logger.warning(
+                    f"Audio pre-mix failed for content #{content.id}, "
+                    f"falling back to narration-only"
+                )
+                mixed_audio_path = narration_path
+
+            # Step 4: Render with Remotion
+            output_dir = str(IMAGES_PROCESSED_DIR)
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, f"reel_{content.id}.mp4")
+
+            reel_path = render_devotional_reel(
+                image_path=raw_path,
+                audio_path=mixed_audio_path,
+                words=word_timestamps,
+                verse_reference=verse_ref,
+                duration_seconds=duration,
+                output_path=output_path,
+            )
+
+            if reel_path:
+                logger.info(f"Remotion reel rendered for content #{content.id}")
+            return reel_path
+
+        except Exception as e:
+            logger.error(f"Remotion reel pipeline failed for content #{content.id}: {e}")
+            return None
 
     def _process_image(
         self,

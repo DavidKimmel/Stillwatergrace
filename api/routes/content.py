@@ -361,39 +361,50 @@ def create_custom_content(
         except Exception as e:
             logger.error(f"Creator image pipeline failed: {e}")
 
-    # Generate reel from the background image
-    if raw_path and Path(raw_path).exists():
+    # Generate reel from the background image via Remotion pipeline
+    if raw_path and Path(raw_path).exists() and text:
         try:
-            from core.images.reel_generator import generate_reel
-            reel_path = generate_reel(
-                background_path=raw_path,
-                verse_text=text,
-                verse_ref="",
-                content_id=content.id,
-                content_type=content_type,
-                translation="",
-                overlay_style=overlay_style,
-                font_size_override=font_size,
-                raw_narration=True,
-                font_family=font_family,
-                text_color=text_color,
-            )
-            if reel_path:
-                r2_key = f"content/{content.id}/reel_9x16.mp4"
-                reel_url = _upload_ai_reel(reel_path, r2_key)
+            from core.audio.elevenlabs_music import generate_narration_with_timestamps, premix_audio
+            from core.rendering.remotion_renderer import render_devotional_reel
 
-                reel_record = GeneratedImage(
-                    content_id=content.id,
-                    provider=ImageProvider.unsplash,
-                    format=ImageFormat.reel_9x16,
-                    raw_url=raw_path,
-                    final_url=reel_url,
-                    r2_key=r2_key,
-                    width=1080,
-                    height=1920,
+            narration_path, word_timestamps = generate_narration_with_timestamps(
+                text=text, content_id=content.id,
+            )
+            if narration_path:
+                duration = 15.0
+                if word_timestamps:
+                    duration = min(max(max(w["end"] for w in word_timestamps) + 3.0, 12.0), 30.0)
+
+                mixed_audio = premix_audio(
+                    narration_path=narration_path, music_mood=content_type or "daily_devotional",
+                    duration_seconds=duration, content_id=content.id,
                 )
-                db.add(reel_record)
-                db.commit()
+
+                import os as _os
+                output_dir = _os.path.join("images", "processed")
+                _os.makedirs(output_dir, exist_ok=True)
+                reel_path = render_devotional_reel(
+                    image_path=raw_path, audio_path=mixed_audio or narration_path,
+                    words=word_timestamps, verse_reference="",
+                    duration_seconds=duration,
+                    output_path=_os.path.join(output_dir, f"reel_{content.id}.mp4"),
+                )
+                if reel_path:
+                    r2_key = f"content/{content.id}/reel_9x16.mp4"
+                    reel_url = _upload_ai_reel(reel_path, r2_key)
+
+                    reel_record = GeneratedImage(
+                        content_id=content.id,
+                        provider=ImageProvider.unsplash,
+                        format=ImageFormat.reel_9x16,
+                        raw_url=raw_path,
+                        final_url=reel_url,
+                        r2_key=r2_key,
+                        width=1080,
+                        height=1920,
+                    )
+                    db.add(reel_record)
+                    db.commit()
         except Exception as e:
             logger.error(f"Creator reel generation failed: {e}")
 
@@ -908,31 +919,41 @@ def swap_reel_image(
     if not _Path(raw_path).exists():
         raise HTTPException(status_code=404, detail=f"AI raw image file not found on disk: {raw_path}")
 
-    # Determine reel type and generate
-    reel_path = None
-    content_type_val = content.content_type.value if content.content_type else ""
-
-    if content.content_type == ContentType.christian_quote and content.quote:
-        from core.images.phrase_reel_generator import generate_phrase_reel
-        reel_path = generate_phrase_reel(
-            background_path=raw_path,
-            text=content.quote.quote_text,
-            content_id=content.id,
-            content_type="christian_quote",
-            author=content.quote.author,
-        )
-    elif content.verse and content.verse.text:
-        from core.images.reel_generator import generate_reel
-        reel_path = generate_reel(
-            background_path=raw_path,
-            verse_text=content.verse.text,
-            verse_ref=content.verse.reference,
-            content_id=content.id,
-            translation=content.verse.translation or "WEB",
-            content_type=content_type_val,
-        )
-    else:
+    # Render reel via Remotion pipeline
+    from core.images.image_processor import ImagePipeline
+    pipeline = ImagePipeline.__new__(ImagePipeline)
+    if not pipeline._has_narration_text(content):
         raise HTTPException(status_code=400, detail="Content has no verse or quote text for reel generation")
+
+    narration_text, verse_ref = pipeline._get_narration_text(content)
+
+    from core.audio.elevenlabs_music import generate_narration_with_timestamps, premix_audio
+    from core.rendering.remotion_renderer import render_devotional_reel
+
+    narration_path, word_timestamps = generate_narration_with_timestamps(
+        text=narration_text, content_id=content.id,
+    )
+    if not narration_path:
+        raise HTTPException(status_code=502, detail="Narration generation failed")
+
+    duration = 15.0
+    if word_timestamps:
+        duration = min(max(max(w["end"] for w in word_timestamps) + 3.0, 12.0), 30.0)
+
+    content_type_val = content.content_type.value if content.content_type else "daily_devotional"
+    mixed_audio = premix_audio(
+        narration_path=narration_path, music_mood=content_type_val,
+        duration_seconds=duration, content_id=content.id,
+    )
+
+    import os as _os
+    output_dir = _os.path.join("images", "processed")
+    _os.makedirs(output_dir, exist_ok=True)
+    reel_path = render_devotional_reel(
+        image_path=raw_path, audio_path=mixed_audio or narration_path,
+        words=word_timestamps, verse_reference=verse_ref,
+        duration_seconds=duration, output_path=_os.path.join(output_dir, f"reel_{content.id}.mp4"),
+    )
 
     if not reel_path:
         raise HTTPException(status_code=502, detail="Reel generation failed")
@@ -1065,20 +1086,33 @@ def regenerate_reel(
     if not bg_path or not os.path.exists(bg_path):
         raise HTTPException(status_code=404, detail="No background image available")
 
-    # Call the ReelCreate bridge
-    from core.content.reelcreate_bridge import generate_reel_for_content
+    # Render reel via Remotion pipeline
+    from core.audio.elevenlabs_music import generate_narration_with_timestamps, premix_audio
+    from core.rendering.remotion_renderer import render_devotional_reel
 
-    reel_path = generate_reel_for_content(
-        background_path=bg_path,
-        verse_text=verse_text,
-        verse_ref=verse_ref,
-        content_id=content.id,
-        content_type=content.content_type.value,
-        emotional_tone=content.emotional_tone.value if content.emotional_tone else None,
-        reel_script=content.reel_script_15 or content.reel_script_30,
-        translation=translation,
-        force_preset=preset,
-        force_voice=voice,
+    narration_path, word_timestamps = generate_narration_with_timestamps(
+        text=verse_text, content_id=content.id,
+    )
+    if not narration_path:
+        raise HTTPException(status_code=502, detail="Narration generation failed")
+
+    duration = 15.0
+    if word_timestamps:
+        duration = min(max(max(w["end"] for w in word_timestamps) + 3.0, 12.0), 30.0)
+
+    content_type_val = content.content_type.value if content.content_type else "daily_devotional"
+    mixed_audio = premix_audio(
+        narration_path=narration_path, music_mood=content_type_val,
+        duration_seconds=duration, content_id=content.id,
+    )
+
+    output_dir = os.path.join("images", "processed")
+    os.makedirs(output_dir, exist_ok=True)
+    reel_path = render_devotional_reel(
+        image_path=bg_path, audio_path=mixed_audio or narration_path,
+        words=word_timestamps, verse_reference=verse_ref,
+        duration_seconds=duration,
+        output_path=os.path.join(output_dir, f"reel_{content.id}.mp4"),
     )
 
     if not reel_path:
