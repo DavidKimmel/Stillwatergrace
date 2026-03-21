@@ -498,8 +498,8 @@ def select_ambient_sound(content_type: str, content_id: int) -> Optional[Path]:
 NARRATION_DIR = AUDIO_DIR / "narration"
 
 # Single brand voice — Suzanne (Casual, Female)
-NARRATION_VOICE_ID = "3AvFKjwBVQoGCFjmz5ib"
-NARRATION_VOICE_NAME = "Suzanne"
+NARRATION_VOICE_ID = "B5jEZPqk2OJ2vkPw3wBM"
+NARRATION_VOICE_NAME = "Cillian"
 
 
 def generate_narration(

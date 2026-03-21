@@ -21,15 +21,7 @@ function VerseTextDisplay({
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
 
-  // Fade in over the first 1.5 seconds
-  const fadeIn = interpolate(
-    currentTime,
-    [0.5, 2.0],
-    [0, 1],
-    { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
-  );
-
-  // Fade out during the last 1.5 seconds
+  // Visible from frame 0 (shows on thumbnail), fade out near the end
   const fadeOut = interpolate(
     currentTime,
     [durationInSeconds - 1.5, durationInSeconds],
@@ -41,25 +33,26 @@ function VerseTextDisplay({
     <div
       style={{
         position: "absolute",
-        top: "50%",
-        left: 60,
-        right: 60,
+        top: "35%",
+        bottom: "15%",
+        left: 50,
+        right: 50,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        opacity: fadeIn * fadeOut,
+        opacity: fadeOut,
       }}
     >
       <div
         style={{
           fontFamily: "'Georgia', 'Times New Roman', serif",
-          fontSize: 48,
+          fontSize: 62,
           fontWeight: 400,
           color: "#FFF8F0",
           textAlign: "center",
-          lineHeight: 1.5,
+          lineHeight: 1.45,
           textShadow:
-            "0 2px 12px rgba(0,0,0,0.7), 0 1px 4px rgba(0,0,0,0.5)",
+            "0 3px 16px rgba(0,0,0,0.8), 0 1px 6px rgba(0,0,0,0.6)",
           letterSpacing: 0.5,
         }}
       >
