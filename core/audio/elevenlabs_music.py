@@ -497,70 +497,27 @@ def select_ambient_sound(content_type: str, content_id: int) -> Optional[Path]:
 
 NARRATION_DIR = AUDIO_DIR / "narration"
 
-# Curated narration voices — rotated by content_id for variety.
-# Each entry: (voice_id, name, description)
-# Add community voices by getting their ID from elevenlabs.io/voice-library.
-import random as _random
-
-NARRATION_VOICES: list[dict[str, str]] = [
-    {
-        "id": "3AvFKjwBVQoGCFjmz5ib",
-        "name": "Suzanne",
-    },
-    {
-        "id": "oQV06a7Gn8pbCJh5DXcO",
-        "name": "Archer",
-    },
-    {
-        "id": "EkK5I93UQWFDigLMpZcX",
-        "name": "James",
-    },
-    {
-        "id": "uju3wxzG5OhpWcoi3SMy",
-        "name": "Michael C. Vincent",
-    },
-    {
-        "id": "jfIS2w2yJi0grJZPyEsk",
-        "name": "Oliver Silk",
-    },
-    {
-        "id": "B5jEZPqk2OJ2vkPw3wBM",
-        "name": "Cillian",
-    },
-    {
-        "id": "66y97vsfcmXgLh93gcal",
-        "name": "Connery",
-    },
-    {
-        "id": "kBag1HOZlaVBH7ICPE8x",
-        "name": "Sakky Ford",
-    },
-    {
-        "id": "lL4hpA5hxNF3ovpnRQT5",
-        "name": "Barry",
-    },
-]
-
-
-def _select_narration_voice(content_id: int) -> dict[str, str]:
-    """Select a narration voice, rotating by content_id for variety."""
-    idx = content_id % len(NARRATION_VOICES)
-    return NARRATION_VOICES[idx]
+# Single brand voice — Ian Cartwell (Suspense and Mystery)
+NARRATION_VOICE_ID = "e5WNhrdI30aXpS2RSGm1"
+NARRATION_VOICE_NAME = "Ian Cartwell"
 
 
 def generate_narration(
     verse_text: str,
     verse_ref: str,
     content_id: int,
+    raw_narration: bool = False,
 ) -> Optional[Path]:
     """Generate TTS narration of a Bible verse using ElevenLabs.
 
-    Rotates through curated narration voices based on content_id.
+    Uses the single brand voice (Ian Cartwell) for all content.
 
     Args:
         verse_text: The verse text to narrate.
         verse_ref: Verse reference (e.g. "Psalms 23:1") — spoken at the end.
         content_id: Content ID for cache naming and voice rotation.
+        raw_narration: If True, narrate only the raw text — no intro phrase or
+            verse reference appended. Used for Creator custom posts.
 
     Returns:
         Path to the narration MP3 file, or None if TTS is unavailable.
@@ -582,18 +539,21 @@ def generate_narration(
         logger.error("elevenlabs package not installed — run: pip install elevenlabs")
         return None
 
-    # Select voice for this content
-    voice = _select_narration_voice(content_id)
-    # Extract book name from reference (e.g. "John 3:16" → "John")
-    book = verse_ref.rsplit(" ", 1)[0] if " " in verse_ref else ""
-    # Handle "1 John 4:7" → "1 John" by checking if last part has digits
-    parts = verse_ref.split()
-    book = " ".join(parts[:-1]) if len(parts) > 1 else ""
-    narration_text = _prepare_narration_text(verse_text, verse_ref, content_id, book)
+    if raw_narration:
+        # Creator mode: narrate only the entered text, no intro or reference
+        narration_text = " ".join(verse_text.split())
+    else:
+        # Normal pipeline: add intro phrase + verse reference
+        # Extract book name from reference (e.g. "John 3:16" → "John")
+        book = verse_ref.rsplit(" ", 1)[0] if " " in verse_ref else ""
+        # Handle "1 John 4:7" → "1 John" by checking if last part has digits
+        parts = verse_ref.split()
+        book = " ".join(parts[:-1]) if len(parts) > 1 else ""
+        narration_text = _prepare_narration_text(verse_text, verse_ref, content_id, book)
 
     logger.info(
         f"Generating TTS narration for content #{content_id}: "
-        f"voice={voice['name']}, {len(narration_text)} chars"
+        f"voice={NARRATION_VOICE_NAME}, {len(narration_text)} chars"
     )
 
     try:
@@ -602,7 +562,7 @@ def generate_narration(
         client = ElevenLabs(api_key=settings.elevenlabs_api_key)
         audio = client.text_to_speech.convert(
             text=narration_text,
-            voice_id=voice["id"],
+            voice_id=NARRATION_VOICE_ID,
             model_id="eleven_v3",
             output_format="mp3_44100_128",
             voice_settings=VoiceSettings(
@@ -624,7 +584,7 @@ def generate_narration(
             return None
 
         size_kb = output_path.stat().st_size / 1024
-        logger.info(f"Narration saved: {output_path} ({size_kb:.0f} KB, voice={voice['name']})")
+        logger.info(f"Narration saved: {output_path} ({size_kb:.0f} KB, voice={NARRATION_VOICE_NAME})")
         return output_path
 
     except Exception as e:
@@ -659,7 +619,6 @@ def generate_narration_at_speed(
         from elevenlabs import ElevenLabs, VoiceSettings
 
         client = ElevenLabs(api_key=settings.elevenlabs_api_key)
-        voice = _select_narration_voice(content_id)
         parts = verse_ref.split()
         book = " ".join(parts[:-1]) if len(parts) > 1 else ""
         narration_text = _prepare_narration_text(verse_text, verse_ref, content_id, book)
@@ -669,12 +628,12 @@ def generate_narration_at_speed(
 
         logger.info(
             f"Regenerating narration for content #{content_id} at {speed:.2f}x speed "
-            f"(voice={voice['name']})"
+            f"(voice={NARRATION_VOICE_NAME})"
         )
 
         audio = client.text_to_speech.convert(
             text=narration_text,
-            voice_id=voice["id"],
+            voice_id=NARRATION_VOICE_ID,
             model_id="eleven_v3",
             output_format="mp3_44100_128",
             voice_settings=VoiceSettings(
