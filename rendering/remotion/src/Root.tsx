@@ -1,4 +1,4 @@
-import { Composition } from "remotion";
+import { Composition, registerRoot } from "remotion";
 import { DevotionalReel } from "./DevotionalReel";
 import type { ReelProps } from "./types";
 
@@ -12,7 +12,7 @@ const defaultProps: ReelProps = {
   durationInSeconds: 15,
 };
 
-export const RemotionRoot = () => {
+const RemotionRoot = () => {
   return (
     <Composition
       id="DevotionalReel"
@@ -28,3 +28,5 @@ export const RemotionRoot = () => {
     />
   );
 };
+
+registerRoot(RemotionRoot);
