@@ -693,6 +693,279 @@ CHRIST_INTROS: list[str] = [
 GOSPEL_BOOKS = {"Matthew", "Mark", "Luke", "John", "Revelation"}
 
 
+def generate_narration_with_timestamps(
+    text: str,
+    content_id: int,
+) -> tuple[str | None, list[dict[str, str | float]]]:
+    """Generate TTS audio with word-level timestamps using ElevenLabs.
+
+    Uses the single brand voice (Ian Cartwell) and the convert_with_timestamps
+    endpoint which returns character-level alignment data. Converts character
+    timestamps to word boundaries.
+
+    Args:
+        text: Text to narrate.
+        content_id: Content ID for cache naming.
+
+    Returns:
+        Tuple of (audio_path, word_timestamps) where each timestamp dict is
+        {"word": str, "start": float, "end": float}. Returns (None, []) if
+        TTS is unavailable or fails.
+    """
+    if not settings.has_elevenlabs:
+        logger.warning("ElevenLabs not configured -- skipping timestamped narration")
+        return None, []
+
+    try:
+        import base64
+
+        from elevenlabs import ElevenLabs, VoiceSettings
+    except ImportError:
+        logger.error("elevenlabs package not installed -- run: pip install elevenlabs")
+        return None, []
+
+    NARRATION_DIR.mkdir(parents=True, exist_ok=True)
+
+    output_path = NARRATION_DIR / f"narration_{content_id}.mp3"
+
+    # Use cached audio if it exists (but we still need timestamps, so
+    # only skip the API call if we also have a cached timestamp sidecar)
+    ts_sidecar = NARRATION_DIR / f"narration_{content_id}.timestamps.json"
+    if (
+        output_path.exists()
+        and output_path.stat().st_size > 1000
+        and ts_sidecar.exists()
+    ):
+        import json
+
+        logger.info(f"Using cached timestamped narration for content #{content_id}")
+        try:
+            cached_ts = json.loads(ts_sidecar.read_text(encoding="utf-8"))
+            return str(output_path), cached_ts
+        except Exception:
+            pass  # Re-generate if sidecar is corrupt
+
+    logger.info(
+        f"Generating timestamped narration for content #{content_id}: "
+        f"voice={NARRATION_VOICE_NAME}, {len(text)} chars"
+    )
+
+    try:
+        client = ElevenLabs(api_key=settings.elevenlabs_api_key)
+
+        # Use convert_with_timestamps for character-level alignment
+        response = client.text_to_speech.convert_with_timestamps(
+            text=text,
+            voice_id=NARRATION_VOICE_ID,
+            model_id="eleven_v3",
+            output_format="mp3_44100_128",
+            voice_settings=VoiceSettings(
+                stability=0.4,
+                similarity_boost=0.75,
+                style=0.3,
+                use_speaker_boost=True,
+            ),
+        )
+
+        # Response is AudioWithTimestampsResponse — access fields directly
+        audio_b64 = response.audio_base_64
+        alignment_obj = response.alignment
+
+        if not audio_b64:
+            logger.error("No audio data received from ElevenLabs")
+            return None, []
+
+        import base64 as _b64
+
+        audio_bytes = _b64.b64decode(audio_b64)
+
+        # Write audio file
+        with open(output_path, "wb") as f:
+            f.write(audio_bytes)
+
+        if output_path.stat().st_size < 1000:
+            logger.warning("Timestamped narration file is empty/corrupt, removing")
+            output_path.unlink()
+            return None, []
+
+        # Parse alignment into word timestamps
+        word_timestamps: list[dict[str, str | float]] = []
+        if alignment_obj is not None:
+            characters = list(alignment_obj.characters)
+            starts = list(alignment_obj.character_start_times_seconds)
+            ends = list(alignment_obj.character_end_times_seconds)
+            word_timestamps = _characters_to_word_dicts(characters, starts, ends)
+
+        # Cache timestamps as sidecar JSON
+        try:
+            import json
+
+            ts_sidecar.write_text(
+                json.dumps(word_timestamps, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.debug(f"Failed to cache timestamps sidecar: {e}")
+
+        size_kb = output_path.stat().st_size / 1024
+        logger.info(
+            f"Timestamped narration saved: {output_path.name} "
+            f"({size_kb:.0f} KB, {len(word_timestamps)} words, "
+            f"voice={NARRATION_VOICE_NAME})"
+        )
+        return str(output_path), word_timestamps
+
+    except Exception as e:
+        logger.error(f"Timestamped TTS narration failed: {e}")
+        if output_path.exists() and output_path.stat().st_size < 1000:
+            output_path.unlink()
+        return None, []
+
+
+def _characters_to_word_dicts(
+    characters: list[str],
+    starts: list[float],
+    ends: list[float],
+) -> list[dict[str, str | float]]:
+    """Convert character-level alignment arrays to word-level timestamp dicts.
+
+    ElevenLabs returns parallel arrays:
+      - characters: list of individual characters
+      - starts: start time per character (seconds)
+      - ends: end time per character (seconds)
+
+    Words are delimited by spaces. We take the start time of the first
+    character and end time of the last character in each word.
+    """
+    if not characters:
+        return []
+
+    words: list[dict[str, str | float]] = []
+    current_chars: list[str] = []
+    word_start: float | None = None
+    word_end: float = 0.0
+
+    for i, char in enumerate(characters):
+        if char == " ":
+            if current_chars:
+                words.append({
+                    "word": "".join(current_chars),
+                    "start": word_start if word_start is not None else 0.0,
+                    "end": word_end,
+                })
+                current_chars = []
+                word_start = None
+        else:
+            current_chars.append(char)
+            if word_start is None:
+                word_start = starts[i]
+            word_end = ends[i]
+
+    # Flush last word
+    if current_chars:
+        words.append({
+            "word": "".join(current_chars),
+            "start": word_start if word_start is not None else 0.0,
+            "end": word_end,
+        })
+
+    return words
+
+
+def premix_audio(
+    narration_path: str,
+    music_mood: str,
+    duration_seconds: float,
+    content_id: int,
+) -> str | None:
+    """Pre-mix narration + background music into a single audio file.
+
+    Music is ducked to 8% volume when narration is present, 20% for
+    music-only sections. Includes fade-in (1.5s) and fade-out (2.5s)
+    on the music track.
+
+    Args:
+        narration_path: Path to the narration MP3 file.
+        music_mood: Content type string for mood-matched music selection
+                    (e.g. "daily_verse", "encouragement").
+        duration_seconds: Target duration for the mixed output in seconds.
+        content_id: Content ID for music selection and output naming.
+
+    Returns:
+        Path to mixed audio file, or None on failure.
+    """
+    if not shutil.which("ffmpeg"):
+        logger.error("FFmpeg not found -- cannot premix audio")
+        return None
+
+    narration = Path(narration_path)
+    if not narration.exists() or narration.stat().st_size < 1000:
+        logger.error(f"Narration file missing or empty: {narration_path}")
+        return None
+
+    # Select mood-matched background music
+    music_track = select_music_for_content(music_mood, content_id)
+    if music_track is None:
+        logger.warning("No music track available -- returning narration only")
+        return narration_path
+
+    output_dir = Path(__file__).parent.parent.parent / "output" / "audio"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"mixed_{content_id}.mp3"
+
+    # Calculate fade timing
+    music_fade_out_start = max(0, duration_seconds - 2.5)
+    narr_fade_out_start = max(0, duration_seconds - 0.8)
+
+    # FFmpeg filter: narration at full volume with fade-out,
+    # music ducked to 8% with fade-in/out, mixed together
+    filter_complex = (
+        f"[0:a]afade=t=out:st={narr_fade_out_start}:d=0.8[narr];"
+        f"[1:a]volume=0.08,"
+        f"afade=t=in:st=0:d=1.5,"
+        f"afade=t=out:st={music_fade_out_start}:d=2.5[music];"
+        f"[narr][music]amix=inputs=2:duration=longest:normalize=0[a]"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(narration),
+        "-i", str(music_track),
+        "-filter_complex", filter_complex,
+        "-map", "[a]",
+        "-c:a", "libmp3lame", "-q:a", "2",
+        "-t", str(duration_seconds),
+        str(output_path),
+    ]
+
+    logger.info(
+        f"Premixing audio for content #{content_id}: "
+        f"narration={narration.name}, music={music_track.name}, "
+        f"duration={duration_seconds:.1f}s"
+    )
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            logger.error(f"Audio premix failed: {result.stderr[-300:]}")
+            return None
+
+        if not output_path.exists() or output_path.stat().st_size < 1000:
+            logger.error("Premixed audio output is missing or too small")
+            return None
+
+        size_kb = output_path.stat().st_size / 1024
+        logger.info(f"Premixed audio saved: {output_path} ({size_kb:.0f} KB)")
+        return str(output_path)
+
+    except subprocess.TimeoutExpired:
+        logger.error("Audio premix timed out")
+        return None
+    except Exception as e:
+        logger.error(f"Audio premix error: {e}")
+        return None
+
+
 def _prepare_narration_text(
     verse_text: str,
     verse_ref: str,

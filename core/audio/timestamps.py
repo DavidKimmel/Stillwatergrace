@@ -74,21 +74,18 @@ def generate_narration_with_timestamps(
         logger.error("elevenlabs package not installed -- run: pip install elevenlabs")
         return None
 
-    from core.audio.elevenlabs_music import NARRATION_VOICES, _select_narration_voice
+    from core.audio.elevenlabs_music import NARRATION_VOICE_ID, NARRATION_VOICE_NAME
 
     NARRATION_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Select voice
-    if voice_index is not None:
-        voice = NARRATION_VOICES[voice_index % len(NARRATION_VOICES)]
-    else:
-        voice = _select_narration_voice(content_id)
+    voice_id = NARRATION_VOICE_ID
+    voice_name = NARRATION_VOICE_NAME
 
     output_path = NARRATION_DIR / f"narration_phrase_{content_id}.mp3"
 
     logger.info(
         f"Generating timestamped narration for content #{content_id}: "
-        f"voice={voice['name']}, {len(text)} chars"
+        f"voice={voice_name}, {len(text)} chars"
     )
 
     try:
@@ -97,7 +94,7 @@ def generate_narration_with_timestamps(
         # Use convert_with_timestamps for character-level alignment
         response = client.text_to_speech.convert_with_timestamps(
             text=text,
-            voice_id=voice["id"],
+            voice_id=voice_id,
             model_id="eleven_v3",
             output_format="mp3_44100_128",
             voice_settings=VoiceSettings(
@@ -148,7 +145,7 @@ def generate_narration_with_timestamps(
         logger.info(
             f"Timestamped narration saved: {output_path.name} "
             f"({output_path.stat().st_size / 1024:.0f} KB, "
-            f"{len(words)} words, voice={voice['name']})"
+            f"{len(words)} words, voice={voice_name})"
         )
         return output_path, words
 
