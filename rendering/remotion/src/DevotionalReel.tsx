@@ -33,10 +33,10 @@ function VerseTextDisplay({
     <div
       style={{
         position: "absolute",
-        top: "35%",
-        bottom: "15%",
-        left: 50,
-        right: 50,
+        top: "20%",
+        bottom: "12%",
+        left: 40,
+        right: 40,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -46,14 +46,14 @@ function VerseTextDisplay({
       <div
         style={{
           fontFamily: "'Georgia', 'Times New Roman', serif",
-          fontSize: 62,
+          fontSize: 72,
           fontWeight: 400,
           color: "#FFF8F0",
           textAlign: "center",
-          lineHeight: 1.45,
+          lineHeight: 1.4,
           textShadow:
-            "0 3px 16px rgba(0,0,0,0.8), 0 1px 6px rgba(0,0,0,0.6)",
-          letterSpacing: 0.5,
+            "0 4px 20px rgba(0,0,0,0.85), 0 2px 8px rgba(0,0,0,0.7)",
+          letterSpacing: 0.3,
         }}
       >
         {verseText}
@@ -170,13 +170,13 @@ export const DevotionalReel: React.FC<ReelProps> = ({
   const { fps } = useVideoConfig();
   const totalFrames = durationInSeconds * fps;
 
-  // Ken Burns: subtle slow zoom from 1.0 to 1.08 over full duration
-  const scale = interpolate(frame, [0, totalFrames], [1.0, 1.08], {
+  // Ken Burns: noticeable zoom from 1.0 to 1.15 over full duration
+  const scale = interpolate(frame, [0, totalFrames], [1.0, 1.15], {
     extrapolateRight: "clamp",
   });
 
-  // Slight upward drift
-  const translateY = interpolate(frame, [0, totalFrames], [0, -15], {
+  // Upward drift
+  const translateY = interpolate(frame, [0, totalFrames], [0, -30], {
     extrapolateRight: "clamp",
   });
 

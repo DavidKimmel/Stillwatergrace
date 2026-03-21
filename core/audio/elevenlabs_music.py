@@ -921,7 +921,7 @@ def premix_audio(
     # music ducked to 8% with fade-in/out, mixed together
     filter_complex = (
         f"[0:a]afade=t=out:st={narr_fade_out_start}:d=0.8[narr];"
-        f"[1:a]volume=0.08,"
+        f"[1:a]volume=0.20,"
         f"afade=t=in:st=0:d=1.5,"
         f"afade=t=out:st={music_fade_out_start}:d=2.5[music];"
         f"[narr][music]amix=inputs=2:duration=longest:normalize=0[a]"

@@ -104,7 +104,7 @@ def render_devotional_reel(
             cwd=str(REMOTION_PROJECT_DIR),
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=600,
         )
 
         if result.returncode != 0:
