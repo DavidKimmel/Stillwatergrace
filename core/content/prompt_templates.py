@@ -130,6 +130,32 @@ class PromptTemplateEngine:
             book_name=book_name,
         )
 
+    def render_scripture_single(
+        self,
+        verse_text: str,
+        verse_reference: str,
+    ) -> str:
+        """Render the scripture single image post prompt."""
+        return self.render(
+            "scripture_single",
+            verse_text=verse_text,
+            verse_reference=verse_reference,
+        )
+
+    def render_carousel(
+        self,
+        theme: str,
+        verse_text: str = "",
+        verse_reference: str = "",
+    ) -> str:
+        """Render the carousel image post prompt."""
+        return self.render(
+            "carousel",
+            theme=theme,
+            verse_text=verse_text,
+            verse_reference=verse_reference,
+        )
+
     def render_christian_quote(
         self,
         quote_text: str,

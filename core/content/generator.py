@@ -56,6 +56,26 @@ DAILY_DEVOTIONAL_KEYS = {
 
 VALID_MUSIC_MOODS = {"peaceful", "reflective", "hopeful", "reverent"}
 
+# Required keys for scripture single image posts (daily_devotional pivot)
+SCRIPTURE_SINGLE_KEYS = [
+    "verse_text",
+    "verse_reference",
+    "highlight_phrases",
+    "caption",
+]
+
+# Required keys for carousel image posts
+CAROUSEL_KEYS = [
+    "cover_text",
+    "cover_highlights",
+    "content_text",
+    "content_highlights",
+    "verse_text",
+    "verse_reference",
+    "verse_highlights",
+    "caption",
+]
+
 # Content type choices for daily verse
 CONTENT_TYPE_CHOICES = ["encouragement", "challenge", "reflection", "prayer prompt", "devotional"]
 
@@ -243,11 +263,27 @@ class ContentGenerator:
             if not verse:
                 logger.warning("No verse available for daily_devotional")
                 return None
-            book_name = verse.book if verse.book else verse.reference.split()[0]
-            return self.templates.render_daily_devotional(
+            return self.templates.render_scripture_single(
                 verse_text=verse.text,
                 verse_reference=verse.reference,
-                book_name=book_name,
+            )
+
+        elif content_type == ContentType.carousel:
+            if not verse:
+                logger.warning("No verse available for carousel")
+                return None
+            # Pick a theme based on emotional context
+            tone_themes = {
+                "hopeful": "hope and trust in God",
+                "reflective": "finding peace",
+                "challenging": "perseverance",
+                "celebratory": "gratitude and praise",
+            }
+            carousel_theme = tone_themes.get(theme, "hope and trust in God")
+            return self.templates.render_carousel(
+                theme=carousel_theme,
+                verse_text=verse.text,
+                verse_reference=verse.reference,
             )
 
         elif content_type in {
@@ -343,44 +379,72 @@ class ContentGenerator:
 
         # Build column values based on content type
         if content_type == ContentType.daily_devotional:
-            # Validate daily_devotional keys
-            missing = DAILY_DEVOTIONAL_KEYS - set(data.keys())
+            # Validate scripture single keys
+            missing = set(SCRIPTURE_SINGLE_KEYS) - set(data.keys())
             if missing:
-                logger.warning(f"Daily devotional response missing keys: {missing}")
-
-            # Validate music_mood value
-            music_mood = data.get("music_mood", "peaceful")
-            if music_mood not in VALID_MUSIC_MOODS:
-                logger.warning(
-                    f"Invalid music_mood '{music_mood}', defaulting to 'peaceful'"
-                )
-                music_mood = "peaceful"
-
-            # Map music_mood to EmotionalTone (closest match)
-            mood_to_tone = {
-                "peaceful": EmotionalTone.hopeful,
-                "reflective": EmotionalTone.reflective,
-                "hopeful": EmotionalTone.hopeful,
-                "reverent": EmotionalTone.reflective,
-            }
-            tone = mood_to_tone.get(music_mood, EmotionalTone.hopeful)
+                logger.warning(f"Scripture single response missing keys: {missing}")
 
             content = GeneratedContent(
                 verse_id=verse.id if verse else None,
                 quote_id=quote.id if quote else None,
                 content_type=content_type,
                 series_type=None,
-                emotional_tone=tone,
-                weekly_theme=music_mood,
-                # Map daily_devotional fields to existing columns
+                emotional_tone=EmotionalTone.hopeful,
+                weekly_theme="",
+                # Map scripture single fields to existing columns
                 hook=data.get("verse_reference", ""),
                 caption_short=data.get("caption", ""),
                 caption_medium=data.get("caption", ""),
                 caption_long=data.get("caption", ""),
                 story_text=data.get("verse_text", ""),
-                reel_script_15=data.get("narration_script", ""),
-                reel_script_30=data.get("narration_script", ""),
-                image_prompt=data.get("unsplash_query", ""),
+                reel_script_15="",
+                reel_script_30="",
+                image_prompt=json.dumps(data.get("highlight_phrases", [])),
+                alt_text=data.get("verse_reference", ""),
+                # Unused legacy columns left empty
+                pinterest_description="",
+                facebook_variation="",
+                content_series_fit="",
+                hashtags_large=[],
+                hashtags_medium=[],
+                hashtags_niche=[],
+                scheduled_at=scheduled_at,
+                status=ContentStatus.pending,
+                model_used=usage.get("model", MODEL) if usage else MODEL,
+                prompt_template_version=self.templates.version,
+                input_tokens=usage.get("input_tokens") if usage else None,
+                output_tokens=usage.get("output_tokens") if usage else None,
+                generation_cost_usd=round(cost, 6),
+            )
+        elif content_type == ContentType.carousel:
+            # Validate carousel keys
+            missing = set(CAROUSEL_KEYS) - set(data.keys())
+            if missing:
+                logger.warning(f"Carousel response missing keys: {missing}")
+
+            # Pack all highlight data into image_prompt as JSON
+            highlights_data = json.dumps({
+                "cover": data.get("cover_highlights", []),
+                "content": data.get("content_highlights", []),
+                "verse": data.get("verse_highlights", []),
+            })
+
+            content = GeneratedContent(
+                verse_id=verse.id if verse else None,
+                quote_id=quote.id if quote else None,
+                content_type=content_type,
+                series_type=None,
+                emotional_tone=EmotionalTone.hopeful,
+                weekly_theme="",
+                # Map carousel fields to existing columns
+                hook=data.get("cover_text", ""),
+                caption_short=data.get("caption", ""),
+                caption_medium=data.get("caption", ""),
+                caption_long=data.get("caption", ""),
+                story_text=data.get("verse_text", ""),
+                reel_script_15=data.get("content_text", ""),
+                reel_script_30="",
+                image_prompt=highlights_data,
                 alt_text=data.get("verse_reference", ""),
                 # Unused legacy columns left empty
                 pinterest_description="",
