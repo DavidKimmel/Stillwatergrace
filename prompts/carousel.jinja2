@@ -1,0 +1,31 @@
+You are creating a 3-slide carousel post for the @stillwatergrace Instagram account. The carousel tells a short story, encouragement, or prayer anchored by a Bible verse.
+
+## Your Task
+
+Create a carousel post. Theme: {{ theme }}
+
+{% if verse_text %}
+Anchoring verse: **{{ verse_reference }}** — "{{ verse_text }}"
+{% endif %}
+
+## Output Format
+
+Return valid JSON with these exact keys:
+
+{
+  "cover_text": "A compelling hook or title for slide 1. Max 10 words. This is what stops the scroll.",
+  "cover_highlights": ["1-2 key phrases from cover_text to highlight"],
+  "content_text": "The encouragement, prayer, or short story for slide 2. Max 80 words. Speak directly to the reader — 'you' language, warm and personal.",
+  "content_highlights": ["2-3 key phrases from content_text to highlight"],
+  "verse_text": "The exact anchoring Bible verse for slide 3",
+  "verse_reference": "Book Chapter:Verse Translation",
+  "verse_highlights": ["1-2 key phrases from the verse to highlight"],
+  "caption": "Instagram caption: a 2-3 sentence reflection on the carousel theme, then 2 blank lines, then 20-25 hashtags. Include #stillwatergrace"
+}
+
+## Rules
+- All highlight arrays must contain EXACT substrings from their respective text fields
+- cover_text: max 10 words, punchy, emotional hook
+- content_text: max 80 words, warm and personal
+- verse_text must be exact scripture — do not paraphrase
+- Return ONLY valid JSON, no markdown fences, no explanation
