@@ -64,9 +64,11 @@ export default function PostDetailPanel({ content, onClose, onAction, onRegenera
     }
   };
 
-  // Prefer the AI (fal) reel over the original unsplash reel
+  // Find the primary preview image — reel, feed image, or carousel slides
   const reelImages = content.images?.filter((img) => img.format === 'reel_9x16') || [];
   const reelImage = reelImages.find((img) => img.provider === 'fal') || reelImages[0];
+  const feedImages = content.images?.filter((img) => img.format === 'feed_1x1') || [];
+  const primaryFeedImage = feedImages[0];
   const allImages = content.images || [];
 
   const hashtagGroups = [
@@ -161,6 +163,28 @@ export default function PostDetailPanel({ content, onClose, onAction, onRegenera
             controls
             className="w-full max-w-sm rounded-lg border"
           />
+        </div>
+      )}
+
+      {/* Feed image preview (scripture singles + carousels) */}
+      {!reelImage?.final_url && feedImages.length > 0 && (
+        <div className="mb-4">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">
+            {feedImages.length > 1 ? `Carousel Preview (${feedImages.length} slides)` : 'Image Preview'}
+          </h4>
+          <div className={feedImages.length > 1 ? 'flex gap-2 overflow-x-auto pb-2' : ''}>
+            {feedImages.map((img, i) => (
+              <img
+                key={img.id}
+                src={img.final_url}
+                alt={feedImages.length > 1 ? `Slide ${i + 1}` : 'Post preview'}
+                className={feedImages.length > 1
+                  ? 'w-48 h-48 object-cover rounded-lg border flex-shrink-0'
+                  : 'w-full max-w-sm rounded-lg border'
+                }
+              />
+            ))}
+          </div>
         </div>
       )}
 
