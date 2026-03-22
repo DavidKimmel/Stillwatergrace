@@ -209,7 +209,7 @@ class ImagePipeline:
             return []
 
         # Upload to R2 and create DB record
-        r2_key = f"content/{content.id}/feed_1x1.png"
+        r2_key = f"images/scripture_{content.id}.png"
         final_url = self._upload_png_to_storage(rendered, content.id, r2_key)
 
         record = GeneratedImage(
@@ -286,7 +286,7 @@ class ImagePipeline:
         # Upload each slide and create DB records
         images: list[GeneratedImage] = []
         for i, slide_path in enumerate(slide_paths):
-            r2_key = f"content/{content.id}/carousel_{i + 1}.png"
+            r2_key = f"images/carousel_{content.id}_{i + 1}.png"
             final_url = self._upload_png_to_storage(slide_path, content.id, r2_key)
 
             record = GeneratedImage(
