@@ -2,9 +2,11 @@
 
 Orchestrates the full image pipeline from generation to final storage.
 Includes PIL-based text overlay with multiple branded layout templates.
+Playwright HTML renderer for daily_devotional and carousel types.
 """
 
 import io
+import json
 import logging
 import math
 import os
@@ -146,32 +148,189 @@ class ImagePipeline:
     def generate_images_for_content(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Generate all image formats for a content piece.
 
-        Uses Unsplash for background photos, falls back to PIL-only branded images.
+        daily_devotional and carousel use Playwright HTML renderer.
+        Other types use Unsplash + Remotion reel pipeline.
         """
-        images = []
+        content_type = content.content_type
+
+        # --- Playwright HTML rendering for daily_devotional ---
+        if content_type == ContentType.daily_devotional:
+            return self._generate_scripture_image(content)
+
+        # --- Playwright HTML rendering for carousel ---
+        if content_type == ContentType.carousel:
+            return self._generate_carousel_images(content)
+
+        # --- Legacy pipeline for other content types ---
+        return self._generate_legacy_reel(content)
+
+    def _generate_scripture_image(self, content: GeneratedContent) -> list[GeneratedImage]:
+        """Render a single scripture image via Playwright HTML renderer."""
+        from core.rendering.html_renderer import render_scripture_image
+
+        # Extract verse text and reference
+        verse_text = ""
+        verse_reference = ""
+        if content.verse:
+            verse_text = content.verse.text or ""
+            verse_reference = content.verse.reference or ""
+            translation = content.verse.translation or "NIV"
+            if verse_reference and translation:
+                verse_reference = f"{verse_reference} {translation}"
+        if not verse_text:
+            verse_text = content.reel_script_15 or content.hook or ""
+
+        # Parse highlight phrases from image_prompt (JSON string)
+        highlights: list[str] = []
+        if content.image_prompt:
+            try:
+                highlights = json.loads(content.image_prompt)
+                if not isinstance(highlights, list):
+                    highlights = []
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(
+                    "Could not parse highlight_phrases for content #%d",
+                    content.id,
+                )
+
+        # Render to local PNG
+        output_dir = str(IMAGES_PROCESSED_DIR)
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{content.id}_feed_1x1.png")
+
+        rendered = render_scripture_image(
+            verse_text=verse_text,
+            verse_reference=verse_reference,
+            highlights=highlights,
+            output_path=output_path,
+        )
+        if not rendered:
+            logger.error("Playwright scripture render failed for content #%d", content.id)
+            return []
+
+        # Upload to R2 and create DB record
+        r2_key = f"content/{content.id}/feed_1x1.png"
+        final_url = self._upload_png_to_storage(rendered, content.id, r2_key)
+
+        record = GeneratedImage(
+            content_id=content.id,
+            provider=ImageProvider.pil_fallback,
+            format=ImageFormat.feed_1x1,
+            raw_url=rendered,
+            final_url=final_url,
+            r2_key=r2_key,
+            width=1080,
+            height=1080,
+        )
+        self.db.add(record)
+        self.db.flush()
+        logger.info("Scripture image rendered for content #%d", content.id)
+        return [record]
+
+    def _generate_carousel_images(self, content: GeneratedContent) -> list[GeneratedImage]:
+        """Render 3 carousel slide images via Playwright HTML renderer."""
+        from core.rendering.html_renderer import render_carousel_images
+
+        # Parse highlights dict from image_prompt
+        highlights_dict: dict[str, list[str]] = {
+            "cover": [], "content": [], "verse": [],
+        }
+        if content.image_prompt:
+            try:
+                parsed = json.loads(content.image_prompt)
+                if isinstance(parsed, dict):
+                    highlights_dict = {
+                        "cover": parsed.get("cover", []),
+                        "content": parsed.get("content", []),
+                        "verse": parsed.get("verse", []),
+                    }
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(
+                    "Could not parse carousel highlights for content #%d",
+                    content.id,
+                )
+
+        # Extract text fields
+        cover_text = content.hook or ""
+        content_text = content.reel_script_15 or ""
+
+        verse_text = ""
+        verse_reference = ""
+        if content.verse:
+            verse_text = content.verse.text or ""
+            verse_reference = content.verse.reference or ""
+            translation = content.verse.translation or "NIV"
+            if verse_reference and translation:
+                verse_reference = f"{verse_reference} {translation}"
+
+        # Render 3 slides
+        output_dir = str(IMAGES_PROCESSED_DIR)
+        os.makedirs(output_dir, exist_ok=True)
+
+        slide_paths = render_carousel_images(
+            cover_text=cover_text,
+            cover_highlights=highlights_dict["cover"],
+            content_text=content_text,
+            content_highlights=highlights_dict["content"],
+            verse_text=verse_text,
+            verse_reference=verse_reference,
+            verse_highlights=highlights_dict["verse"],
+            output_dir=output_dir,
+            content_id=content.id,
+        )
+
+        if not slide_paths:
+            logger.error("Playwright carousel render failed for content #%d", content.id)
+            return []
+
+        # Upload each slide and create DB records
+        images: list[GeneratedImage] = []
+        for i, slide_path in enumerate(slide_paths):
+            r2_key = f"content/{content.id}/carousel_{i + 1}.png"
+            final_url = self._upload_png_to_storage(slide_path, content.id, r2_key)
+
+            record = GeneratedImage(
+                content_id=content.id,
+                provider=ImageProvider.pil_fallback,
+                format=ImageFormat.feed_1x1,
+                raw_url=slide_path,
+                final_url=final_url,
+                r2_key=r2_key,
+                width=1080,
+                height=1080,
+            )
+            self.db.add(record)
+            images.append(record)
+
+        self.db.flush()
+        logger.info(
+            "Carousel rendered %d slides for content #%d",
+            len(images),
+            content.id,
+        )
+        return images
+
+    def _generate_legacy_reel(self, content: GeneratedContent) -> list[GeneratedImage]:
+        """Legacy pipeline: Unsplash photo + Remotion reel for non-HTML content types."""
+        images: list[GeneratedImage] = []
         raw_path = None
         provider = ImageProvider.pil_fallback
 
         # Unsplash
-        if not raw_path and settings.unsplash_access_key:
+        if settings.unsplash_access_key:
             try:
                 from core.images.unsplash_client import UnsplashClient
                 unsplash = UnsplashClient()
                 result = unsplash.search_and_download(
                     content_type=content.content_type.value,
-                    high_res=True,  # Full-res for reel zoompan headroom
+                    high_res=True,
                 )
                 if result and result.get("local_path"):
                     raw_path = result["local_path"]
                     provider = ImageProvider.unsplash
-                    logger.info(f"Unsplash fallback image for content #{content.id}")
+                    logger.info("Unsplash image for content #%d", content.id)
             except Exception as e:
-                logger.warning(f"Unsplash fallback also failed: {e}")
-
-        # Static feed image generation skipped — reels only (2026-03-10)
-        # TARGET_SIZES definitions kept for reference / future use.
-        # for img_format, target_size in TARGET_SIZES.items():
-        #     ... (static PIL overlay generation removed to save processing time and storage)
+                logger.warning("Unsplash failed for content #%d: %s", content.id, e)
 
         # Generate reel via Remotion pipeline
         if raw_path and self._has_narration_text(content):
@@ -192,39 +351,15 @@ class ImagePipeline:
                 )
                 self.db.add(reel_record)
                 images.append(reel_record)
-                logger.info(f"Remotion reel stored for content #{content.id}")
-
-        # Generate carousel slides if content type is carousel
-        if content.content_type and content.content_type.value == "carousel":
-            try:
-                slide_paths = generate_carousel_slides(content, raw_path)
-                for i, slide_path in enumerate(slide_paths):
-                    slide_url = self._upload_to_storage(
-                        slide_path, content.id, ImageFormat.feed_4x5,
-                    )
-                    slide_record = GeneratedImage(
-                        content_id=content.id,
-                        provider=provider,
-                        format=ImageFormat.feed_4x5,
-                        raw_url=raw_path,
-                        final_url=slide_url,
-                        r2_key=f"content/{content.id}/carousel_{i + 1}.jpg",
-                        width=1080,
-                        height=1350,
-                    )
-                    self.db.add(slide_record)
-                    images.append(slide_record)
-                logger.info(f"Generated {len(slide_paths)} carousel slides for content #{content.id}")
-            except Exception as e:
-                logger.error(f"Carousel generation failed for content #{content.id}: {e}")
+                logger.info("Remotion reel stored for content #%d", content.id)
 
         # Clean up raw source image after all processing is done
         if raw_path and settings.has_r2:
             try:
                 Path(raw_path).unlink(missing_ok=True)
-                logger.info(f"Cleaned up raw image: {raw_path}")
+                logger.info("Cleaned up raw image: %s", raw_path)
             except Exception as e:
-                logger.warning(f"Could not delete raw image {raw_path}: {e}")
+                logger.warning("Could not delete raw image %s: %s", raw_path, e)
 
         # Clean up narration cache for this content
         if content.verse and content.verse.text:
@@ -593,6 +728,60 @@ class ImagePipeline:
 
         except Exception as e:
             logger.error(f"R2 upload failed: {e}")
+            return f"file://{local_path}"
+
+    def _upload_png_to_storage(
+        self, local_path: str, content_id: int, r2_key: str,
+    ) -> str:
+        """Upload a PNG image to R2 with a custom key.
+
+        Args:
+            local_path: Path to the local PNG file.
+            content_id: Content ID (for logging).
+            r2_key: Full R2 object key (e.g. "content/42/feed_1x1.png").
+
+        Returns:
+            Public URL on success, file:// URI on failure or no R2 config.
+        """
+        if not settings.has_r2:
+            return f"file://{local_path}"
+
+        try:
+            import boto3
+
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=settings.cloudflare_r2_endpoint,
+                aws_access_key_id=settings.cloudflare_r2_access_key,
+                aws_secret_access_key=settings.cloudflare_r2_secret_key,
+            )
+
+            s3.upload_file(
+                local_path,
+                settings.cloudflare_r2_bucket,
+                r2_key,
+                ExtraArgs={"ContentType": "image/png"},
+            )
+
+            public_base = settings.cloudflare_r2_public_url.rstrip("/")
+            url = f"{public_base}/{r2_key}"
+            if not url.startswith("https://"):
+                logger.warning("R2 URL missing https: %s", url)
+                url = f"https://{url.lstrip('http://')}"
+            logger.info("Uploaded PNG to R2: %s", url)
+
+            # Clean up local file after successful upload
+            try:
+                Path(local_path).unlink(missing_ok=True)
+            except Exception as cleanup_err:
+                logger.warning(
+                    "Could not delete local file %s: %s", local_path, cleanup_err,
+                )
+
+            return url
+
+        except Exception as e:
+            logger.error("R2 PNG upload failed for content #%d: %s", content_id, e)
             return f"file://{local_path}"
 
 
