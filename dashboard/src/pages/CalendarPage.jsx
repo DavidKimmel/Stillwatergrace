@@ -451,14 +451,14 @@ export default function CalendarPage({ weekStart }) {
             {/* Large Thumbnail */}
             <button
               onClick={() => setDetailContent(primaryPost)}
-              className="relative w-full max-w-[420px] aspect-[4/5] rounded-2xl overflow-hidden bg-gray-100 shadow-lg hover:shadow-xl transition-shadow group cursor-pointer"
+              className="relative w-full max-w-[420px] aspect-square rounded-2xl overflow-hidden bg-gray-100 shadow-lg hover:shadow-xl transition-shadow group cursor-pointer"
             >
               {preview ? (
                 <>
                   <img
                     src={preview.url}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
                   {preview.isReel && (
