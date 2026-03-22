@@ -255,7 +255,11 @@ def _post_to_instagram(db, content):
         if content.content_type == ContentType.carousel:
             return _publish_carousel(db, client, content)
 
-        # Non-carousel: check for reel first
+        # daily_devotional → always post as a single square photo (feed_1x1)
+        if content.content_type == ContentType.daily_devotional:
+            return _publish_devotional_photo(db, client, content)
+
+        # Non-carousel, non-devotional: check for reel first
         reel = (
             db.query(GeneratedImage)
             .filter(
@@ -394,6 +398,58 @@ def _publish_reel(db, client, content, reel):
 
     logger.info(f"Successfully posted content #{content.id} as reel to Instagram")
     return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "reel"}
+
+
+def _publish_devotional_photo(db, client, content):
+    """Publish a daily_devotional as a single square photo (feed_1x1)."""
+    from database.models import PostingLog, PostingStatus, Platform, GeneratedImage, ImageFormat
+
+    caption = _build_caption(content)
+
+    # Prefer the square 1x1 image generated for devotionals
+    image = (
+        db.query(GeneratedImage)
+        .filter(
+            GeneratedImage.content_id == content.id,
+            GeneratedImage.format == ImageFormat.feed_1x1,
+        )
+        .first()
+    )
+
+    # Fall back to 4x5 if no 1x1 exists
+    if not image or not image.final_url:
+        image = (
+            db.query(GeneratedImage)
+            .filter(
+                GeneratedImage.content_id == content.id,
+                GeneratedImage.format == ImageFormat.feed_4x5,
+            )
+            .first()
+        )
+
+    if not image or not image.final_url:
+        raise ValueError(f"No feed image found for daily_devotional content #{content.id}")
+
+    result = client.publish_photo(image_url=image.final_url, caption=caption)
+
+    log = PostingLog(
+        content_id=content.id,
+        platform=Platform.instagram,
+        platform_post_id=result.get("id"),
+        platform_media_id=result.get("media_id"),
+        status=PostingStatus.success,
+        caption_used=caption,
+        hashtags_used=_get_hashtags(content),
+        posted_at=datetime.utcnow(),
+        scheduled_for=content.scheduled_at,
+    )
+    db.add(log)
+
+    logger.info(
+        f"Successfully posted content #{content.id} as devotional photo "
+        f"(format={image.format}) to Instagram"
+    )
+    return {"content_id": content.id, "platform": "instagram", "status": "success", "type": "photo"}
 
 
 def _publish_carousel(db, client, content):
