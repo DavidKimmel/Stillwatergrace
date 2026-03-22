@@ -25,15 +25,15 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 # Day of week (0=Monday) → content type mapping
-# Simplified schedule: 1 daily_devotional post per day, every day
+# 4 scripture singles (daily_devotional) + 3 carousels per week
 WEEKLY_SCHEDULE = {
-    0: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},   # Monday
-    1: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},  # Tuesday
-    2: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.challenging}},  # Wednesday
-    3: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},   # Thursday
-    4: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},  # Friday
-    5: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},   # Saturday
-    6: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},  # Sunday
+    0: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},      # Mon: scripture
+    1: {"morning": {"type": ContentType.carousel, "tone": EmotionalTone.reflective}},             # Tue: carousel
+    2: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},     # Wed: scripture
+    3: {"morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful}},                # Thu: carousel
+    4: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.challenging}},    # Fri: scripture
+    5: {"morning": {"type": ContentType.carousel, "tone": EmotionalTone.celebratory}},            # Sat: carousel
+    6: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},     # Sun: scripture
 }
 
 # Posting times (EST)
