@@ -53,7 +53,7 @@ app.conf.update(
         # ── Posting Windows ──
         "morning-post": {
             "task": "workers.posting_tasks.post_scheduled_content",
-            "schedule": crontab(hour=6, minute=30),
+            "schedule": crontab(hour=10, minute=0),
             "args": ("morning",),
         },
         # ── Analytics Collection ──

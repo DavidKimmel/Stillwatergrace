@@ -38,7 +38,7 @@ WEEKLY_SCHEDULE = {
 
 # Posting times (EST)
 POSTING_TIMES = {
-    "morning": time(6, 30),
+    "morning": time(10, 0),
 }
 
 
