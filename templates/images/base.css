@@ -1,0 +1,93 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: 1080px;
+  height: 1080px;
+  overflow: hidden;
+  font-family: 'Caladea', 'Georgia', 'Times New Roman', serif;
+}
+
+.swg-bg-green {
+  background-color: #2D4A3E;
+  background-image: url('./assets/linen-texture.png');
+  background-size: 200px 200px;
+  background-blend-mode: overlay;
+  width: 1080px;
+  height: 1080px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px;
+  position: relative;
+}
+
+.swg-bg-light {
+  background-color: #3a5c4e;
+  background-image: url('./assets/linen-texture.png');
+  background-size: 200px 200px;
+  background-blend-mode: overlay;
+  width: 1080px;
+  height: 1080px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px;
+  position: relative;
+}
+
+.verse-reference {
+  font-size: 28px;
+  color: rgba(212, 168, 83, 0.7);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 40px;
+}
+
+.verse-text {
+  font-size: 64px;
+  color: #FFF8F0;
+  line-height: 1.4;
+  text-align: center;
+  font-weight: 400;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.highlight {
+  background: linear-gradient(180deg, transparent 55%, rgba(212, 168, 83, 0.3) 55%);
+  padding: 0 4px;
+}
+
+.watermark {
+  position: absolute;
+  bottom: 40px;
+  font-size: 20px;
+  color: rgba(212, 168, 83, 0.35);
+  letter-spacing: 3px;
+}
+
+.cover-title {
+  font-size: 72px;
+  color: #FFF8F0;
+  line-height: 1.3;
+  text-align: center;
+  font-weight: 400;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.content-text {
+  font-size: 42px;
+  color: #FFF8F0;
+  line-height: 1.6;
+  text-align: center;
+  font-weight: 400;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.cta-text {
+  font-size: 28px;
+  color: rgba(212, 168, 83, 0.8);
+  letter-spacing: 2px;
+  margin-top: 40px;
+}
