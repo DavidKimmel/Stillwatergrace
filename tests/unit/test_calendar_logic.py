@@ -44,15 +44,22 @@ class TestContentCalendar:
             for content_type, count in counts.items():
                 assert count <= 2, f"Day {day}: {content_type} appears {count} times"
 
-    def test_all_days_are_daily_devotional(self):
-        """After reframe, every day should be daily_devotional."""
+    def test_schedule_is_4_singles_3_carousels(self):
+        """After image pivot, schedule is 4 scripture singles + 3 carousels."""
+        type_counts: dict[str, int] = {}
         for day in range(7):
             day_schedule = WEEKLY_SCHEDULE[day]
             for slot_config in day_schedule.values():
                 if slot_config:
-                    assert slot_config["type"].value == "daily_devotional", (
-                        f"Day {day} has non-devotional type: {slot_config['type'].value}"
-                    )
+                    t = slot_config["type"].value
+                    type_counts[t] = type_counts.get(t, 0) + 1
+
+        assert type_counts.get("daily_devotional", 0) == 4, (
+            f"Expected 4 daily_devotional slots, got {type_counts.get('daily_devotional', 0)}"
+        )
+        assert type_counts.get("carousel", 0) == 3, (
+            f"Expected 3 carousel slots, got {type_counts.get('carousel', 0)}"
+        )
 
     def test_generate_week_calendar_returns_7_days(self):
         """Week calendar should produce entries spanning 7 days."""
