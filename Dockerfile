@@ -46,7 +46,8 @@ COPY rendering/remotion/package.json /app/rendering/remotion/
 RUN cd /app/rendering/remotion && npm install
 
 # Playwright + Chromium for HTML-to-image rendering
-RUN pip install playwright && playwright install --with-deps chromium
+# System deps already installed above; skip --with-deps to avoid missing font packages on Debian Trixie
+RUN playwright install chromium
 
 # Georgia-compatible font (Caladea)
 RUN apt-get update && apt-get install -y fonts-crosextra-caladea && rm -rf /var/lib/apt/lists/*
