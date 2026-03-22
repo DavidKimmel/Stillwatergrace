@@ -70,9 +70,11 @@ def render_html_to_image(
         template = env.get_template(template_name)
         rendered_html = template.render(**variables)
 
-        temp_html = Path(output_path).with_suffix(".html")
-        temp_html.parent.mkdir(parents=True, exist_ok=True)
+        # Write temp HTML inside templates dir so relative CSS/asset paths resolve
+        temp_html = TEMPLATES_DIR / f"_render_{Path(output_path).stem}.html"
         temp_html.write_text(rendered_html, encoding="utf-8")
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
         browser = _get_browser()
         page = browser.new_page(viewport={"width": width, "height": height})
