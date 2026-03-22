@@ -1,11 +1,12 @@
 """Bible API client — fetches verses from API.Bible (rest.api.bible).
 
-Uses NIV translation by default via the ReelCreate BibleClient.
+Uses NIV 2011 translation by default via direct HTTP calls.
 Falls back to bible-api.com (WEB) if API.Bible key is unavailable.
 """
 
 import logging
 import os
+import re
 import random
 from datetime import datetime, timedelta
 from typing import Optional
@@ -83,6 +84,63 @@ VERSE_POOL = [
     "Ecclesiastes 4:9-12",
 ]
 
+# API.Bible NIV 2011 bible ID
+_NIV_BIBLE_ID = "78a9f6124f344018-01"
+_API_BIBLE_BASE = "https://rest.api.bible/v1"
+
+# Mapping from human-readable book names to API.Bible abbreviations
+_BOOK_ABBREVS: dict[str, str] = {
+    "Genesis": "GEN", "Exodus": "EXO", "Leviticus": "LEV", "Numbers": "NUM",
+    "Deuteronomy": "DEU", "Joshua": "JOS", "Judges": "JDG", "Ruth": "RUT",
+    "1 Samuel": "1SA", "2 Samuel": "2SA", "1 Kings": "1KI", "2 Kings": "2KI",
+    "1 Chronicles": "1CH", "2 Chronicles": "2CH", "Ezra": "EZR", "Nehemiah": "NEH",
+    "Esther": "EST", "Job": "JOB", "Psalm": "PSA", "Psalms": "PSA",
+    "Proverbs": "PRO", "Ecclesiastes": "ECC", "Song of Solomon": "SNG",
+    "Isaiah": "ISA", "Jeremiah": "JER", "Lamentations": "LAM", "Ezekiel": "EZK",
+    "Daniel": "DAN", "Hosea": "HOS", "Joel": "JOL", "Amos": "AMO",
+    "Obadiah": "OBA", "Jonah": "JON", "Micah": "MIC", "Nahum": "NAM",
+    "Habakkuk": "HAB", "Zephaniah": "ZEP", "Haggai": "HAG", "Zechariah": "ZEC",
+    "Malachi": "MAL", "Matthew": "MAT", "Mark": "MRK", "Luke": "LUK",
+    "John": "JHN", "Acts": "ACT", "Romans": "ROM",
+    "1 Corinthians": "1CO", "2 Corinthians": "2CO",
+    "Galatians": "GAL", "Ephesians": "EPH", "Philippians": "PHP",
+    "Colossians": "COL", "1 Thessalonians": "1TH", "2 Thessalonians": "2TH",
+    "1 Timothy": "1TI", "2 Timothy": "2TI", "Titus": "TIT", "Philemon": "PHM",
+    "Hebrews": "HEB", "James": "JAS", "1 Peter": "1PE", "2 Peter": "2PE",
+    "1 John": "1JN", "2 John": "2JN", "3 John": "3JN", "Jude": "JUD",
+    "Revelation": "REV",
+}
+
+
+def _reference_to_api_format(reference: str) -> Optional[str]:
+    """Convert 'Psalm 23:1-6' to 'PSA.23.1-PSA.23.6' for API.Bible.
+
+    Single verse: 'John 3:16' -> 'JHN.3.16'
+    Range: 'Psalm 23:1-6' -> 'PSA.23.1-PSA.23.6'
+    """
+    parts = reference.rsplit(":", 1)
+    if len(parts) != 2:
+        return None
+
+    book_chapter = parts[0].strip()
+    verse_part = parts[1].strip()
+
+    # Split book from chapter
+    tokens = book_chapter.rsplit(" ", 1)
+    if len(tokens) != 2:
+        return None
+    book_name = tokens[0]
+    chapter = tokens[1]
+
+    abbrev = _BOOK_ABBREVS.get(book_name)
+    if not abbrev:
+        return None
+
+    if "-" in verse_part:
+        start, end = verse_part.split("-", 1)
+        return f"{abbrev}.{chapter}.{start}-{abbrev}.{chapter}.{end}"
+    return f"{abbrev}.{chapter}.{verse_part}"
+
 
 class BibleAPIClient:
     """Client for bible-api.com — fetches and caches Bible verses."""
@@ -107,28 +165,33 @@ class BibleAPIClient:
             return cached
 
         # Try API.Bible (NIV) first
-        # Load RC's .env for the Bible API key if not already in env
         api_key = os.environ.get("BIBLE_API_KEY", "")
-        if not api_key:
-            try:
-                from pathlib import Path
-                from dotenv import load_dotenv
-                import reelcreate
-                rc_env = Path(reelcreate._PROJECT_ROOT) / ".env"
-                if rc_env.exists():
-                    load_dotenv(rc_env, override=False)
-                    api_key = os.environ.get("BIBLE_API_KEY", "")
-            except Exception:
-                pass
 
         if api_key:
             try:
-                from reelcreate import BibleClient
-                client = BibleClient(translation="NIV", api_key=api_key)
-                result = client.fetch_verse(reference)
+                verse_ref = _reference_to_api_format(reference)
+                if not verse_ref:
+                    raise ValueError(f"Cannot convert '{reference}' to API.Bible format")
 
-                ref = result.reference
-                text = result.text
+                url = f"{_API_BIBLE_BASE}/bibles/{_NIV_BIBLE_ID}/verses/{verse_ref}"
+                resp = self.client.get(
+                    url,
+                    headers={"api-key": api_key},
+                    params={
+                        "content-type": "text",
+                        "include-notes": "false",
+                        "include-verse-numbers": "false",
+                    },
+                )
+                resp.raise_for_status()
+                api_data = resp.json()["data"]
+
+                raw_text = api_data["content"]
+                # Strip [10] verse number markers and clean whitespace
+                text = re.sub(r"\[\d+\]\s*", "", raw_text).strip()
+                text = re.sub(r"\s+", " ", text)
+
+                ref = reference  # keep our canonical reference format
                 translation = "NIV"
 
                 book, chapter, verse_start, verse_end = self._parse_reference(ref)

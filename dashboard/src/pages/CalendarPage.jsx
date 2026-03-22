@@ -87,6 +87,13 @@ function getPreviewImage(post) {
   return null;
 }
 
+function getAllPreviewImages(post) {
+  if (!post?.images?.length) return [];
+  const withUrls = post.images.filter((img) => img.final_url);
+  if (withUrls.length === 0) return [];
+  return withUrls.map((img) => ({ url: img.final_url, isReel: img.format === 'reel_9x16' }));
+}
+
 function formatScheduledTime(scheduledAt) {
   if (!scheduledAt) return '';
   const d = parseISO(scheduledAt);
@@ -159,12 +166,14 @@ export default function CalendarPage({ weekStart }) {
   // detailContent state removed — no sidebar panel
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [toast, setToast] = useState(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   // Reset selected day when week changes
   useEffect(() => {
     const today = new Date();
     const offset = differenceInCalendarDays(today, weekStart);
     setSelectedDay((offset >= 0 && offset <= 6) ? offset : 0);
+    setCarouselIndex(0);
   }, [weekStart]);
 
   // Auto-dismiss toasts
@@ -192,6 +201,11 @@ export default function CalendarPage({ weekStart }) {
   const dayPosts = grid[selectedDay] || [];
   const primaryPost = dayPosts[0] || null;
   const preview = primaryPost ? getPreviewImage(primaryPost) : null;
+  const allImages = primaryPost ? getAllPreviewImages(primaryPost) : [];
+  const hasMultipleImages = allImages.length > 1;
+  const currentSlide = hasMultipleImages
+    ? allImages[Math.min(carouselIndex, allImages.length - 1)]
+    : preview;
 
   // Mutations
   const invalidateCalendar = () => queryClient.invalidateQueries({ queryKey: ['calendar'] });
@@ -336,6 +350,7 @@ export default function CalendarPage({ weekStart }) {
       if (next < 0 || next > 6) return prev;
       return next;
     });
+    setCarouselIndex(0);
   };
 
   if (isLoading) {
@@ -382,7 +397,7 @@ export default function CalendarPage({ weekStart }) {
               dayDate={addDays(weekStart, i)}
               posts={grid[i] || []}
               isSelected={selectedDay === i}
-              onSelect={setSelectedDay}
+              onSelect={(day) => { setSelectedDay(day); setCarouselIndex(0); }}
             />
           ))}
         </div>
@@ -436,24 +451,47 @@ export default function CalendarPage({ weekStart }) {
               )}
             </div>
 
-            {/* Large Thumbnail */}
+            {/* Large Thumbnail (with carousel navigation for multi-image posts) */}
             <div
               className="relative w-full max-w-[420px] aspect-square rounded-2xl overflow-hidden bg-gray-100 shadow-lg"
             >
-              {preview ? (
+              {currentSlide ? (
                 <>
                   <img
-                    src={preview.url}
+                    src={currentSlide.url}
                     alt=""
                     className="w-full h-full object-contain"
                     onError={(e) => { e.target.style.display = 'none'; }}
                   />
-                  {preview.isReel && (
+                  {currentSlide.isReel && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
                       <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
                         <Play size={24} className="text-[#2D4A3E] fill-[#2D4A3E] ml-1" />
                       </div>
                     </div>
+                  )}
+                  {/* Carousel prev/next arrows */}
+                  {hasMultipleImages && (
+                    <>
+                      <button
+                        onClick={() => setCarouselIndex((prev) => Math.max(0, prev - 1))}
+                        disabled={carouselIndex === 0}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 hover:bg-white flex items-center justify-center shadow-md disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronLeft size={20} className="text-[#2D4A3E]" />
+                      </button>
+                      <button
+                        onClick={() => setCarouselIndex((prev) => Math.min(allImages.length - 1, prev + 1))}
+                        disabled={carouselIndex >= allImages.length - 1}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 hover:bg-white flex items-center justify-center shadow-md disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <ChevronRight size={20} className="text-[#2D4A3E]" />
+                      </button>
+                      {/* Slide counter */}
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/50 text-white text-xs font-medium">
+                        {Math.min(carouselIndex + 1, allImages.length)} / {allImages.length}
+                      </div>
+                    </>
                   )}
                 </>
               ) : (
