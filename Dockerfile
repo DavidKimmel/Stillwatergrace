@@ -42,8 +42,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Remotion dependencies
-COPY rendering/remotion/package.json rendering/remotion/package-lock.json* /app/rendering/remotion/
-RUN cd /app/rendering/remotion && npm ci --production=false
+COPY rendering/remotion/package.json /app/rendering/remotion/
+RUN cd /app/rendering/remotion && npm install
+
+# Playwright + Chromium for HTML-to-image rendering
+RUN pip install playwright && playwright install --with-deps chromium
+
+# Georgia-compatible font (Caladea)
+RUN apt-get update && apt-get install -y fonts-crosextra-caladea && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 

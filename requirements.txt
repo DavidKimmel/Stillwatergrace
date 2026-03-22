@@ -58,3 +58,6 @@ pytest-cov==6.0.0
 
 # Utilities
 orjson==3.10.14
+
+# HTML-to-image rendering
+playwright==1.49.1
