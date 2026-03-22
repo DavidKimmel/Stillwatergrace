@@ -1,44 +1,59 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DndContext, DragOverlay, useDroppable, pointerWithin } from '@dnd-kit/core';
 import { addDays, differenceInCalendarDays, format, isToday, parseISO } from 'date-fns';
+import { ChevronLeft, ChevronRight, Play, Clock } from 'lucide-react';
 import {
   fetchWeeklyCalendar,
   selectPost,
-  movePost,
   deletePost,
   approveContent,
   rejectContent,
   postNow,
   generateAiImage,
   swapReelImage,
+  regenerateContent,
 } from '../lib/api';
-import CalendarCard from '../components/CalendarCard';
 import PostDetailPanel from '../components/PostDetailPanel';
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function formatTime12h(hour, minute) {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const h = hour % 12 || 12;
-  const m = String(minute).padStart(2, '0');
-  return `${h}:${m} ${period}`;
-}
+const TYPE_COLORS = {
+  daily_verse: 'bg-blue-100 text-blue-700',
+  marriage_monday: 'bg-pink-100 text-pink-700',
+  faith_friday: 'bg-emerald-100 text-emerald-700',
+  encouragement: 'bg-amber-100 text-amber-700',
+  carousel: 'bg-cyan-100 text-cyan-700',
+  christian_quote: 'bg-orange-100 text-orange-700',
+};
 
-function getTimeKey(scheduledAt) {
-  if (!scheduledAt) return '06:30';
-  const date = typeof scheduledAt === 'string' ? parseISO(scheduledAt) : scheduledAt;
-  const h = String(date.getHours()).padStart(2, '0');
-  const m = String(date.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
+const TYPE_LABELS = {
+  daily_verse: 'Scripture',
+  marriage_monday: 'Marriage',
+  faith_friday: 'Faith',
+  encouragement: 'Encouragement',
+  carousel: 'Carousel',
+  christian_quote: 'Quote',
+};
+
+const STATUS_STYLES = {
+  pending: 'bg-amber-100 text-amber-700',
+  approved: 'bg-emerald-100 text-emerald-700',
+  posted: 'bg-blue-100 text-blue-700',
+  rejected: 'bg-red-100 text-red-700',
+};
+
+const STATUS_DOTS = {
+  pending: 'bg-amber-500',
+  approved: 'bg-emerald-500',
+  posted: 'bg-blue-500',
+  rejected: 'bg-red-500',
+};
 
 function groupPostsByDay(items, weekStart) {
   const grid = {};
   for (let d = 0; d < 7; d++) {
     grid[d] = [];
   }
-
   if (!items) return grid;
 
   items.forEach((item) => {
@@ -49,7 +64,6 @@ function groupPostsByDay(items, weekStart) {
     grid[dayOffset].push(item);
   });
 
-  // Sort each day's posts by scheduled time
   for (let d = 0; d < 7; d++) {
     grid[d].sort((a, b) => {
       const da = a.scheduled_at ? parseISO(a.scheduled_at) : new Date(0);
@@ -57,135 +71,103 @@ function groupPostsByDay(items, weekStart) {
       return da - db;
     });
   }
-
   return grid;
 }
 
-function formatDate(date) {
+function formatDateStr(date) {
   return format(date, 'yyyy-MM-dd');
 }
 
-function DroppableDay({ id, children, isOver }) {
-  const { setNodeRef, isOver: dndIsOver } = useDroppable({ id });
-  const highlight = isOver || dndIsOver;
-  return (
-    <div
-      ref={setNodeRef}
-      className={`min-h-[300px] p-1.5 rounded-lg transition-colors flex-1 ${
-        highlight ? 'bg-[#D4A853]/10 ring-2 ring-[#D4A853]/30' : ''
-      }`}
-    >
-      {children}
-    </div>
-  );
+function getPreviewImage(post) {
+  if (!post?.images?.length) return null;
+  const reel = post.images.find((img) => img.format === 'reel_9x16' && img.final_url);
+  if (reel) return { url: reel.final_url, isReel: true };
+  const feed = post.images.find((img) => img.final_url);
+  if (feed) return { url: feed.final_url, isReel: false };
+  return null;
 }
 
-/* ── Time Picker Modal ── */
-function TimePickerModal({ dayDate, onConfirm, onCancel }) {
-  const [hour, setHour] = useState('06');
-  const [minute, setMinute] = useState('30');
+function formatScheduledTime(scheduledAt) {
+  if (!scheduledAt) return '';
+  const d = parseISO(scheduledAt);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${period}`;
+}
 
-  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-  const minutes = ['00', '15', '30', '45'];
-
-  const handleConfirm = () => {
-    onConfirm(`${hour}:${minute}`);
-  };
-
-  const presets = [
-    { label: '6:30 AM', h: '06', m: '30' },
-    { label: '12:00 PM', h: '12', m: '00' },
-    { label: '4:00 PM', h: '16', m: '00' },
-    { label: '7:00 PM', h: '19', m: '00' },
-  ];
+/* ── Week Strip Thumbnail ── */
+function WeekStripDay({ dayIndex, dayDate, posts, isSelected, onSelect }) {
+  const today = isToday(dayDate);
+  const hasContent = posts.length > 0;
+  const preview = hasContent ? getPreviewImage(posts[0]) : null;
+  const statusDot = hasContent ? STATUS_DOTS[posts[0].status] || 'bg-gray-400' : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl p-6 w-[320px]">
-        <h3 className="text-sm font-semibold text-[#2D4A3E] mb-1">
-          Schedule Time
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          {format(dayDate, 'EEEE, MMM d')}
-        </p>
+    <button
+      onClick={() => onSelect(dayIndex)}
+      className={`
+        flex flex-col items-center gap-1 p-1.5 rounded-xl transition-all flex-1 min-w-0
+        ${isSelected
+          ? 'ring-2 ring-[#D4A853] bg-[#FFF8F0]'
+          : today
+            ? 'bg-[#D4A853]/5 hover:bg-[#D4A853]/10'
+            : 'hover:bg-gray-100'
+        }
+      `}
+    >
+      <span className={`text-[10px] font-semibold uppercase tracking-wide ${
+        isSelected ? 'text-[#D4A853]' : today ? 'text-[#D4A853]' : 'text-gray-500'
+      }`}>
+        {DAY_NAMES[dayIndex]}
+      </span>
 
-        {/* Quick presets */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {presets.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => { setHour(p.h); setMinute(p.m); }}
-              className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
-                hour === p.h && minute === p.m
-                  ? 'bg-[#D4A853] text-white border-[#D4A853]'
-                  : 'border-gray-300 text-gray-600 hover:border-[#D4A853] hover:text-[#D4A853]'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Custom time selectors */}
-        <div className="flex items-center gap-2 mb-5">
-          <select
-            value={hour}
-            onChange={(e) => setHour(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-[#2D4A3E] focus:outline-none focus:ring-2 focus:ring-[#D4A853]/40"
-          >
-            {hours.map((h) => (
-              <option key={h} value={h}>
-                {h}
-              </option>
-            ))}
-          </select>
-          <span className="text-lg font-bold text-gray-400">:</span>
-          <select
-            value={minute}
-            onChange={(e) => setMinute(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-[#2D4A3E] focus:outline-none focus:ring-2 focus:ring-[#D4A853]/40"
-          >
-            {minutes.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          <span className="text-xs text-gray-500 ml-1">
-            ({formatTime12h(parseInt(hour, 10), parseInt(minute, 10))})
-          </span>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirm}
-            className="flex-1 px-4 py-2 text-sm bg-[#2D4A3E] text-white rounded-lg hover:bg-[#2D4A3E]/90 transition-colors"
-          >
-            Set Time
-          </button>
-        </div>
+      {/* Mini thumbnail */}
+      <div className={`w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 ${
+        isSelected ? 'ring-2 ring-[#D4A853]' : 'ring-1 ring-gray-200'
+      }`}>
+        {preview ? (
+          <img src={preview.url} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+            <span className="text-[9px] text-gray-300">--</span>
+          </div>
+        )}
       </div>
-    </div>
+
+      <div className="flex items-center gap-1">
+        <span className={`text-[10px] ${
+          isSelected ? 'text-[#D4A853] font-bold' : today ? 'text-[#D4A853] font-semibold' : 'text-gray-400'
+        }`}>
+          {format(dayDate, 'M/d')}
+        </span>
+        {statusDot && <span className={`w-1.5 h-1.5 rounded-full ${statusDot}`} />}
+      </div>
+    </button>
   );
 }
 
 export default function CalendarPage({ weekStart }) {
   const queryClient = useQueryClient();
-  const [selectedPostId, setSelectedPostId] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(() => {
+    // Default to today if it falls within this week, otherwise Monday
+    const today = new Date();
+    const offset = differenceInCalendarDays(today, weekStart);
+    return (offset >= 0 && offset <= 6) ? offset : 0;
+  });
   const [detailContent, setDetailContent] = useState(null);
-  const [activeDragId, setActiveDragId] = useState(null);
-  const [timePicker, setTimePicker] = useState(null); // { postId, dayIndex }
-  const [confirmDialog, setConfirmDialog] = useState(null); // { action, id, message }
-  const [toast, setToast] = useState(null); // { message, type }
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [toast, setToast] = useState(null);
 
-  // Auto-dismiss success/error toasts after 3s
+  // Reset selected day when week changes
+  useEffect(() => {
+    const today = new Date();
+    const offset = differenceInCalendarDays(today, weekStart);
+    setSelectedDay((offset >= 0 && offset <= 6) ? offset : 0);
+  }, [weekStart]);
+
+  // Auto-dismiss toasts
   useEffect(() => {
     if (toast && toast.type !== 'loading') {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -193,7 +175,7 @@ export default function CalendarPage({ weekStart }) {
     }
   }, [toast]);
 
-  const startDateStr = formatDate(weekStart);
+  const startDateStr = formatDateStr(weekStart);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['calendar', startDateStr],
@@ -203,7 +185,7 @@ export default function CalendarPage({ weekStart }) {
   const items = data?.items || [];
   const grid = groupPostsByDay(items, weekStart);
 
-  // Sync detail panel with latest data after mutations (AI Image, Swap Reel, etc.)
+  // Sync detail panel with latest data
   useEffect(() => {
     if (!detailContent || !data?.items) return;
     const updated = data.items.find((item) => item.id === detailContent.id);
@@ -212,21 +194,17 @@ export default function CalendarPage({ weekStart }) {
     }
   }, [data]);
 
-  // Find the dragged item for the overlay
-  const activeDragItem = activeDragId
-    ? items.find((item) => item.id === activeDragId)
-    : null;
+  // Current day data
+  const selectedDate = addDays(weekStart, selectedDay);
+  const dayPosts = grid[selectedDay] || [];
+  const primaryPost = dayPosts[0] || null;
+  const preview = primaryPost ? getPreviewImage(primaryPost) : null;
 
   // Mutations
   const invalidateCalendar = () => queryClient.invalidateQueries({ queryKey: ['calendar'] });
 
   const selectMutation = useMutation({
     mutationFn: (id) => selectPost(id),
-    onSuccess: invalidateCalendar,
-  });
-
-  const moveMutation = useMutation({
-    mutationFn: ({ id, date, time }) => movePost(id, date, time),
     onSuccess: invalidateCalendar,
   });
 
@@ -292,12 +270,21 @@ export default function CalendarPage({ weekStart }) {
     },
   });
 
-  // Handlers
-  const handleSelect = (id) => {
-    setSelectedPostId((prev) => (prev === id ? null : id));
-    selectMutation.mutate(id);
-  };
+  const regenerateMutation = useMutation({
+    mutationFn: (id) => {
+      setToast({ message: 'Regenerating content...', type: 'loading' });
+      return regenerateContent(id);
+    },
+    onSuccess: () => {
+      setToast({ message: 'Content regenerated', type: 'success' });
+      invalidateCalendar();
+    },
+    onError: (err) => {
+      setToast({ message: err.message || 'Regenerate failed', type: 'error' });
+    },
+  });
 
+  // Handlers
   const handleAction = (action, id) => {
     switch (action) {
       case 'approve':
@@ -330,6 +317,9 @@ export default function CalendarPage({ weekStart }) {
       case 'swap-reel':
         swapReelMutation.mutate(id);
         break;
+      case 'regenerate':
+        regenerateMutation.mutate(id);
+        break;
       case 'view-details': {
         const post = items.find((item) => item.id === id);
         setDetailContent(post || null);
@@ -352,43 +342,12 @@ export default function CalendarPage({ weekStart }) {
     setConfirmDialog(null);
   };
 
-  const handleDragStart = (event) => {
-    setActiveDragId(event.active.id);
-  };
-
-  const handleDragEnd = (event) => {
-    setActiveDragId(null);
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    // over.id format: "day-{dayIndex}"
-    const overId = String(over.id);
-    if (!overId.startsWith('day-')) return;
-
-    const dayIndex = parseInt(overId.split('-')[1], 10);
-    if (isNaN(dayIndex) || dayIndex < 0 || dayIndex > 6) return;
-
-    // Open time picker for the target day
-    setTimePicker({ postId: active.id, dayIndex });
-  };
-
-  const handleTimePickerConfirm = (timeStr) => {
-    if (!timePicker) return;
-    const targetDate = addDays(weekStart, timePicker.dayIndex);
-    moveMutation.mutate({
-      id: timePicker.postId,
-      date: formatDate(targetDate),
-      time: timeStr,
+  const navigateDay = (delta) => {
+    setSelectedDay((prev) => {
+      const next = prev + delta;
+      if (next < 0 || next > 6) return prev;
+      return next;
     });
-    setTimePicker(null);
-  };
-
-  const handleTimePickerCancel = () => {
-    setTimePicker(null);
-  };
-
-  const handleDragCancel = () => {
-    setActiveDragId(null);
   };
 
   if (isLoading) {
@@ -413,96 +372,216 @@ export default function CalendarPage({ weekStart }) {
     );
   }
 
+  const typeColor = primaryPost
+    ? (TYPE_COLORS[primaryPost.content_type] || 'bg-gray-100 text-gray-700')
+    : '';
+  const typeLabel = primaryPost
+    ? (TYPE_LABELS[primaryPost.content_type] || primaryPost.content_type)
+    : '';
+  const statusStyle = primaryPost
+    ? (STATUS_STYLES[primaryPost.status] || 'bg-gray-100 text-gray-600')
+    : '';
+
   return (
-    <div className="p-4 h-full overflow-auto">
-      <DndContext
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
-        {/* 7-column grid */}
-        <div className="grid grid-cols-7 gap-2 min-w-[900px]">
-          {DAY_NAMES.map((dayName, dayIndex) => {
-            const dayDate = addDays(weekStart, dayIndex);
-            const dayIsToday = isToday(dayDate);
-            const dayPosts = grid[dayIndex] || [];
+    <div className="h-full flex flex-col">
+      {/* ── Week Strip ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-2 mb-4">
+        <div className="flex gap-1">
+          {Array.from({ length: 7 }, (_, i) => (
+            <WeekStripDay
+              key={i}
+              dayIndex={i}
+              dayDate={addDays(weekStart, i)}
+              posts={grid[i] || []}
+              isSelected={selectedDay === i}
+              onSelect={setSelectedDay}
+            />
+          ))}
+        </div>
+      </div>
 
-            return (
-              <div
-                key={dayIndex}
-                className={`rounded-xl overflow-hidden ${
-                  dayIsToday ? 'bg-[#D4A853]/5 ring-1 ring-[#D4A853]/20' : 'bg-gray-50/50'
-                }`}
-              >
-                {/* Day header */}
-                <div
-                  className={`px-3 py-2 text-center border-b ${
-                    dayIsToday
-                      ? 'bg-[#D4A853]/10 border-[#D4A853]/20'
-                      : 'bg-white border-gray-200'
-                  }`}
-                >
-                  <div className={`text-xs font-semibold uppercase tracking-wider ${
-                    dayIsToday ? 'text-[#D4A853]' : 'text-[#2D4A3E]'
-                  }`}>
-                    {dayName}
-                  </div>
-                  <div className={`text-sm ${dayIsToday ? 'text-[#D4A853] font-bold' : 'text-gray-500'}`}>
-                    {format(dayDate, 'M/d')}
-                  </div>
-                </div>
+      {/* ── Main Content Area ── */}
+      <div className="flex-1 flex flex-col items-center">
+        {/* Day Navigation Header */}
+        <div className="flex items-center gap-4 mb-5">
+          <button
+            onClick={() => navigateDay(-1)}
+            disabled={selectedDay === 0}
+            className="p-2 rounded-lg hover:bg-gray-100 text-[#2D4A3E] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft size={22} />
+          </button>
 
-                {/* Droppable day column */}
-                <div className="px-1.5 py-1">
-                  <DroppableDay id={`day-${dayIndex}`}>
-                    <div className="space-y-1.5">
-                      {dayPosts.map((post) => (
-                        <CalendarCard
-                          key={post.id}
-                          content={post}
-                          isSelected={selectedPostId === post.id}
-                          onSelect={handleSelect}
-                          onAction={handleAction}
-                          onTimeClick={(postId) => setTimePicker({ postId, dayIndex })}
-                        />
-                      ))}
-                      {dayPosts.length === 0 && (
-                        <div className="text-[10px] text-gray-300 text-center py-8">
-                          Empty
-                        </div>
-                      )}
-                    </div>
-                  </DroppableDay>
-                </div>
-              </div>
-            );
-          })}
+          <div className="text-center min-w-[220px]">
+            <h2 className="text-lg font-heading font-semibold text-[#2D4A3E]">
+              {format(selectedDate, 'EEEE, MMMM d')}
+            </h2>
+            {isToday(selectedDate) && (
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#D4A853]">Today</span>
+            )}
+          </div>
+
+          <button
+            onClick={() => navigateDay(1)}
+            disabled={selectedDay === 6}
+            className="p-2 rounded-lg hover:bg-gray-100 text-[#2D4A3E] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight size={22} />
+          </button>
         </div>
 
-        {/* Drag overlay */}
-        <DragOverlay>
-          {activeDragItem ? (
-            <div className="opacity-80 w-[160px]">
-              <CalendarCard
-                content={activeDragItem}
-                isSelected={false}
-                onSelect={() => {}}
-                onAction={() => {}}
-              />
+        {primaryPost ? (
+          <div className="flex flex-col items-center w-full max-w-lg">
+            {/* Badges row */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${typeColor}`}>
+                {typeLabel}
+              </span>
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusStyle}`}>
+                {primaryPost.status}
+              </span>
+              {primaryPost.scheduled_at && (
+                <span className="flex items-center gap-1 text-xs text-gray-500">
+                  <Clock size={12} />
+                  {formatScheduledTime(primaryPost.scheduled_at)}
+                </span>
+              )}
             </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
 
-      {/* Time picker modal */}
-      {timePicker && (
-        <TimePickerModal
-          dayDate={addDays(weekStart, timePicker.dayIndex)}
-          onConfirm={handleTimePickerConfirm}
-          onCancel={handleTimePickerCancel}
-        />
-      )}
+            {/* Large Thumbnail */}
+            <button
+              onClick={() => setDetailContent(primaryPost)}
+              className="relative w-full max-w-[420px] aspect-[4/5] rounded-2xl overflow-hidden bg-gray-100 shadow-lg hover:shadow-xl transition-shadow group cursor-pointer"
+            >
+              {preview ? (
+                <>
+                  <img
+                    src={preview.url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                  {preview.isReel && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                      <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                        <Play size={24} className="text-[#2D4A3E] fill-[#2D4A3E] ml-1" />
+                      </div>
+                    </div>
+                  )}
+                  {/* Hover overlay hint */}
+                  <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <p className="text-white text-xs text-center">Click for details</p>
+                  </div>
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                  <span className="text-sm">No image</span>
+                </div>
+              )}
+            </button>
+
+            {/* Hook preview */}
+            {primaryPost.hook && (
+              <p className="mt-3 text-sm text-[#2D4A3E] text-center leading-relaxed max-w-md line-clamp-2">
+                {primaryPost.hook}
+              </p>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+              {primaryPost.status === 'pending' && (
+                <>
+                  <button
+                    onClick={() => handleAction('approve', primaryPost.id)}
+                    className="px-5 py-2.5 text-sm font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleAction('reject', primaryPost.id)}
+                    className="px-5 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
+              {primaryPost.status === 'approved' && (
+                <button
+                  onClick={() => handleAction('post-now', primaryPost.id)}
+                  className="px-5 py-2.5 text-sm font-medium bg-[#D4A853] text-white rounded-lg hover:bg-[#b8903a] transition-colors"
+                >
+                  Post Now
+                </button>
+              )}
+              <button
+                onClick={() => handleAction('regenerate', primaryPost.id)}
+                className="px-5 py-2.5 text-sm font-medium border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Regenerate
+              </button>
+              <button
+                onClick={() => handleAction('ai-image', primaryPost.id)}
+                className="px-4 py-2.5 text-sm font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                AI Image
+              </button>
+              <button
+                onClick={() => handleAction('swap-reel', primaryPost.id)}
+                className="px-4 py-2.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+              >
+                Swap Reel
+              </button>
+            </div>
+
+            {/* Additional posts for this day (if more than 1) */}
+            {dayPosts.length > 1 && (
+              <div className="mt-6 w-full border-t pt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 text-center">
+                  {dayPosts.length} posts this day
+                </p>
+                <div className="flex gap-3 justify-center">
+                  {dayPosts.map((post, i) => {
+                    const img = getPreviewImage(post);
+                    const isActive = i === 0;
+                    return (
+                      <button
+                        key={post.id}
+                        onClick={() => setDetailContent(post)}
+                        className={`
+                          w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 transition-all
+                          ${isActive
+                            ? 'ring-2 ring-[#D4A853] shadow-md'
+                            : 'ring-1 ring-gray-200 hover:ring-[#D4A853]/50'
+                          }
+                        `}
+                      >
+                        {img ? (
+                          <img src={img.url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 flex items-center justify-center text-[9px] text-gray-300">
+                            --
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Empty day state */
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="w-24 h-24 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+              <span className="text-3xl text-gray-300">--</span>
+            </div>
+            <p className="text-sm text-gray-500 mb-1">No content scheduled</p>
+            <p className="text-xs text-gray-400 mb-4">
+              {format(selectedDate, 'EEEE, MMMM d')}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Confirm dialog */}
       {confirmDialog && (
