@@ -13,7 +13,7 @@ import {
   swapReelImage,
   regenerateContent,
 } from '../lib/api';
-import PostDetailPanel from '../components/PostDetailPanel';
+// PostDetailPanel removed — caption shown inline below thumbnail
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -156,7 +156,7 @@ export default function CalendarPage({ weekStart }) {
     const offset = differenceInCalendarDays(today, weekStart);
     return (offset >= 0 && offset <= 6) ? offset : 0;
   });
-  const [detailContent, setDetailContent] = useState(null);
+  // detailContent state removed — no sidebar panel
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -185,14 +185,7 @@ export default function CalendarPage({ weekStart }) {
   const items = data?.items || [];
   const grid = groupPostsByDay(items, weekStart);
 
-  // Sync detail panel with latest data
-  useEffect(() => {
-    if (!detailContent || !data?.items) return;
-    const updated = data.items.find((item) => item.id === detailContent.id);
-    if (updated) {
-      setDetailContent(updated);
-    }
-  }, [data]);
+  // (detail panel removed — caption inline)
 
   // Current day data
   const selectedDate = addDays(weekStart, selectedDay);
@@ -211,9 +204,6 @@ export default function CalendarPage({ weekStart }) {
   const deleteMutation = useMutation({
     mutationFn: (id) => deletePost(id),
     onSuccess: () => {
-      if (detailContent?.id === deleteMutation.variables) {
-        setDetailContent(null);
-      }
       invalidateCalendar();
     },
   });
@@ -320,11 +310,9 @@ export default function CalendarPage({ weekStart }) {
       case 'regenerate':
         regenerateMutation.mutate(id);
         break;
-      case 'view-details': {
-        const post = items.find((item) => item.id === id);
-        setDetailContent(post || null);
+      case 'view-details':
+        // no-op — detail shown inline now
         break;
-      }
       default:
         break;
     }
@@ -449,9 +437,8 @@ export default function CalendarPage({ weekStart }) {
             </div>
 
             {/* Large Thumbnail */}
-            <button
-              onClick={() => setDetailContent(primaryPost)}
-              className="relative w-full max-w-[420px] aspect-square rounded-2xl overflow-hidden bg-gray-100 shadow-lg hover:shadow-xl transition-shadow group cursor-pointer"
+            <div
+              className="relative w-full max-w-[420px] aspect-square rounded-2xl overflow-hidden bg-gray-100 shadow-lg"
             >
               {preview ? (
                 <>
@@ -468,27 +455,16 @@ export default function CalendarPage({ weekStart }) {
                       </div>
                     </div>
                   )}
-                  {/* Hover overlay hint */}
-                  <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-white text-xs text-center">Click for details</p>
-                  </div>
                 </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-300">
                   <span className="text-sm">No image</span>
                 </div>
               )}
-            </button>
-
-            {/* Hook preview */}
-            {primaryPost.hook && (
-              <p className="mt-3 text-sm text-[#2D4A3E] text-center leading-relaxed max-w-md line-clamp-2">
-                {primaryPost.hook}
-              </p>
-            )}
+            </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
               {primaryPost.status === 'pending' && (
                 <>
                   <button
@@ -519,19 +495,28 @@ export default function CalendarPage({ weekStart }) {
               >
                 Regenerate
               </button>
-              <button
-                onClick={() => handleAction('ai-image', primaryPost.id)}
-                className="px-4 py-2.5 text-sm font-medium bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                AI Image
-              </button>
-              <button
-                onClick={() => handleAction('swap-reel', primaryPost.id)}
-                className="px-4 py-2.5 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-              >
-                Swap Reel
-              </button>
             </div>
+
+            {/* Caption */}
+            {(primaryPost.caption_short || primaryPost.caption_medium || primaryPost.caption_long) && (
+              <div className="mt-4 w-full max-w-md">
+                <p className="text-sm text-[#2D4A3E] leading-relaxed whitespace-pre-line">
+                  {(primaryPost.caption_short || primaryPost.caption_medium || primaryPost.caption_long || '')
+                    .split('\n')
+                    .filter(line => !line.trim().startsWith('#') || line.trim().split(/\s+/).filter(w => w.startsWith('#')).length <= 5)
+                    .map((line, i) => {
+                      // If line is all hashtags, limit to 5
+                      const words = line.trim().split(/\s+/);
+                      if (words.length > 0 && words.every(w => w.startsWith('#'))) {
+                        return words.slice(0, 5).join(' ');
+                      }
+                      return line;
+                    })
+                    .join('\n')
+                  }
+                </p>
+              </div>
+            )}
 
             {/* Additional posts for this day (if more than 1) */}
             {dayPosts.length > 1 && (
@@ -546,7 +531,7 @@ export default function CalendarPage({ weekStart }) {
                     return (
                       <button
                         key={post.id}
-                        onClick={() => setDetailContent(post)}
+                        onClick={() => {}}
                         className={`
                           w-16 h-20 rounded-lg overflow-hidden flex-shrink-0 transition-all
                           ${isActive
@@ -639,15 +624,7 @@ export default function CalendarPage({ weekStart }) {
         </div>
       )}
 
-      {/* Detail panel */}
-      {detailContent && (
-        <PostDetailPanel
-          content={detailContent}
-          onClose={() => setDetailContent(null)}
-          onAction={handleAction}
-          onRegenerated={invalidateCalendar}
-        />
-      )}
+      {/* Detail panel removed — caption shown inline */}
     </div>
   );
 }
