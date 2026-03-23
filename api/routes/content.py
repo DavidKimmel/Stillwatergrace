@@ -77,7 +77,10 @@ def generate_content_on_demand(
     gen = ContentGenerator(db)
     img_pipeline = ImagePipeline(db)
 
-    start = date.today() + timedelta(days=1)  # Start from tomorrow
+    # Use EST for date calculation (container runs UTC but schedule is EST)
+    from zoneinfo import ZoneInfo
+    est_now = datetime.now(ZoneInfo("America/New_York"))
+    start = est_now.date() + timedelta(days=1)  # Start from tomorrow EST
     slots_created = 0
     slots_skipped = 0
     image_errors: list[str] = []
