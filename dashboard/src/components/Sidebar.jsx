@@ -7,6 +7,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -15,6 +16,8 @@ const NAV_ITEMS = [
   { to: '/insights', icon: BarChart3, label: 'Insights' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
+
+const R2_URL = 'https://dash.cloudflare.com/7cdee1457e807faf5dc3a887bdf85a62/r2/default/buckets/stillwatergrace-images?prefix=images%2F';
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -52,6 +55,18 @@ export default function Sidebar() {
             {!collapsed && <span>{label}</span>}
           </NavLink>
         ))}
+        {/* R2 Storage link */}
+        <a
+          href={R2_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex items-center gap-3 py-3 text-sm transition-colors text-brand-cream/70 hover:text-brand-cream hover:bg-white/5 border-l-[3px] border-transparent ${
+            collapsed ? 'justify-center px-0' : 'px-5'
+          }`}
+        >
+          <ExternalLink size={20} />
+          {!collapsed && <span>R2 Storage</span>}
+        </a>
       </nav>
 
       {/* Collapse toggle */}
