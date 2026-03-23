@@ -7,7 +7,7 @@ Usage:
     python manage.py generate-content Test: generate content for today
     python manage.py generate-week    Generate content for the full week (Mon-Sun)
     python manage.py show-calendar    Show this week's content calendar
-    python manage.py test-render      Render 1 test reel + feed images (no posting/DB)
+    python manage.py test-render      Render test feed overlay images (no posting/DB)
     python manage.py generate-audio   Generate background music tracks (--ambient for sound effects)
     python manage.py weekly-report    Generate weekly report
     python manage.py rate-card        Show sponsorship rate card
@@ -189,7 +189,7 @@ def show_calendar():
 
 
 def test_render():
-    """Render 1 test reel + feed images from a fresh verse. No posting, no approval."""
+    """Render test feed overlay images from a fresh verse. No posting, no approval."""
     import time
     from pathlib import Path
     from database.session import get_db
@@ -269,58 +269,10 @@ def test_render():
             except Exception as e:
                 print(f"   {img_format.value}: FAILED — {e}")
 
-        # 4. Generate reel via Remotion pipeline
-        print("\n4. Generating reel via Remotion...")
-        from core.audio.elevenlabs_music import (
-            generate_narration_with_timestamps,
-            premix_audio,
-        )
-        from core.rendering.remotion_renderer import render_devotional_reel
-
-        reel_path = None
-        try:
-            narr_text = f"{verse.text} — {verse.reference}"
-            narr_path, word_ts = generate_narration_with_timestamps(
-                text=narr_text,
-                content_id=test_id,
-            )
-            if narr_path and word_ts:
-                last_end = max(w["end"] for w in word_ts)
-                dur = min(max(last_end + 3.0, 12.0), 30.0)
-
-                mixed = premix_audio(
-                    narration_path=narr_path,
-                    music_mood="daily_devotional",
-                    duration_seconds=dur,
-                    content_id=test_id,
-                )
-                audio = mixed or narr_path
-
-                out = str(IMAGES_PROCESSED_DIR / f"reel_{test_id}.mp4")
-                reel_path = render_devotional_reel(
-                    image_path=raw_path,
-                    audio_path=audio,
-                    words=word_ts,
-                    verse_reference=verse.reference,
-                    duration_seconds=dur,
-                    output_path=out,
-                    verse_text=verse.text,
-                )
-        except Exception as e:
-            print(f"   Reel pipeline error: {e}")
-
-        if reel_path:
-            reel_size_mb = Path(reel_path).stat().st_size / (1024 * 1024)
-            print(f"   Reel: {reel_path} ({reel_size_mb:.1f} MB)")
-        else:
-            print("   Reel: FAILED (narration or Remotion unavailable)")
-
         # Summary
         print("\n== Output Files ==\n")
         for p in feed_paths:
             print(f"  {p}")
-        if reel_path:
-            print(f"  {reel_path}")
         print(f"\nOpen these files in Explorer to inspect quality.")
 
 

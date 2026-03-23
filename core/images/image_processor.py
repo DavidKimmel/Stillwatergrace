@@ -161,8 +161,8 @@ class ImagePipeline:
         if content_type == ContentType.carousel:
             return self._generate_carousel_images(content)
 
-        # --- Legacy pipeline for other content types ---
-        return self._generate_legacy_reel(content)
+        # --- Unsplash-only pipeline for other content types ---
+        return self._generate_unsplash_images(content)
 
     def _generate_scripture_image(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Render a single scripture image via Playwright HTML renderer."""
@@ -310,8 +310,12 @@ class ImagePipeline:
         )
         return images
 
-    def _generate_legacy_reel(self, content: GeneratedContent) -> list[GeneratedImage]:
-        """Legacy pipeline: Unsplash photo + Remotion reel for non-HTML content types."""
+    def _generate_unsplash_images(self, content: GeneratedContent) -> list[GeneratedImage]:
+        """Unsplash photo pipeline for non-HTML content types.
+
+        Downloads a stock photo and stores it as the raw background image.
+        No reel rendering — reels are handled externally if needed.
+        """
         images: list[GeneratedImage] = []
         raw_path = None
         provider = ImageProvider.pil_fallback
@@ -332,181 +336,34 @@ class ImagePipeline:
             except Exception as e:
                 logger.warning("Unsplash failed for content #%d: %s", content.id, e)
 
-        # Generate reel via Remotion pipeline
-        if raw_path and self._has_narration_text(content):
-            reel_path = self._render_remotion_reel(raw_path, content)
-            if reel_path:
-                final_url = self._upload_to_storage(
-                    reel_path, content.id, ImageFormat.reel_9x16,
-                )
-                reel_record = GeneratedImage(
-                    content_id=content.id,
-                    provider=provider,
-                    format=ImageFormat.reel_9x16,
-                    raw_url=raw_path,
-                    final_url=final_url,
-                    r2_key=f"content/{content.id}/reel_9x16.mp4",
-                    width=1080,
-                    height=1920,
-                )
-                self.db.add(reel_record)
-                images.append(reel_record)
-                logger.info("Remotion reel stored for content #%d", content.id)
+        if not raw_path:
+            logger.warning("No background image for content #%d", content.id)
+            return images
+
+        # Store raw image record
+        raw_record = GeneratedImage(
+            content_id=content.id,
+            provider=provider,
+            format=ImageFormat.feed_4x5,
+            raw_url=raw_path,
+            final_url=None,
+            width=1080,
+            height=1350,
+        )
+        self.db.add(raw_record)
+        images.append(raw_record)
+        logger.info("Unsplash image stored for content #%d", content.id)
 
         # Clean up raw source image after all processing is done
-        if raw_path and settings.has_r2:
+        if settings.has_r2:
             try:
                 Path(raw_path).unlink(missing_ok=True)
                 logger.info("Cleaned up raw image: %s", raw_path)
             except Exception as e:
                 logger.warning("Could not delete raw image %s: %s", raw_path, e)
 
-        # Clean up narration cache for this content
-        if content.verse and content.verse.text:
-            self._cleanup_narration(content.id)
-
         self.db.flush()
         return images
-
-    @staticmethod
-    def _cleanup_narration(content_id: int) -> None:
-        """Delete narration MP3 cache files for a content piece after reel is rendered."""
-        narration_dir = Path(__file__).parent.parent.parent / "audio" / "narration"
-        if not narration_dir.exists():
-            return
-        for pattern in [f"narration_{content_id}.mp3", f"narration_{content_id}.fast.mp3"]:
-            path = narration_dir / pattern
-            if path.exists():
-                try:
-                    path.unlink()
-                    logger.info(f"Cleaned up narration: {path.name}")
-                except Exception as e:
-                    logger.warning(f"Could not delete {path}: {e}")
-
-    @staticmethod
-    def _has_narration_text(content: GeneratedContent) -> bool:
-        """Check whether content has text suitable for reel narration."""
-        if content.verse and content.verse.text:
-            return True
-        if content.reel_script_15 or content.reel_script_30:
-            return True
-        if content.content_type == ContentType.christian_quote and content.quote:
-            return True
-        return False
-
-    @staticmethod
-    def _get_narration_text(content: GeneratedContent) -> tuple[str, str]:
-        """Extract narration text and verse reference from content.
-
-        Returns:
-            Tuple of (narration_text, verse_reference).
-        """
-        if content.content_type == ContentType.christian_quote and content.quote:
-            text = content.quote.quote_text
-            ref = content.quote.author or "Unknown"
-            return text, ref
-
-        # Prefer reel script (written by Claude for narration), fall back to verse
-        narration_text = (
-            content.reel_script_15
-            or content.reel_script_30
-            or (content.verse.text if content.verse else "")
-        )
-        verse_ref = content.verse.reference if content.verse else ""
-        translation = (content.verse.translation if content.verse else "NIV") or "NIV"
-        if verse_ref and translation:
-            verse_ref = f"{verse_ref} {translation}"
-        return narration_text, verse_ref
-
-    def _render_remotion_reel(
-        self,
-        raw_path: str,
-        content: GeneratedContent,
-    ) -> Optional[str]:
-        """Render a reel using Remotion with narration and pre-mixed audio.
-
-        Pipeline:
-        1. Generate narration with word-level timestamps (ElevenLabs)
-        2. Pre-mix narration + mood-matched background music
-        3. Render via Remotion (Ken Burns image + animated captions)
-
-        Returns:
-            Path to the rendered MP4 file, or None on failure.
-        """
-        from core.audio.elevenlabs_music import (
-            generate_narration_with_timestamps,
-            premix_audio,
-        )
-        from core.rendering.remotion_renderer import render_devotional_reel
-
-        narration_text, verse_ref = self._get_narration_text(content)
-        if not narration_text:
-            logger.warning(f"No narration text for content #{content.id}")
-            return None
-
-        content_type_val = (
-            content.content_type.value if content.content_type else "daily_devotional"
-        )
-
-        try:
-            # Step 1: Generate narration with timestamps
-            narration_path, word_timestamps = generate_narration_with_timestamps(
-                text=narration_text,
-                content_id=content.id,
-            )
-            if not narration_path:
-                logger.warning(f"Narration generation failed for content #{content.id}")
-                return None
-
-            # Step 2: Calculate duration from narration timestamps
-            duration = 15.0  # default
-            if word_timestamps:
-                last_word_end = max(w["end"] for w in word_timestamps)
-                duration = last_word_end + 3.0  # 3s buffer after last word
-                duration = max(duration, 12.0)  # minimum 12s
-                duration = min(duration, 30.0)  # maximum 30s
-
-            # Step 3: Pre-mix narration + background music
-            mixed_audio_path = premix_audio(
-                narration_path=narration_path,
-                music_mood=content_type_val,
-                duration_seconds=duration,
-                content_id=content.id,
-            )
-            if not mixed_audio_path:
-                logger.warning(
-                    f"Audio pre-mix failed for content #{content.id}, "
-                    f"falling back to narration-only"
-                )
-                mixed_audio_path = narration_path
-
-            # Step 4: Render with Remotion
-            output_dir = str(IMAGES_PROCESSED_DIR)
-            os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, f"reel_{content.id}.mp4")
-
-            # Extract the raw verse text for static on-screen display
-            display_verse_text = (
-                content.verse.text if content.verse and content.verse.text else narration_text
-            )
-
-            reel_path = render_devotional_reel(
-                image_path=raw_path,
-                audio_path=mixed_audio_path,
-                words=word_timestamps,
-                verse_reference=verse_ref,
-                duration_seconds=duration,
-                output_path=output_path,
-                verse_text=display_verse_text,
-            )
-
-            if reel_path:
-                logger.info(f"Remotion reel rendered for content #{content.id}")
-            return reel_path
-
-        except Exception as e:
-            logger.error(f"Remotion reel pipeline failed for content #{content.id}: {e}")
-            return None
 
     def _process_image(
         self,
