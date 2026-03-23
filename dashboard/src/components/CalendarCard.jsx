@@ -46,7 +46,6 @@ const MENU_ACTIONS = [
   { key: 'reject', label: 'Reject' },
   { key: 'delete', label: 'Delete' },
   { key: 'ai-image', label: 'AI Image' },
-  { key: 'swap-reel', label: 'Swap Reel' },
   { key: 'view-details', label: 'View Details' },
 ];
 

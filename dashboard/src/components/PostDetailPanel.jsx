@@ -294,12 +294,6 @@ export default function PostDetailPanel({ content, onClose, onAction, onRegenera
         >
           AI Image
         </button>
-        <button
-          onClick={() => onAction('swap-reel', content.id)}
-          className="px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
-        >
-          Swap Reel
-        </button>
       </div>
 
         </div>{/* end panel body */}

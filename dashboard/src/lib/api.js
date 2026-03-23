@@ -94,18 +94,6 @@ export const generateAiImage = (id) => {
   return request(`/content/${id}/ai-image`, { method: 'POST' });
 };
 
-export const swapReelImage = (id) => {
-  return request(`/content/${id}/swap-reel`, { method: 'POST' });
-};
-
-export const regenerateReel = (id, preset, voice) => {
-  const params = new URLSearchParams();
-  if (preset) params.set('preset', preset);
-  if (voice) params.set('voice', voice);
-  const query = params.toString() ? `?${params}` : '';
-  return request(`/content/${id}/regenerate-reel${query}`, { method: 'POST' });
-};
-
 export const rescheduleContent = (id, scheduledAt) => {
   return request(`/content/${id}/reschedule?scheduled_at=${scheduledAt}`, { method: 'POST' });
 };
