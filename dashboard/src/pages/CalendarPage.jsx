@@ -10,7 +10,6 @@ import {
   rejectContent,
   postNow,
   generateAiImage,
-  swapReelImage,
   regenerateContent,
 } from '../lib/api';
 // PostDetailPanel removed — caption shown inline below thumbnail
@@ -260,19 +259,6 @@ export default function CalendarPage({ weekStart }) {
     },
   });
 
-  const swapReelMutation = useMutation({
-    mutationFn: (id) => {
-      setToast({ message: 'Swapping reel background...', type: 'loading' });
-      return swapReelImage(id);
-    },
-    onSuccess: () => {
-      setToast({ message: 'Reel swapped', type: 'success' });
-      invalidateCalendar();
-    },
-    onError: (err) => {
-      setToast({ message: err.message || 'Swap reel failed', type: 'error' });
-    },
-  });
 
   const regenerateMutation = useMutation({
     mutationFn: (id) => {
@@ -317,9 +303,6 @@ export default function CalendarPage({ weekStart }) {
         break;
       case 'ai-image':
         aiImageMutation.mutate(id);
-        break;
-      case 'swap-reel':
-        swapReelMutation.mutate(id);
         break;
       case 'regenerate':
         regenerateMutation.mutate(id);
