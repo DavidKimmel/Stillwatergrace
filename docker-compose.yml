@@ -1,22 +1,6 @@
 version: "3.9"
 
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: faithpage
-      POSTGRES_PASSWORD: faithpage
-      POSTGRES_DB: faithpage
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U faithpage"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     ports:
@@ -40,12 +24,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
       REDIS_URL: redis://redis:6379/0
       PYTHONPATH: /app
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -59,12 +40,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
       REDIS_URL: redis://redis:6379/0
       PYTHONPATH: /app
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -78,12 +56,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://faithpage:faithpage@db:5432/faithpage
       REDIS_URL: redis://redis:6379/0
       PYTHONPATH: /app
     depends_on:
-      db:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -102,6 +77,5 @@ services:
       - api
 
 volumes:
-  pgdata:
   dashboard_node_modules:
   remotion_node_modules:

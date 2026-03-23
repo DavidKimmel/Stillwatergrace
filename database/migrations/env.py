@@ -42,10 +42,17 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
+    section = config.get_section(config.config_ini_section, {})
+    url = section.get("sqlalchemy.url", "")
+    connect_args = {}
+    if "supabase" in url:
+        connect_args["sslmode"] = "require"
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
 
     with connectable.connect() as connection:

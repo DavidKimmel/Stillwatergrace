@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """All application settings, loaded from .env file."""
 
     # Database
-    database_url: str = "postgresql://faithpage:faithpage@localhost:5432/faithpage"
+    database_url: str = "postgresql://localhost:5432/postgres"
     redis_url: str = "redis://localhost:6379/0"
 
     # Anthropic (Claude API)

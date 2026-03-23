@@ -3,13 +3,6 @@ set -e
 
 echo "=== StillWaterGrace entrypoint ==="
 
-# Wait for Postgres to be ready
-until pg_isready -h db -U faithpage -q 2>/dev/null; do
-  echo "Waiting for Postgres..."
-  sleep 1
-done
-echo "Postgres is ready."
-
 # Install ReelCreate if available (mounted at /reelcreate)
 if [ -d "/reelcreate" ] && [ -f "/reelcreate/pyproject.toml" ]; then
   echo "Installing ReelCreate..."
