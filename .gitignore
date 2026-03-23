@@ -55,6 +55,11 @@ rendering/remotion/out/
 celerybeat-schedule
 celerybeat-schedule.db
 
+# Build artifacts
+output/
+audio/ambient/
+data/assets/builds/
+
 # Claude Code
 .claude/
 .superpowers/
