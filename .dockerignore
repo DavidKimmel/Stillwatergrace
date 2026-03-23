@@ -1,0 +1,9 @@
+node_modules
+rendering/remotion/node_modules
+dashboard/node_modules
+__pycache__
+*.pyc
+.venv
+.git
+.env
+*.egg-info

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace Reframe Design — 2026-03-20</title>
+<style>
+  body { font-family: 'Georgia', serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #2d2d2d; line-height: 1.7; background: #fefefe; }
+  h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 10px; }
+  h2 { color: #2D4A3E; margin-top: 2em; border-bottom: 1px solid #e0d5c5; padding-bottom: 6px; }
+  h3 { color: #4a6b5e; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { border: 1px solid #d4c9b8; padding: 8px 12px; text-align: left; }
+  th { background: #2D4A3E; color: #FFF8F0; }
+  tr:nth-child(even) { background: #faf5ed; }
+  code { background: #f0ebe3; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+  .meta { color: #888; font-style: italic; margin-bottom: 2em; }
+  .status { display: inline-block; background: #2D4A3E; color: #FFF8F0; padding: 2px 10px; border-radius: 4px; font-size: 0.85em; }
+  ul, ol { margin: 0.5em 0; }
+  li { margin: 0.3em 0; }
+  .section-note { background: #f9f5ef; border-left: 4px solid #D4A853; padding: 12px 16px; margin: 1em 0; }
+</style>
+</head>
+<body>
+
+<h1>StillWaterGrace Reframe Design</h1>
+<p class="meta"><strong>Date:</strong> 2026-03-20 &nbsp;|&nbsp; <span class="status">Approved</span></p>
+<p><strong>Goal:</strong> Simplify the content pipeline to one polished reel format, replace FFmpeg with Remotion, establish a unified cinematic visual brand.</p>
+
+<h2>Problem Statement</h2>
+<p>StillWaterGrace has accumulated too many content types, rendering paths, and visual styles. The result is 14 posts/week where none look professional. Three separate FFmpeg-based reel generators produce inconsistent output with white card overlays that don't match the cinematic aesthetic of successful faith accounts like @glorifyappofficial (462K followers) and @mightylordverses (82K followers).</p>
+
+<h2>Design Decisions</h2>
+
+<h3>One Format, One Look</h3>
+<ul>
+  <li><strong>Single content type:</strong> <code>daily_devotional</code> replaces all 7+ active types (daily_verse, marriage_monday, faith_friday, encouragement, christian_quote, carousel, etc.)</li>
+  <li><strong>7 posts/week</strong> (1/day), down from 14/week (2/day)</li>
+  <li><strong>Single posting time</strong> per day (to be tuned)</li>
+</ul>
+
+<h3>Visual Identity (Cinematic/Editorial)</h3>
+<ul>
+  <li>Full-screen Unsplash imagery: nature, moody, cinematic color grading (warm tones, film grain)</li>
+  <li>Text appears directly on the image — no cards, no boxes, no overlays</li>
+  <li>Phrase-by-phrase or word-by-word captions synced to narration via ElevenLabs word timestamps</li>
+  <li>Clean serif typography in cream/white, positioned for readability</li>
+  <li>Subtle Ken Burns motion on background image</li>
+  <li>No watermark card, no Logo.mp4 outro</li>
+  <li>Target duration: 15-20 seconds</li>
+</ul>
+
+<h3>Reference Accounts</h3>
+<ul>
+  <li><strong>@glorifyappofficial</strong> — cinematic moody aesthetic, warm golden tones, B&W, film grain, text directly on imagery</li>
+  <li><strong>@mightylordverses</strong> — dark backgrounds, clean serif text, minimal layout</li>
+</ul>
+
+<h3>Single Voice</h3>
+<ul>
+  <li><strong>Ian Cartwell</strong> (voice ID: <code>e5WNhrdI30aXpS2RSGm1</code>) — American English narration voice</li>
+  <li>No rotation. One voice = brand recognition.</li>
+</ul>
+
+<h3>Script Structure</h3>
+<ul>
+  <li>Scripture-focused: a Bible verse with optional brief intro</li>
+  <li>Intro examples: "Scripture teaches us...", "In the Bible it says...", "The book of Psalms reminds us..."</li>
+  <li>Claude decides per-verse whether an intro adds value or if the verse stands alone</li>
+  <li>No forced hook structure</li>
+  <li>Bible source: api.bible (from ReelCreate, supports preferred translations like NIV)</li>
+</ul>
+
+<h3>Rendering Engine</h3>
+<ul>
+  <li><strong>New Remotion composition built from scratch</strong> inside SWG</li>
+  <li>NOT ported from ReelCreate — clean purpose-built implementation</li>
+  <li>Python renderer bridge passes props to <code>npx remotion render</code></li>
+  <li>Input: Unsplash image, narration audio, word timestamps, music track, script text</li>
+  <li>Output: 1080x1920 MP4, 30fps</li>
+</ul>
+
+<h2>What Gets Replaced</h2>
+<table>
+  <tr><th>Component</th><th>Lines</th><th>Action</th></tr>
+  <tr><td><code>core/images/reel_generator.py</code></td><td>1,652</td><td>Replaced by Remotion</td></tr>
+  <tr><td><code>core/images/phrase_reel_generator.py</code></td><td>736</td><td>Replaced by Remotion</td></tr>
+  <tr><td><code>core/content/reelcreate_bridge.py</code></td><td>536</td><td>Deleted</td></tr>
+  <tr><td>3 reel styles (classic/quick/cinematic)</td><td>—</td><td>Gone — one style</td></tr>
+  <tr><td>9-voice rotation</td><td>—</td><td>Gone — Ian Cartwell only</td></tr>
+  <tr><td>6 feed overlay styles</td><td>—</td><td>Gone — no overlays</td></tr>
+  <tr><td>FFmpeg reel rendering</td><td>—</td><td>Gone — Remotion only</td></tr>
+</table>
+
+<h2>What Gets Built New</h2>
+
+<h3>1. Remotion Composition (<code>rendering/remotion/src/DevotionalReel.tsx</code>)</h3>
+<ul>
+  <li>Full-screen image with subtle Ken Burns motion (Remotion <code>spring()</code> + <code>interpolate()</code>)</li>
+  <li>Cinematic color grading via CSS filters (warm tone shift, subtle grain overlay)</li>
+  <li>Phrase-synced captions from ElevenLabs word-level timestamps</li>
+  <li>Clean serif typography (cream/white)</li>
+  <li>Audio: narration + background music baked into render</li>
+</ul>
+
+<h3>2. Remotion Renderer Bridge (Python)</h3>
+<ul>
+  <li>Copies assets to Remotion public directory</li>
+  <li>Generates <code>render-props.json</code> with all composition data</li>
+  <li>Calls <code>npx remotion render</code> via subprocess</li>
+  <li>Returns rendered MP4 path</li>
+  <li>Replaces all three existing generators with one function: <code>render_devotional_reel()</code></li>
+</ul>
+
+<h3>3. Simplified Content Generator</h3>
+<ul>
+  <li>Single Claude prompt template for <code>daily_devotional</code></li>
+  <li>api.bible integration for verse sourcing (NIV, ESV, etc.)</li>
+  <li>Output: verse text, optional intro line, Unsplash search query, music mood</li>
+</ul>
+
+<h3>4. Updated Calendar</h3>
+<ul>
+  <li>7 slots/week, 1/day</li>
+  <li>Single content type: <code>daily_devotional</code></li>
+  <li>Same approve/reject workflow</li>
+</ul>
+
+<h2>What Stays Untouched</h2>
+<ul>
+  <li>Dashboard (calendar view, approve/reject, post-now)</li>
+  <li>Posting pipeline (Instagram, Facebook, TikTok)</li>
+  <li>Celery beat scheduling (adjusted for 7/week)</li>
+  <li>Analytics / insights / competitor scraper</li>
+  <li>Devotional PDF generator (used in Linktree)</li>
+  <li>R2 uploads</li>
+  <li>Database (new type added, old enums preserved for historical data)</li>
+</ul>
+
+<h2>Post-Completion</h2>
+<div class="section-note">
+  <p>Once SWG is running with the new Remotion pipeline, ReelCreate (<code>C:\reelcreate</code>) can be fully abandoned and deleted. Features from ReelCreate (viral intelligence, creator studio) can be selectively rebuilt in SWG later if needed.</p>
+</div>
+
+<h2>Technical Decisions</h2>
+
+<h3>Audio Architecture</h3>
+<p>FFmpeg pre-mixes narration + music into a single audio file <em>before</em> Remotion render. Remotion receives one <code>&lt;Audio&gt;</code> track. This keeps audio mixing in Python/FFmpeg (where we already have working code) and simplifies the Remotion composition. Word timestamps are relative to narration start, which equals audio start (no offset — narration begins at frame 0).</p>
+
+<h3>Word Timestamp Contract</h3>
+<p>ElevenLabs <code>eleven_v3</code> with <code>alignment</code> returns word-level timestamps. The renderer bridge passes these to Remotion as a JSON array of <code>{ word: string, start: number, end: number }</code> (seconds from audio start). Captions are grouped into 3-5 word phrases for display. No offset adjustment needed since narration starts at t=0.</p>
+
+<h3>Remotion Project Location</h3>
+<p>Lives at <code>rendering/remotion/</code> inside the SWG repo. It is a standalone npm package with its own <code>package.json</code>. The Dockerfile adds <code>RUN cd /app/rendering/remotion &amp;&amp; npm ci</code> to install dependencies at build time. The <code>npx remotion render</code> command runs from this directory.</p>
+
+<h3>Database Migration</h3>
+<p>Migration 007: adds <code>daily_devotional</code> to the <code>contenttype</code> PostgreSQL enum via <code>ALTER TYPE contenttype ADD VALUE 'daily_devotional'</code>. Old enum values are preserved for historical data. No tables are dropped or modified.</p>
+
+<h3>Content Generator Output Schema</h3>
+<p>Claude returns JSON with these keys for <code>daily_devotional</code>:</p>
+<ul>
+  <li><code>narration_script</code> — full narration text (optional intro + verse). This is what gets sent to ElevenLabs.</li>
+  <li><code>verse_text</code> — the scripture text only (for caption display)</li>
+  <li><code>verse_reference</code> — e.g., "Psalm 46:10 NIV"</li>
+  <li><code>caption</code> — Instagram caption (verse + reflection + hashtags)</li>
+  <li><code>unsplash_query</code> — search term for background image</li>
+  <li><code>music_mood</code> — one of: peaceful, reflective, hopeful, reverent</li>
+</ul>
+<p>The generator's <code>REQUIRED_KEYS</code> validation will be updated to match this schema. Old keys (<code>hook</code>, <code>reel_script_15</code>, <code>reel_script_30</code>, etc.) are removed.</p>
+
+<h3>Calendar Update</h3>
+<p><code>WEEKLY_SCHEDULE</code> in <code>calendar_logic.py</code> is rewritten to 7 slots: one <code>daily_devotional</code> per day. The <code>POSTS_PER_DAY_BY_WEEK</code> ramp logic is removed — it's 1/day from the start. Provisional posting time: <strong>6:30 AM EST</strong> (morning slot). Celery beat schedule reduced to one <code>morning-post</code> task. The noon-post task is removed.</p>
+
+<h3>Render Failure Handling</h3>
+<p>If Remotion render fails (Chrome crash, OOM, missing asset), the content stays in <code>pending</code> status with error logged. It does NOT auto-post. The dashboard shows the error — user can retry or skip. No FFmpeg fallback. This is acceptable because we review all content before posting anyway (<code>AUTO_APPROVE=false</code>).</p>
+
+<h3>Branding</h3>
+<p>No watermark card or Logo.mp4 outro. A subtle <code>@stillwatergrace</code> text in the bottom corner (small, semi-transparent) replaces the old watermark system. Instagram already shows the account handle on reels.</p>
+
+<h3>api.bible Integration</h3>
+<p>Port the <code>bible_api.py</code> client from ReelCreate which uses <code>api.bible</code> (API key required, supports NIV/ESV/KJV). This replaces the existing <code>BibleAPIClient</code> in <code>core/scraper/bible_api.py</code> which uses <code>bible-api.com</code> (WEB translation only). The existing <code>bible_verses</code> table schema is reused — just the translation field changes. API key goes in <code>.env</code> as <code>BIBLE_API_KEY</code>.</p>
+
+<h3>Other Technical Notes</h3>
+<ul>
+  <li>Unsplash queries curated for cinematic look: golden hour, moody nature, dramatic skies, ocean, forest light</li>
+  <li>Remotion needs Node.js 20+ runtime — already in Dockerfile</li>
+  <li>Render tasks run on the existing Celery worker (no dedicated queue needed at 1 render/day)</li>
+  <li>Dashboard content-type display may need trivial update to recognize <code>daily_devotional</code></li>
+</ul>
+
+</body>
+</html>

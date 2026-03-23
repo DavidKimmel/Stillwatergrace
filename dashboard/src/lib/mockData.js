@@ -326,13 +326,47 @@ export function weeklyCalendar(startDate) {
     ],
   ];
 
+  const hooks = {
+    daily_verse: '"Be still, and know that I am God." — Psalm 46:10',
+    marriage_monday: 'The strongest marriages are built on the smallest daily choices.',
+    parenting_wednesday: 'Your children don\'t need a perfect parent.',
+    faith_friday: 'When fear whispers, God shouts hope.',
+    encouragement: 'You are never too broken for God\'s grace.',
+    prayer_prompt: 'What are you trusting God for today?',
+    this_or_that: 'Morning prayer or evening prayer?',
+    fill_in_blank: 'My favorite verse is ___.',
+    carousel: '5 prayers for your marriage this week',
+    reel: 'His peace is not like the world gives.',
+    gratitude: 'Thank God for the small things today.',
+    christian_quote: '"Faith is taking the first step." — MLK Jr.',
+  };
+
+  const statuses = ['pending', 'approved', 'posted', 'approved', 'pending'];
+  let idCounter = 101;
+
   schedule.forEach((daySlots, dayIndex) => {
     const day = addDays(start, dayIndex);
-    daySlots.forEach((slot) => {
+    daySlots.forEach((slot, slotIndex) => {
+      const id = idCounter++;
       weekItems.push({
+        id,
         content_type: slot.type,
-        status: 'approved',
+        status: statuses[(dayIndex + slotIndex) % statuses.length],
+        hook: hooks[slot.type] || 'Content hook text here',
+        caption_short: 'In the chaos of life, God invites us to stillness.',
+        caption_medium: 'In the chaos of life, God invites us to stillness. Not to do more — but to trust more.',
+        caption_long: 'In the chaos of life, God invites us to stillness. Not to do more — but to trust more. When the noise gets loud, remember: He is God.',
+        facebook_variation: 'Sometimes the bravest thing you can do is stop striving and trust.',
+        reel_script_15: 'When life feels overwhelming... be still. He is God.',
+        hashtags_large: ['#faith', '#biblestudy', '#christianliving'],
+        hashtags_medium: ['#bestill', '#psalm46', '#trustgod'],
+        hashtags_niche: ['#stillwatergrace', '#faithandfamily'],
         scheduled_at: scheduleAt(day, slot.hour, slot.min),
+        is_selected: id === 103,
+        images: [
+          { id: id * 10, format: 'feed_4x5', final_url: null, provider: 'unsplash' },
+          { id: id * 10 + 1, format: 'reel_9x16', final_url: null, provider: 'unsplash' },
+        ],
       });
     });
   });
@@ -522,6 +556,21 @@ export function insightsCompetitors() {
       ],
     },
   ];
+}
+
+// ── Competitor Top Posts ──
+
+export function competitorTopPosts() {
+  return {
+    posts: [
+      { handle: 'proverbs31ministries', media_type: 'VIDEO', caption_preview: 'When God is silent, He is not absent. He is working behind the scenes in ways you cannot see yet.', posted_at: subDays(today(), 1).toISOString(), permalink: null },
+      { handle: 'proverbs31ministries', media_type: 'CAROUSEL_ALBUM', caption_preview: '5 truths to anchor your soul this week when anxiety tries to steal your peace.', posted_at: subDays(today(), 2).toISOString(), permalink: null },
+      { handle: 'biblesociety', media_type: 'IMAGE', caption_preview: 'The Word of God is alive and active, sharper than any two-edged sword.', posted_at: subDays(today(), 1).toISOString(), permalink: null },
+      { handle: 'biblesociety', media_type: 'VIDEO', caption_preview: 'How do you start your morning with Scripture? Share your routine below.', posted_at: subDays(today(), 3).toISOString(), permalink: null },
+      { handle: 'faithward_org', media_type: 'CAROUSEL_ALBUM', caption_preview: 'What does it mean to walk by faith and not by sight? These 5 steps changed everything.', posted_at: subDays(today(), 2).toISOString(), permalink: null },
+      { handle: 'faithward_org', media_type: 'IMAGE', caption_preview: 'Grace is not a reward for the righteous. It is a gift for the broken.', posted_at: subDays(today(), 4).toISOString(), permalink: null },
+    ],
+  };
 }
 
 // ── Monetization ──

@@ -52,30 +52,30 @@ MAX_REEL_SECONDS = 60.0  # Hard cap — longer reels for engagement
 # Reel presentation styles — rotated by content_id for feed variety
 REEL_STYLES = {
     "classic": {
-        # Instant hook → card fade → line-by-line reveal → long hold → CTA
+        # Instant hook → card fade → line-by-line reveal → hold → CTA
         "intro_hold": 0.3,
         "card_fade_frames": 6,
         "line_reveal_hold": 3.0,
-        "final_hold": 8.0,
-        "outro_hold": 3.0,
+        "final_hold": 3.0,
+        "outro_hold": 1.5,
         "reveal_mode": "line_by_line",
     },
     "quick": {
-        # Near-instant → quick fade → all text at once → long read → CTA
+        # Near-instant → quick fade → all text at once → read → CTA
         "intro_hold": 0.2,
         "card_fade_frames": 4,
         "line_reveal_hold": 0.0,  # all lines appear together
-        "final_hold": 12.0,
-        "outro_hold": 3.0,
+        "final_hold": 4.0,
+        "outro_hold": 1.5,
         "reveal_mode": "all_at_once",
     },
     "cinematic": {
-        # Brief scenic moment → card fade → line-by-line → long hold → CTA
+        # Brief scenic moment → card fade → line-by-line → hold → CTA
         "intro_hold": 0.5,
         "card_fade_frames": 8,
         "line_reveal_hold": 2.5,
-        "final_hold": 8.0,
-        "outro_hold": 3.0,
+        "final_hold": 3.5,
+        "outro_hold": 1.5,
         "reveal_mode": "line_by_line",
     },
 }
@@ -90,8 +90,13 @@ def generate_reel(
     verse_text: str,
     verse_ref: str,
     content_id: int,
-    translation: str = "WEB",
+    translation: str = "ASV",
     content_type: str = "",
+    overlay_style: str = "card",
+    font_size_override: Optional[int] = None,
+    raw_narration: bool = False,
+    font_family: Optional[str] = None,
+    text_color: Optional[str] = None,
 ) -> Optional[str]:
     """Generate an animated text-reveal reel video.
 
@@ -102,6 +107,10 @@ def generate_reel(
         content_id: Content ID for output naming.
         translation: Bible translation abbreviation.
         content_type: Content type string (unused, kept for API compatibility).
+        overlay_style: "card" (white card + highlights) or "creator" (text-on-image, no card).
+        font_size_override: Optional explicit font size (24-80). None = auto-fit.
+        font_family: Optional font family name (georgia, playfair, lato, calibri).
+        text_color: Optional hex color for verse text (e.g. "#FFFFFF").
 
     Returns:
         Path to output MP4 file, or None on failure.
@@ -140,10 +149,17 @@ def generate_reel(
     verse_num_font = get_body_font(28)
     wm_font = get_body_font(18)
 
-    verse_font_names = [
-        "georgia.ttf", "LiberationSerif-Regular.ttf", "DejaVuSerif.ttf",
-        "times.ttf",
-    ]
+    # Font family mapping — resolve user-selected font to system font filenames
+    FONT_FAMILY_MAP = {
+        "georgia": ["georgia.ttf", "LiberationSerif-Regular.ttf", "DejaVuSerif.ttf", "times.ttf"],
+        "playfair": ["PlayfairDisplay-Regular.ttf", "georgia.ttf", "LiberationSerif-Regular.ttf"],
+        "lato": ["Lato-Regular.ttf", "calibri.ttf", "arial.ttf", "DejaVuSans.ttf"],
+        "calibri": ["calibri.ttf", "Lato-Regular.ttf", "arial.ttf", "DejaVuSans.ttf"],
+    }
+    verse_font_names = FONT_FAMILY_MAP.get(
+        font_family or "georgia",
+        FONT_FAMILY_MAP["georgia"],
+    )
 
     # Card sizing
     card_margin_x = int(REEL_W * 0.06)
@@ -152,14 +168,19 @@ def generate_reel(
     text_area_w = card_w - card_padding_x * 2
 
     # Adaptive font for verse text
-    font_size = 50
-    verse_font = _resolve_font(verse_font_names, font_size)
-    verse_lines = _wrap_text(verse_text, verse_font, text_area_w - 40)
-    max_lines = 7
-    while len(verse_lines) > max_lines and font_size > 34:
-        font_size -= 4
+    if font_size_override:
+        font_size = max(24, min(80, font_size_override))
         verse_font = _resolve_font(verse_font_names, font_size)
         verse_lines = _wrap_text(verse_text, verse_font, text_area_w - 40)
+    else:
+        font_size = 50
+        verse_font = _resolve_font(verse_font_names, font_size)
+        verse_lines = _wrap_text(verse_text, verse_font, text_area_w - 40)
+        max_lines = 7
+        while len(verse_lines) > max_lines and font_size > 34:
+            font_size -= 4
+            verse_font = _resolve_font(verse_font_names, font_size)
+            verse_lines = _wrap_text(verse_text, verse_font, text_area_w - 40)
 
     # Measure dimensions
     measure_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -203,6 +224,12 @@ def generate_reel(
     s_outro = style["outro_hold"]
     reveal_mode = style["reveal_mode"]
 
+    # Creator reels: show all text immediately from the start (no line-by-line sync)
+    if overlay_style == "creator":
+        reveal_mode = "all_at_once"
+        s_intro = 0.2
+        s_card_fade = 4
+
     intro_frames = int(s_intro * FPS)
     if reveal_mode == "all_at_once":
         line_reveal_frames = 0  # all lines shown together during final_hold
@@ -225,19 +252,21 @@ def generate_reel(
             verse_text=verse_text,
             verse_ref=verse_ref,
             content_id=content_id,
+            raw_narration=raw_narration,
         )
     except Exception as e:
         logger.warning(f"Narration generation failed: {e}")
 
-    # Extend video if narration is longer than visual timing (capped at MAX_REEL_SECONDS)
-    # If narration still doesn't fit after extension, drop it (no speedup — sounds unnatural)
+    # Adjust video duration to match narration: extend if too short, shorten if too long.
+    # After narration ends, add only 2.5s of breathing room, then end the video.
     if narration_path and narration_path.exists():
         narration_delay = s_intro + (s_card_fade / FPS) + 0.3
         narration_dur = _get_audio_duration(narration_path)
         if narration_dur:
-            narration_end = narration_delay + narration_dur + 1.5  # 1.5s breathing room
-            if narration_end > total_seconds:
-                extra = min(narration_end - total_seconds, MAX_REEL_SECONDS - total_seconds)
+            narration_target = narration_delay + narration_dur + 2.5  # 2.5s breathing room
+            if narration_target > total_seconds:
+                # Extend: narration is longer than visual timing
+                extra = min(narration_target - total_seconds, MAX_REEL_SECONDS - total_seconds)
                 if extra > 0:
                     logger.info(
                         f"Extending reel by {extra:.1f}s for narration "
@@ -246,6 +275,21 @@ def generate_reel(
                     extra_frames = int(extra * FPS)
                     final_frames += extra_frames
                     total_frames += extra_frames
+                    total_seconds = total_frames / FPS
+            elif narration_target < total_seconds - 1.0:
+                # Shorten: narration ends well before the style's final_hold expires.
+                # Trim final_frames so the video ends ~2.5s after narration finishes.
+                overshoot = total_seconds - narration_target
+                trim_frames = int(overshoot * FPS)
+                new_final = max(int(1.5 * FPS), final_frames - trim_frames)
+                if new_final < final_frames:
+                    logger.info(
+                        f"Shortening reel by {(final_frames - new_final) / FPS:.1f}s — "
+                        f"narration ends at {narration_delay + narration_dur:.1f}s, "
+                        f"video was {total_seconds:.1f}s"
+                    )
+                    final_frames = new_final
+                    total_frames = intro_frames + s_card_fade + line_reveal_frames + final_frames + outro_frames
                     total_seconds = total_frames / FPS
 
             # After extension, check if narration still overruns the video
@@ -328,6 +372,7 @@ def generate_reel(
                 narration_path=narration_path,
                 content_type=content_type,
                 content_id=content_id,
+                overlay_style=overlay_style,
             )
         else:
             result = _generate_static(
@@ -359,6 +404,7 @@ def generate_reel(
                 narration_path=narration_path,
                 content_type=content_type,
                 content_id=content_id,
+                overlay_style=overlay_style,
             )
 
         if result:
@@ -400,6 +446,7 @@ def _generate_two_pass(
     narration_path: Optional[Path] = None,
     content_type: str = "",
     content_id: int = 0,
+    overlay_style: str = "card",
 ) -> Optional[str]:
     """Two-pass Ken Burns approach: zoompan background + transparent card overlay."""
 
@@ -455,42 +502,24 @@ def _generate_two_pass(
         dark_overlay.save(str(path), "PNG")
         frame_num += 1
 
-    # Phase 2: Card fade-in
+    # Phase 2: Card/text fade-in
+    use_creator = overlay_style == "creator"
     for fade_i in range(card_fade_frames):
         alpha = int((fade_i + 1) / card_fade_frames * 248)
-        # For "all_at_once" show all lines as card fades in
         vis = len(verse_lines) if reveal_mode == "all_at_once" else 0
-        frame = _render_card_frame(
-            bg=None, transparent_bg=True,
-            card_alpha=alpha,
-            card_x=card_x, card_y=card_y,
-            card_w=card_w, card_h=card_h,
-            header_text=header_text,
-            header_font=header_font,
-            header_y_offset=header_y_offset,
-            sep_y_offset=sep_y_offset,
-            card_padding_x=card_padding_x,
-            wm_font=wm_font,
-            visible_lines=vis,
-            verse_lines=verse_lines,
-            verse_font=verse_font,
-            verse_num_font=verse_num_font,
-            verse_num_text=verse_num_text,
-            text_x=text_x,
-            text_y_offset=text_y_offset,
-            line_h=line_h,
-        )
-        path = tmpdir / f"overlay_{frame_num:05d}.png"
-        frame.save(str(path), "PNG")
-        frame_num += 1
-
-    # Phase 3: Line-by-line reveal (skipped for "all_at_once")
-    if reveal_mode == "line_by_line":
-        for line_idx in range(1, len(verse_lines) + 1):
-            hold_frames = int(line_reveal_hold * FPS)
+        if use_creator:
+            frame = _render_creator_frame(
+                text_alpha=alpha,
+                visible_lines=vis if vis > 0 else len(verse_lines),
+                verse_lines=verse_lines,
+                verse_font=verse_font,
+                wm_font=wm_font,
+                line_h=line_h,
+            )
+        else:
             frame = _render_card_frame(
                 bg=None, transparent_bg=True,
-                card_alpha=248,
+                card_alpha=alpha,
                 card_x=card_x, card_y=card_y,
                 card_w=card_w, card_h=card_h,
                 header_text=header_text,
@@ -499,7 +528,7 @@ def _generate_two_pass(
                 sep_y_offset=sep_y_offset,
                 card_padding_x=card_padding_x,
                 wm_font=wm_font,
-                visible_lines=line_idx,
+                visible_lines=vis,
                 verse_lines=verse_lines,
                 verse_font=verse_font,
                 verse_num_font=verse_num_font,
@@ -508,56 +537,108 @@ def _generate_two_pass(
                 text_y_offset=text_y_offset,
                 line_h=line_h,
             )
+        path = tmpdir / f"overlay_{frame_num:05d}.png"
+        frame.save(str(path), "PNG")
+        frame_num += 1
+
+    # Phase 3: Line-by-line reveal (skipped for "all_at_once")
+    if reveal_mode == "line_by_line":
+        for line_idx in range(1, len(verse_lines) + 1):
+            hold_frames = int(line_reveal_hold * FPS)
+            if use_creator:
+                frame = _render_creator_frame(
+                    text_alpha=248,
+                    visible_lines=line_idx,
+                    verse_lines=verse_lines,
+                    verse_font=verse_font,
+                    wm_font=wm_font,
+                    line_h=line_h,
+                )
+            else:
+                frame = _render_card_frame(
+                    bg=None, transparent_bg=True,
+                    card_alpha=248,
+                    card_x=card_x, card_y=card_y,
+                    card_w=card_w, card_h=card_h,
+                    header_text=header_text,
+                    header_font=header_font,
+                    header_y_offset=header_y_offset,
+                    sep_y_offset=sep_y_offset,
+                    card_padding_x=card_padding_x,
+                    wm_font=wm_font,
+                    visible_lines=line_idx,
+                    verse_lines=verse_lines,
+                    verse_font=verse_font,
+                    verse_num_font=verse_num_font,
+                    verse_num_text=verse_num_text,
+                    text_x=text_x,
+                    text_y_offset=text_y_offset,
+                    line_h=line_h,
+                )
             for _ in range(hold_frames):
                 path = tmpdir / f"overlay_{frame_num:05d}.png"
                 frame.save(str(path), "PNG")
                 frame_num += 1
 
     # Phase 4: Final hold — all lines visible
-    full_card = _render_card_frame(
-        bg=None, transparent_bg=True,
-        card_alpha=248,
-        card_x=card_x, card_y=card_y,
-        card_w=card_w, card_h=card_h,
-        header_text=header_text,
-        header_font=header_font,
-        header_y_offset=header_y_offset,
-        sep_y_offset=sep_y_offset,
-        card_padding_x=card_padding_x,
-        wm_font=wm_font,
-        visible_lines=len(verse_lines),
-        verse_lines=verse_lines,
-        verse_font=verse_font,
-        verse_num_font=verse_num_font,
-        verse_num_text=verse_num_text,
-        text_x=text_x,
-        text_y_offset=text_y_offset,
-        line_h=line_h,
-    )
+    if use_creator:
+        full_frame = _render_creator_frame(
+            text_alpha=248,
+            visible_lines=len(verse_lines),
+            verse_lines=verse_lines,
+            verse_font=verse_font,
+            wm_font=wm_font,
+            line_h=line_h,
+        )
+    else:
+        full_frame = _render_card_frame(
+            bg=None, transparent_bg=True,
+            card_alpha=248,
+            card_x=card_x, card_y=card_y,
+            card_w=card_w, card_h=card_h,
+            header_text=header_text,
+            header_font=header_font,
+            header_y_offset=header_y_offset,
+            sep_y_offset=sep_y_offset,
+            card_padding_x=card_padding_x,
+            wm_font=wm_font,
+            visible_lines=len(verse_lines),
+            verse_lines=verse_lines,
+            verse_font=verse_font,
+            verse_num_font=verse_num_font,
+            verse_num_text=verse_num_text,
+            text_x=text_x,
+            text_y_offset=text_y_offset,
+            line_h=line_h,
+        )
     for _ in range(final_frames):
         path = tmpdir / f"overlay_{frame_num:05d}.png"
-        full_card.save(str(path), "PNG")
+        full_frame.save(str(path), "PNG")
         frame_num += 1
 
     # Phase 5: CTA end-screen — "Save this | Send to someone who needs this"
-    cta_frame = _render_cta_frame(
-        transparent_bg=True,
-        card_x=card_x, card_y=card_y,
-        card_w=card_w, card_h=card_h,
-        card_padding_x=card_padding_x,
-        header_text=header_text,
-        header_font=header_font,
-        header_y_offset=header_y_offset,
-        sep_y_offset=sep_y_offset,
-        wm_font=wm_font,
-        verse_lines=verse_lines,
-        verse_font=verse_font,
-        verse_num_font=verse_num_font,
-        verse_num_text=verse_num_text,
-        text_x=text_x,
-        text_y_offset=text_y_offset,
-        line_h=line_h,
-    )
+    if use_creator:
+        # Creator style: keep full text visible for outro (no card-based CTA)
+        cta_frame = full_frame
+    else:
+        cta_frame = _render_cta_frame(
+            transparent_bg=True,
+            card_x=card_x, card_y=card_y,
+            card_w=card_w, card_h=card_h,
+            card_padding_x=card_padding_x,
+            header_text=header_text,
+            header_font=header_font,
+            header_y_offset=header_y_offset,
+            sep_y_offset=sep_y_offset,
+            wm_font=wm_font,
+            verse_lines=verse_lines,
+            verse_font=verse_font,
+            verse_num_font=verse_num_font,
+            verse_num_text=verse_num_text,
+            text_x=text_x,
+            text_y_offset=text_y_offset,
+            line_h=line_h,
+        )
     for _ in range(outro_frames):
         path = tmpdir / f"overlay_{frame_num:05d}.png"
         cta_frame.save(str(path), "PNG")
@@ -633,11 +714,13 @@ def _generate_static(
     narration_path: Optional[Path] = None,
     content_type: str = "",
     content_id: int = 0,
+    overlay_style: str = "card",
 ) -> Optional[str]:
     """Original static-background approach: PIL renders full frames as JPGs."""
 
     # Crop/resize background to reel dimensions
     bg = _resize_and_crop_reel(bg)
+    use_creator = overlay_style == "creator"
 
     frame_num = 0
 
@@ -649,41 +732,25 @@ def _generate_static(
         darkened_bg.save(str(path), "JPEG", quality=88)
         frame_num += 1
 
-    # Phase 2: Card fade-in
+    # Phase 2: Card/text fade-in
     for fade_i in range(card_fade_frames):
         alpha = int((fade_i + 1) / card_fade_frames * 248)
         vis = len(verse_lines) if reveal_mode == "all_at_once" else 0
-        frame = _render_card_frame(
-            bg=bg, transparent_bg=False,
-            card_alpha=alpha,
-            card_x=card_x, card_y=card_y,
-            card_w=card_w, card_h=card_h,
-            header_text=header_text,
-            header_font=header_font,
-            header_y_offset=header_y_offset,
-            sep_y_offset=sep_y_offset,
-            card_padding_x=card_padding_x,
-            wm_font=wm_font,
-            visible_lines=vis,
-            verse_lines=verse_lines,
-            verse_font=verse_font,
-            verse_num_font=verse_num_font,
-            verse_num_text=verse_num_text,
-            text_x=text_x,
-            text_y_offset=text_y_offset,
-            line_h=line_h,
-        )
-        path = tmpdir / f"frame_{frame_num:05d}.jpg"
-        frame.save(str(path), "JPEG", quality=88)
-        frame_num += 1
-
-    # Phase 3: Line-by-line reveal (skipped for "all_at_once")
-    if reveal_mode == "line_by_line":
-        for line_idx in range(1, len(verse_lines) + 1):
-            hold_frames = int(line_reveal_hold * FPS)
+        if use_creator:
+            frame = _render_creator_frame(
+                text_alpha=alpha,
+                visible_lines=vis if vis > 0 else len(verse_lines),
+                verse_lines=verse_lines,
+                verse_font=verse_font,
+                wm_font=wm_font,
+                line_h=line_h,
+                transparent_bg=False,
+                bg=bg,
+            )
+        else:
             frame = _render_card_frame(
                 bg=bg, transparent_bg=False,
-                card_alpha=248,
+                card_alpha=alpha,
                 card_x=card_x, card_y=card_y,
                 card_w=card_w, card_h=card_h,
                 header_text=header_text,
@@ -692,7 +759,7 @@ def _generate_static(
                 sep_y_offset=sep_y_offset,
                 card_padding_x=card_padding_x,
                 wm_font=wm_font,
-                visible_lines=line_idx,
+                visible_lines=vis,
                 verse_lines=verse_lines,
                 verse_font=verse_font,
                 verse_num_font=verse_num_font,
@@ -701,32 +768,84 @@ def _generate_static(
                 text_y_offset=text_y_offset,
                 line_h=line_h,
             )
+        path = tmpdir / f"frame_{frame_num:05d}.jpg"
+        frame.save(str(path), "JPEG", quality=88)
+        frame_num += 1
+
+    # Phase 3: Line-by-line reveal (skipped for "all_at_once")
+    if reveal_mode == "line_by_line":
+        for line_idx in range(1, len(verse_lines) + 1):
+            hold_frames = int(line_reveal_hold * FPS)
+            if use_creator:
+                frame = _render_creator_frame(
+                    text_alpha=248,
+                    visible_lines=line_idx,
+                    verse_lines=verse_lines,
+                    verse_font=verse_font,
+                    wm_font=wm_font,
+                    line_h=line_h,
+                    transparent_bg=False,
+                    bg=bg,
+                )
+            else:
+                frame = _render_card_frame(
+                    bg=bg, transparent_bg=False,
+                    card_alpha=248,
+                    card_x=card_x, card_y=card_y,
+                    card_w=card_w, card_h=card_h,
+                    header_text=header_text,
+                    header_font=header_font,
+                    header_y_offset=header_y_offset,
+                    sep_y_offset=sep_y_offset,
+                    card_padding_x=card_padding_x,
+                    wm_font=wm_font,
+                    visible_lines=line_idx,
+                    verse_lines=verse_lines,
+                    verse_font=verse_font,
+                    verse_num_font=verse_num_font,
+                    verse_num_text=verse_num_text,
+                    text_x=text_x,
+                    text_y_offset=text_y_offset,
+                    line_h=line_h,
+                )
             for _ in range(hold_frames):
                 path = tmpdir / f"frame_{frame_num:05d}.jpg"
                 frame.save(str(path), "JPEG", quality=88)
                 frame_num += 1
 
     # Phase 4: Final hold — all lines visible
-    full_frame = _render_card_frame(
-        bg=bg, transparent_bg=False,
-        card_alpha=248,
-        card_x=card_x, card_y=card_y,
-        card_w=card_w, card_h=card_h,
-        header_text=header_text,
-        header_font=header_font,
-        header_y_offset=header_y_offset,
-        sep_y_offset=sep_y_offset,
-        card_padding_x=card_padding_x,
-        wm_font=wm_font,
-        visible_lines=len(verse_lines),
-        verse_lines=verse_lines,
-        verse_font=verse_font,
-        verse_num_font=verse_num_font,
-        verse_num_text=verse_num_text,
-        text_x=text_x,
-        text_y_offset=text_y_offset,
-        line_h=line_h,
-    )
+    if use_creator:
+        full_frame = _render_creator_frame(
+            text_alpha=248,
+            visible_lines=len(verse_lines),
+            verse_lines=verse_lines,
+            verse_font=verse_font,
+            wm_font=wm_font,
+            line_h=line_h,
+            transparent_bg=False,
+            bg=bg,
+        )
+    else:
+        full_frame = _render_card_frame(
+            bg=bg, transparent_bg=False,
+            card_alpha=248,
+            card_x=card_x, card_y=card_y,
+            card_w=card_w, card_h=card_h,
+            header_text=header_text,
+            header_font=header_font,
+            header_y_offset=header_y_offset,
+            sep_y_offset=sep_y_offset,
+            card_padding_x=card_padding_x,
+            wm_font=wm_font,
+            visible_lines=len(verse_lines),
+            verse_lines=verse_lines,
+            verse_font=verse_font,
+            verse_num_font=verse_num_font,
+            verse_num_text=verse_num_text,
+            text_x=text_x,
+            text_y_offset=text_y_offset,
+            line_h=line_h,
+        )
     f_final_frames = int(final_hold * FPS)
     for _ in range(f_final_frames):
         path = tmpdir / f"frame_{frame_num:05d}.jpg"
@@ -734,25 +853,28 @@ def _generate_static(
         frame_num += 1
 
     # Phase 5: CTA end-screen
-    cta_frame = _render_cta_frame(
-        bg=bg,
-        transparent_bg=False,
-        card_x=card_x, card_y=card_y,
-        card_w=card_w, card_h=card_h,
-        card_padding_x=card_padding_x,
-        header_text=header_text,
-        header_font=header_font,
-        header_y_offset=header_y_offset,
-        sep_y_offset=sep_y_offset,
-        wm_font=wm_font,
-        verse_lines=verse_lines,
-        verse_font=verse_font,
-        verse_num_font=verse_num_font,
-        verse_num_text=verse_num_text,
-        text_x=text_x,
-        text_y_offset=text_y_offset,
-        line_h=line_h,
-    )
+    if use_creator:
+        cta_frame = full_frame
+    else:
+        cta_frame = _render_cta_frame(
+            bg=bg,
+            transparent_bg=False,
+            card_x=card_x, card_y=card_y,
+            card_w=card_w, card_h=card_h,
+            card_padding_x=card_padding_x,
+            header_text=header_text,
+            header_font=header_font,
+            header_y_offset=header_y_offset,
+            sep_y_offset=sep_y_offset,
+            wm_font=wm_font,
+            verse_lines=verse_lines,
+            verse_font=verse_font,
+            verse_num_font=verse_num_font,
+            verse_num_text=verse_num_text,
+            text_x=text_x,
+            text_y_offset=text_y_offset,
+            line_h=line_h,
+        )
     f_outro_frames = int(outro_hold * FPS)
     for _ in range(f_outro_frames):
         path = tmpdir / f"frame_{frame_num:05d}.jpg"
@@ -1284,6 +1406,76 @@ def _render_cta_frame(
     # Draw CTA text in white
     draw = ImageDraw.Draw(frame)
     draw.text((cta_x, cta_y), cta_text, fill=(255, 255, 255, 240), font=cta_font)
+
+    if transparent_bg:
+        return frame
+    return frame.convert("RGB")
+
+
+def _render_creator_frame(
+    text_alpha: int,
+    visible_lines: int,
+    verse_lines: list[str],
+    verse_font: ImageFont.FreeTypeFont,
+    wm_font: ImageFont.FreeTypeFont,
+    line_h: int,
+    transparent_bg: bool = True,
+    bg: Optional[Image.Image] = None,
+) -> Image.Image:
+    """Render a creator-style frame: text directly on background, no card.
+
+    White text with dark drop shadow — matches the Creator phone preview.
+    """
+    if transparent_bg:
+        frame = Image.new("RGBA", (REEL_W, REEL_H), (0, 0, 0, 0))
+        dark = Image.new("RGBA", (REEL_W, REEL_H), (0, 0, 0, 50))
+        frame = Image.alpha_composite(frame, dark)
+    else:
+        frame = bg.convert("RGBA")
+        dark = Image.new("RGBA", (REEL_W, REEL_H), (0, 0, 0, 50))
+        frame = Image.alpha_composite(frame, dark)
+
+    if text_alpha < 30 or visible_lines <= 0:
+        if transparent_bg:
+            return frame
+        return frame.convert("RGB")
+
+    # Text layout — centered vertically with horizontal padding
+    margin_x = int(REEL_W * 0.08)  # 8% margin
+    text_area_w = REEL_W - margin_x * 2
+    total_text_h = len(verse_lines) * line_h
+    text_y_start = (REEL_H - total_text_h) // 2
+
+    draw = ImageDraw.Draw(frame)
+
+    # Shadow offset for drop shadow
+    shadow_offset = 3
+    shadow_color = (0, 0, 0, min(180, text_alpha))
+    text_color = (255, 255, 255, text_alpha)
+
+    for i in range(min(visible_lines, len(verse_lines))):
+        line = verse_lines[i]
+        y = text_y_start + i * line_h
+
+        # Drop shadow
+        draw.text(
+            (margin_x + shadow_offset, y + shadow_offset),
+            line, fill=shadow_color, font=verse_font,
+        )
+        # White text
+        draw.text(
+            (margin_x, y),
+            line, fill=text_color, font=verse_font,
+        )
+
+    # Watermark
+    wm_text = "@stillwatergrace"
+    wm_bbox = draw.textbbox((0, 0), wm_text, font=wm_font)
+    wm_w = wm_bbox[2] - wm_bbox[0]
+    draw.text(
+        (margin_x, REEL_H - 120),
+        wm_text, fill=(255, 255, 255, min(150, text_alpha)), font=wm_font,
+    )
 
     if transparent_bg:
         return frame

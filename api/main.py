@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import content, analytics, insights, monetization, dashboard
+from api.routes import content, analytics, competitors, insights, monetization, dashboard, images
 from core.config import settings
 
 app = FastAPI(
@@ -48,8 +48,15 @@ _images_dir = Path(__file__).resolve().parent.parent / "images" / "processed"
 if _images_dir.is_dir():
     app.mount("/static/images", StaticFiles(directory=str(_images_dir)), name="images")
 
+# Serve library images (raw/themed folders) for the image library browser
+_library_dir = Path(__file__).resolve().parent.parent / "images" / "raw"
+if _library_dir.is_dir():
+    app.mount("/static/library", StaticFiles(directory=str(_library_dir)), name="library")
+
 app.include_router(content.router, prefix="/api/content", tags=["content"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(insights.router, prefix="/api/analytics/insights", tags=["insights"])
 app.include_router(monetization.router, prefix="/api/monetization", tags=["monetization"])
+app.include_router(competitors.router, prefix="/api", tags=["competitors"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(images.router, prefix="/api/images", tags=["images"])

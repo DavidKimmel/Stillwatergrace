@@ -105,6 +105,10 @@ class ImageCatalog:
         theme_dir.mkdir(parents=True, exist_ok=True)
         return theme_dir / filename
 
+    def find_by_id(self, image_id: str) -> Optional[dict[str, Any]]:
+        """Return a single catalog entry by ID, or None if not found."""
+        return next((e for e in self._entries if e["id"] == image_id), None)
+
     def find_by_theme(self, theme: str) -> list[dict[str, Any]]:
         """Return all catalog entries for a given theme."""
         return [e for e in self._entries if e["theme"] == theme]

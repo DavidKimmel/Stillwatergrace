@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard Overhaul Implementation Plan - StillWaterGrace</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; max-width: 960px; margin: 40px auto; padding: 0 20px; color: #2D4A3E; background: #FFF8F0; line-height: 1.6; }
+  h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 8px; }
+  h2 { color: #D4A853; margin-top: 40px; border-bottom: 1px solid #e8ddd0; padding-bottom: 6px; }
+  h3 { color: #2D4A3E; margin-top: 28px; }
+  h4 { color: #3A6054; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background: #2D4A3E; color: #FFF8F0; }
+  tr:nth-child(even) { background: #f9f5ee; }
+  code { background: #f0ebe3; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #2D4A3E; color: #FFF8F0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85em; }
+  blockquote { border-left: 4px solid #D4A853; margin: 16px 0; padding: 8px 16px; background: #f9f5ee; }
+  ul, ol { line-height: 1.8; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.8em; color: white; }
+  .phase { background: #D4A853; }
+  .task-header { background: #f0ebe3; padding: 12px 16px; border-radius: 8px; margin: 8px 0; border-left: 4px solid #D4A853; }
+</style>
+</head>
+<body>
+
+<h1>Dashboard Overhaul Implementation Plan</h1>
+
+<blockquote>
+<strong>Goal:</strong> Rebuild the StillWaterGrace dashboard into a professional, calendar-centric social media management tool with creator sandbox, competitor insights, drag-and-drop scheduling, and reel-first generation.<br><br>
+<strong>Architecture:</strong> React 18 SPA with sidebar navigation (4 views: Calendar, Creator, Insights, Settings). FastAPI backend with new endpoints for generation control, post selection, drag-and-drop moves, deletion, and creator workflow. Reel-only generation pipeline (drop static images), Unsplash-first with optional AI alternative.<br><br>
+<strong>Tech Stack:</strong> React 18, React Router 6, TanStack Query, Tailwind CSS 3, @dnd-kit/core + @dnd-kit/sortable, Recharts, Lucide icons, Vite. Backend: FastAPI, SQLAlchemy, Celery, FFmpeg.<br><br>
+<strong>Design Doc:</strong> <code>docs/plans/2026-03-10-dashboard-overhaul-design.html</code><br>
+<strong>Skill References:</strong> Use <code>frontend-design</code> skill for all UI components. Use <code>frontend-patterns</code> for React architecture.
+</blockquote>
+
+<h2><span class="badge phase">Phase 1</span> Backend API Endpoints</h2>
+<p>New endpoints needed before the frontend can consume them. Each task adds one endpoint with test.</p>
+
+<h3>Task 1: POST /content/{id}/select - Mark post as active for its time slot</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>api/routes/content.py</code><br>
+Modify: <code>database/models.py</code> (add <code>is_selected</code> boolean to GeneratedContent)<br>
+Create: <code>database/migrations/versions/006_add_is_selected_field.py</code><br>
+Test: <code>tests/test_select_endpoint.py</code>
+</div>
+
+<h4>Step 1: Write the migration</h4>
+<pre>
+# database/migrations/versions/006_add_is_selected_field.py
+"""Add is_selected field to generated_content"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '006'
+down_revision = '005'
+
+def upgrade():
+    op.add_column('generated_content',
+        sa.Column('is_selected', sa.Boolean(), server_default='false', nullable=False))
+
+def downgrade():
+    op.drop_column('generated_content', 'is_selected')
+</pre>
+
+<h4>Step 2: Add field to model</h4>
+<p>In <code>database/models.py</code>, add to <code>GeneratedContent</code>:</p>
+<pre>is_selected = Column(Boolean, default=False, server_default='false')</pre>
+
+<h4>Step 3: Write the failing test</h4>
+<pre>
+# tests/test_select_endpoint.py
+def test_select_post_deselects_others_in_same_slot(client, db_session):
+    post1 = create_test_content(db_session, scheduled_at=datetime(2026, 3, 11, 6, 30), status="approved")
+    post2 = create_test_content(db_session, scheduled_at=datetime(2026, 3, 11, 6, 30), status="approved")
+
+    response = client.post(f"/api/content/{post1.id}/select")
+    assert response.status_code == 200
+
+    db_session.refresh(post1)
+    db_session.refresh(post2)
+    assert post1.is_selected is True
+    assert post2.is_selected is False
+
+def test_select_post_switches_selection(client, db_session):
+    post1 = create_test_content(db_session, scheduled_at=datetime(2026, 3, 11, 6, 30), status="approved", is_selected=True)
+    post2 = create_test_content(db_session, scheduled_at=datetime(2026, 3, 11, 6, 30), status="approved")
+
+    response = client.post(f"/api/content/{post2.id}/select")
+    assert response.status_code == 200
+
+    db_session.refresh(post1)
+    db_session.refresh(post2)
+    assert post1.is_selected is False
+    assert post2.is_selected is True
+</pre>
+
+<h4>Step 4: Run test to verify it fails</h4>
+<p>Run: <code>docker compose exec api pytest tests/test_select_endpoint.py -v</code><br>Expected: FAIL</p>
+
+<h4>Step 5: Implement the endpoint</h4>
+<pre>
+@router.post("/{content_id}/select")
+def select_post(content_id: int, db: Session = Depends(get_db_dependency)):
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    if not content.scheduled_at:
+        raise HTTPException(status_code=400, detail="Content has no scheduled time")
+
+    # Deselect all other posts in the same time slot (same date + same hour)
+    slot_start = content.scheduled_at.replace(minute=0, second=0, microsecond=0)
+    slot_end = slot_start + timedelta(hours=1)
+
+    db.query(GeneratedContent).filter(
+        GeneratedContent.scheduled_at >= slot_start,
+        GeneratedContent.scheduled_at < slot_end,
+        GeneratedContent.id != content_id,
+    ).update({"is_selected": False})
+
+    content.is_selected = True
+    db.commit()
+    return {"success": True, "selected_id": content_id}
+</pre>
+
+<h4>Step 6: Run test to verify it passes</h4>
+<p>Run: <code>docker compose exec api pytest tests/test_select_endpoint.py -v</code><br>Expected: PASS</p>
+
+<h4>Step 7: Commit</h4>
+<pre>git commit -m "feat: add POST /content/{id}/select endpoint for time slot post selection"</pre>
+
+<hr>
+
+<h3>Task 2: POST /content/{id}/move - Move post to different day</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>api/routes/content.py</code><br>
+Test: <code>tests/test_move_endpoint.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_move_post_to_different_day(client, db_session):
+    post = create_test_content(db_session, scheduled_at=datetime(2026, 3, 11, 6, 30), status="approved")
+    response = client.post(f"/api/content/{post.id}/move", json={
+        "date": "2026-03-12", "time_slot": "morning"
+    })
+    assert response.status_code == 200
+    db_session.refresh(post)
+    assert post.scheduled_at.date() == date(2026, 3, 12)
+    assert post.scheduled_at.hour == 6
+
+def test_move_post_to_noon_slot(client, db_session):
+    post = create_test_content(db_session, scheduled_at=datetime(2026, 3, 11, 6, 30), status="approved")
+    response = client.post(f"/api/content/{post.id}/move", json={
+        "date": "2026-03-12", "time_slot": "noon"
+    })
+    assert response.status_code == 200
+    db_session.refresh(post)
+    assert post.scheduled_at.hour == 12
+</pre>
+
+<h4>Step 2: Implement the endpoint</h4>
+<pre>
+SLOT_TIMES = {"morning": (6, 30), "noon": (12, 0)}
+
+@router.post("/{content_id}/move")
+def move_post(content_id: int, body: dict, db: Session = Depends(get_db_dependency)):
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    target_date = date.fromisoformat(body["date"])
+    time_slot = body.get("time_slot", "morning")
+    hour, minute = SLOT_TIMES.get(time_slot, (6, 30))
+    content.scheduled_at = datetime.combine(target_date, time(hour, minute))
+    content.is_selected = False
+    db.commit()
+    return {"success": True, "new_scheduled_at": content.scheduled_at.isoformat()}
+</pre>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: add POST /content/{id}/move endpoint for drag-and-drop"</pre>
+
+<hr>
+
+<h3>Task 3: DELETE /content/{id} - Delete a post</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>api/routes/content.py</code><br>
+Test: <code>tests/test_delete_endpoint.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_delete_post_removes_content_and_images(client, db_session):
+    post = create_test_content(db_session, status="pending")
+    image = create_test_image(db_session, content_id=post.id)
+    response = client.delete(f"/api/content/{post.id}")
+    assert response.status_code == 200
+    assert db_session.query(GeneratedContent).filter_by(id=post.id).first() is None
+    assert db_session.query(GeneratedImage).filter_by(content_id=post.id).first() is None
+
+def test_delete_posted_content_returns_error(client, db_session):
+    post = create_test_content(db_session, status="posted")
+    response = client.delete(f"/api/content/{post.id}")
+    assert response.status_code == 400
+</pre>
+
+<h4>Step 2: Implement</h4>
+<pre>
+@router.delete("/{content_id}")
+def delete_post(content_id: int, db: Session = Depends(get_db_dependency)):
+    content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    if content.status == ContentStatus.posted:
+        raise HTTPException(status_code=400, detail="Cannot delete posted content")
+    db.query(GeneratedImage).filter(GeneratedImage.content_id == content_id).delete()
+    db.delete(content)
+    db.commit()
+    return {"success": True, "deleted_id": content_id}
+</pre>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: add DELETE /content/{id} endpoint"</pre>
+
+<hr>
+
+<h3>Task 4: POST /content/generate - On-demand generation (1-7 days)</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>api/routes/content.py</code><br>
+Modify: <code>workers/daily_tasks.py</code> (extract reusable generation logic)<br>
+Test: <code>tests/test_generate_endpoint.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_generate_creates_content_for_n_days(client, db_session, mocker):
+    mocker.patch("core.content.generator.ContentGenerator.generate_single", return_value=mock_content())
+    mocker.patch("core.images.image_processor.ImagePipeline.generate_images_for_content")
+    response = client.post("/api/content/generate", json={"days": 2})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["slots_created"] == 4  # 2 days x 2 slots/day
+</pre>
+
+<h4>Step 2: Implement - dispatches Celery tasks for each slot, skips existing content</h4>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: add POST /content/generate endpoint for on-demand 1-7 day generation"</pre>
+
+<hr>
+
+<h3>Task 5: POST /content/create - Creator sandbox endpoint</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>api/routes/content.py</code><br>
+Test: <code>tests/test_create_endpoint.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_create_custom_post(client, db_session, mocker):
+    mocker.patch("core.images.reel_generator.ReelGenerator.generate_reel")
+    response = client.post("/api/content/create", json={
+        "content_type": "daily_verse",
+        "text": "Be still and know that I am God. - Psalm 46:10",
+        "image_source": "library",
+        "image_id": "nature_sunset_001",
+        "narration": True,
+        "reel_style": "classic"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["content_id"] is not None
+    assert data["status"] == "pending"
+</pre>
+
+<h4>Step 2: Implement - creates GeneratedContent with status=pending, no scheduled_at (sandbox). Generate reel if requested. Return content_id.</h4>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: add POST /content/create endpoint for creator sandbox"</pre>
+
+<hr>
+
+<h3>Task 6: GET /images/library - Browse image catalog</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Create: <code>api/routes/images.py</code><br>
+Modify: <code>api/routes/__init__.py</code> (register router)<br>
+Test: <code>tests/test_images_api.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_get_library_by_theme(client):
+    response = client.get("/api/images/library?theme=nature")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data["images"], list)
+
+def test_get_library_unused_filter(client):
+    response = client.get("/api/images/library?unused=true")
+    assert response.status_code == 200
+    for img in response.json()["images"]:
+        assert len(img["used_by"]) == 0
+</pre>
+
+<h4>Step 2: Implement - reads from ImageCatalog, supports theme + unused filters</h4>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: add GET /images/library endpoint for image catalog browsing"</pre>
+
+<hr>
+
+<h3>Task 7: GET /competitors/top-posts - Top competitor posts</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Create: <code>api/routes/competitors.py</code><br>
+Test: <code>tests/test_competitors_api.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_get_top_competitor_posts(client, db_session):
+    create_test_competitor_post(db_session, handle="youversion", engagement=500)
+    create_test_competitor_post(db_session, handle="youversion", engagement=100)
+    response = client.get("/api/competitors/top-posts?limit=5")
+    assert response.status_code == 200
+    posts = response.json()["posts"]
+    assert len(posts) &lt;= 5
+</pre>
+
+<h4>Step 2: Implement - query CompetitorPost, sort by engagement desc, support filters</h4>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: add GET /competitors/top-posts endpoint"</pre>
+
+<hr>
+
+<h3>Task 8: Update scraper schedule to Mon/Wed/Fri</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>workers/celery_app.py</code> (beat schedule)
+</div>
+
+<h4>Step 1: Change competitor scraper crontab entries</h4>
+<pre>
+"competitor-content-monday": crontab(hour=5, minute=0, day_of_week="monday"),
+"competitor-content-wednesday": crontab(hour=5, minute=0, day_of_week="wednesday"),
+"competitor-content-friday": crontab(hour=5, minute=0, day_of_week="friday"),
+</pre>
+
+<h4>Step 2: Commit</h4>
+<pre>git commit -m "feat: update competitor scraper to Mon/Wed/Fri schedule"</pre>
+
+<hr>
+
+<h3>Task 9: Update posting task to respect is_selected</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>workers/posting_tasks.py</code><br>
+Test: <code>tests/test_posting_selection.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_posting_task_only_posts_selected_content(db_session, mocker):
+    selected = create_test_content(db_session, scheduled_at=now, status="approved", is_selected=True)
+    unselected = create_test_content(db_session, scheduled_at=now, status="approved", is_selected=False)
+    mock_post = mocker.patch("core.posting.instagram_client.publish_reel")
+    run_posting_task(db_session)
+    mock_post.assert_called_once()
+
+def test_posting_task_skips_slot_with_no_selection(db_session, mocker):
+    post1 = create_test_content(db_session, scheduled_at=now, status="approved", is_selected=False)
+    mock_post = mocker.patch("core.posting.instagram_client.publish_reel")
+    run_posting_task(db_session)
+    mock_post.assert_not_called()
+</pre>
+
+<h4>Step 2: Update posting logic to filter by is_selected=True. Skip if none selected.</h4>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: posting task respects is_selected field"</pre>
+
+<hr>
+
+<h3>Task 10: Reel-only generation pipeline</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Modify: <code>core/images/image_processor.py</code><br>
+Test: <code>tests/test_reel_only_generation.py</code>
+</div>
+
+<h4>Step 1: Write the failing test</h4>
+<pre>
+def test_generate_images_creates_reel_only(db_session, mocker):
+    content = create_test_content(db_session)
+    pipeline = ImagePipeline(db_session)
+    mocker.patch("core.images.unsplash_client.download_image", return_value="test.jpg")
+    mocker.patch("core.images.reel_generator.ReelGenerator.generate_reel", return_value="reel.mp4")
+    pipeline.generate_images_for_content(content)
+    images = db_session.query(GeneratedImage).filter_by(content_id=content.id).all()
+    formats = [img.format for img in images]
+    assert "reel_9x16" in formats
+    assert "feed_4x5" not in formats
+    assert "feed_1x1" not in formats
+    assert "story_9x16" not in formats
+</pre>
+
+<h4>Step 2: Remove TARGET_SIZES loop. Keep only reel generation block.</h4>
+
+<h4>Step 3: Run tests, verify pass, commit</h4>
+<pre>git commit -m "feat: reel-only generation pipeline, drop static feed images"</pre>
+
+<hr>
+
+<h2><span class="badge phase">Phase 2</span> Dashboard Rebuild - Layout &amp; Views</h2>
+
+<h3>Task 11: Install @dnd-kit dependency</h3>
+<div class="task-header">
+<strong>Files:</strong> <code>dashboard/package.json</code>
+</div>
+<pre>
+docker compose exec dashboard npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+</pre>
+<pre>git commit -m "chore: add @dnd-kit dependencies for drag-and-drop"</pre>
+
+<hr>
+
+<h3>Task 12: Rebuild App layout - Sidebar navigation + TopBar</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Rewrite: <code>dashboard/src/App.jsx</code><br>
+Create: <code>dashboard/src/components/Sidebar.jsx</code><br>
+Create: <code>dashboard/src/components/TopBar.jsx</code><br>
+Modify: <code>dashboard/src/index.css</code>
+</div>
+
+<p>Use <code>frontend-design</code> skill. Sidebar: slim left rail, deep green bg, gold highlights, SWG logo, 4 nav items (Calendar, Creator, Insights, Settings) with Lucide icons. Collapsible.</p>
+<p>TopBar: week display with prev/next arrows, "Generate" dropdown (1-7 days), quick stats badges.</p>
+<p>Routes: <code>/</code> Calendar, <code>/creator</code> Creator, <code>/insights</code> Insights, <code>/settings</code> Settings.</p>
+
+<pre>git commit -m "feat: rebuild app layout with sidebar navigation and top bar"</pre>
+
+<hr>
+
+<h3>Task 13: Build CalendarPage - Week grid with post cards + drag-and-drop</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Rewrite: <code>dashboard/src/pages/CalendarPage.jsx</code><br>
+Create: <code>dashboard/src/components/CalendarCard.jsx</code><br>
+Create: <code>dashboard/src/components/CalendarColumn.jsx</code><br>
+Create: <code>dashboard/src/components/PostDetailPanel.jsx</code><br>
+Modify: <code>dashboard/src/lib/api.js</code>
+</div>
+
+<p><strong>API functions to add:</strong> <code>selectPost</code>, <code>movePost</code>, <code>deletePost</code>, <code>generateContent</code></p>
+
+<p><strong>CalendarCard:</strong> Reel thumbnail (120px), content type badge (color-coded), hook text (2 lines), status dot (amber/green/blue), provider badge, radio button for selection (gold border when selected), kebab menu (Post Now, Delete, Open in Creator, Swap AI, View Details).</p>
+
+<p><strong>CalendarColumn:</strong> Day header + date + post count. Morning/noon slot sections. DnD drop zone.</p>
+
+<p><strong>CalendarPage:</strong> 7-column grid. Fetch <code>/content/calendar/week</code>. Group by day/slot. Today column has gold wash. Click card expands PostDetailPanel.</p>
+
+<p><strong>PostDetailPanel:</strong> Full content preview, reel video player, action buttons (Approve, Reject, Post Now, AI Image, Swap Reel).</p>
+
+<p><strong>Drag-and-drop:</strong> DndContext wrapper, CalendarCard=draggable, CalendarColumn=droppable. On drop calls movePost API.</p>
+
+<pre>git commit -m "feat: build calendar page with week grid, post cards, drag-and-drop"</pre>
+
+<hr>
+
+<h3>Task 14: Build CreatorPage - Sandbox with live preview</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Create: <code>dashboard/src/pages/CreatorPage.jsx</code><br>
+Create: <code>dashboard/src/components/ImageLibrary.jsx</code><br>
+Create: <code>dashboard/src/components/PhonePreview.jsx</code><br>
+Modify: <code>dashboard/src/lib/api.js</code>
+</div>
+
+<p><strong>Left panel (editor):</strong> Content type dropdown, text textarea + "Generate with AI" button, image source toggle (Library/AI/Unsplash), narration toggle, reel style dropdown, "Create Reel" button.</p>
+
+<p><strong>Right panel:</strong> PhonePreview (iPhone frame CSS mockup showing reel preview).</p>
+
+<p><strong>ImageLibrary:</strong> Theme tabs, thumbnail grid, usage count badges, "Unused" filter, AI prompt tab.</p>
+
+<p><strong>After creation:</strong> "Post Now" and "Add to Schedule" (mini calendar picker + slot selector).</p>
+
+<pre>git commit -m "feat: build creator page with sandbox editor and live preview"</pre>
+
+<hr>
+
+<h3>Task 15: Build InsightsPage - Competitors + Performance + Recommendations</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Rewrite: <code>dashboard/src/pages/InsightsPage.jsx</code><br>
+Create: <code>dashboard/src/components/CompetitorCard.jsx</code><br>
+Create: <code>dashboard/src/components/KpiRow.jsx</code><br>
+Create: <code>dashboard/src/components/PerformanceChart.jsx</code><br>
+Modify: <code>dashboard/src/lib/api.js</code>
+</div>
+
+<p><strong>Section A:</strong> Competitor Top Posts grid with "Inspire" button (navigates to Creator with pre-filled type/theme).</p>
+<p><strong>Section B:</strong> KPI row (reach, engagement, likes, saves, shares with deltas) + Recharts line chart + best posts table with "Remix" button.</p>
+<p><strong>Section C:</strong> Recommendations cards from existing insights API.</p>
+
+<pre>git commit -m "feat: build insights page with competitor cards, KPIs, and performance chart"</pre>
+
+<hr>
+
+<h3>Task 16: Build SettingsPage</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Create: <code>dashboard/src/pages/SettingsPage.jsx</code>
+</div>
+
+<p>Generation config (default days dropdown), posting times display, scraper schedule, competitor accounts list, system status indicators.</p>
+
+<pre>git commit -m "feat: build settings page"</pre>
+
+<hr>
+
+<h2><span class="badge phase">Phase 3</span> Polish &amp; Integration</h2>
+
+<h3>Task 17: Update design system CSS</h3>
+<div class="task-header">
+<strong>Files:</strong> Modify: <code>dashboard/src/index.css</code>
+</div>
+
+<p>Apply <code>frontend-design</code> skill: card styles (12px radius, warm shadows), status colors, gold left-border on selected, sidebar styles, calendar column styles, drag state styles, smooth 200ms transitions. Remove old unused classes.</p>
+
+<pre>git commit -m "feat: update design system with refined editorial aesthetic"</pre>
+
+<hr>
+
+<h3>Task 18: Remove old pages</h3>
+<div class="task-header">
+<strong>Files:</strong><br>
+Delete: <code>dashboard/src/pages/QueuePage.jsx</code> (replaced by Calendar)<br>
+Delete: <code>dashboard/src/pages/CompetitorsPage.jsx</code> (merged into Insights)<br>
+Delete: <code>dashboard/src/pages/MonetizationPage.jsx</code> (deferred)<br>
+Delete: <code>dashboard/src/pages/AnalyticsPage.jsx</code> (merged into Insights)<br>
+Delete: <code>dashboard/src/pages/DashboardPage.jsx</code> (replaced by Calendar)
+</div>
+
+<pre>git commit -m "refactor: remove old pages replaced by new calendar-centric layout"</pre>
+
+<hr>
+
+<h3>Task 19: Integration testing - Full flow verification</h3>
+<div class="task-header">
+<strong>Manual test checklist:</strong>
+</div>
+<ol>
+<li>Start Docker stack, navigate to dashboard :5175</li>
+<li>Verify sidebar navigation (Calendar, Creator, Insights, Settings)</li>
+<li>Generate 2 days of content via top bar</li>
+<li>Verify posts appear in calendar</li>
+<li>Drag a post from one day to another</li>
+<li>Select between multiple posts in same slot</li>
+<li>Delete a post</li>
+<li>Create a custom post in Creator</li>
+<li>Add it to schedule</li>
+<li>Post Now a post</li>
+<li>Check Insights page loads competitor data</li>
+<li>Verify all actions persist after page refresh</li>
+</ol>
+
+<pre>git commit -m "test: verify full dashboard overhaul integration"</pre>
+
+<hr>
+
+<h2><span class="badge phase">Phase 4</span> Carousel Placeholder</h2>
+
+<h3>Task 20: Add carousel placeholder to calendar</h3>
+<div class="task-header">
+<strong>Files:</strong> Modify: <code>dashboard/src/components/CalendarCard.jsx</code>
+</div>
+
+<p>Carousel slots (Wed morning, Sat morning) show distinct card style: "Carousel - Design Coming Soon" label, different badge color. No generation logic changes.</p>
+
+<pre>git commit -m "feat: add carousel placeholder cards in calendar view"</pre>
+
+<hr>
+
+<h2>Summary</h2>
+<table>
+<tr><th>Phase</th><th>Tasks</th><th>Focus</th></tr>
+<tr><td>Phase 1</td><td>Tasks 1-10</td><td>Backend API endpoints + pipeline changes</td></tr>
+<tr><td>Phase 2</td><td>Tasks 11-16</td><td>Dashboard rebuild (all 4 views)</td></tr>
+<tr><td>Phase 3</td><td>Tasks 17-19</td><td>Design polish, cleanup, integration testing</td></tr>
+<tr><td>Phase 4</td><td>Task 20</td><td>Carousel placeholder</td></tr>
+</table>
+
+<p><strong>Total: 20 tasks across 4 phases.</strong></p>
+<p>Each task is independently committable. Phase 1 can be built while old dashboard still works. Phase 2 replaces the frontend. Phase 3 polishes. Phase 4 is a stub for future work.</p>
+
+</body>
+</html>

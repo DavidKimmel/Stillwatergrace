@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard Overhaul Design - StillWaterGrace</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #2D4A3E; background: #FFF8F0; }
+  h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 8px; }
+  h2 { color: #D4A853; margin-top: 32px; }
+  h3 { color: #2D4A3E; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background: #2D4A3E; color: #FFF8F0; }
+  tr:nth-child(even) { background: #f9f5ee; }
+  code { background: #f0ebe3; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.8em; color: white; }
+  .approved { background: #10B981; }
+  .date { color: #888; font-size: 0.9em; }
+  blockquote { border-left: 4px solid #D4A853; margin: 16px 0; padding: 8px 16px; background: #f9f5ee; }
+  ul { line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<h1>StillWaterGrace Dashboard Overhaul Design</h1>
+<p class="date">Date: 2026-03-10 | Status: <span class="badge approved">Approved</span></p>
+
+<blockquote>
+Full rebuild of the dashboard into a professional social media management tool. Calendar-centric, reel-first, with creator sandbox, competitor insights, and drag-and-drop scheduling.
+Inspired by: Iconosquare, Brandwatch, Hootsuite/monday.com, Databox.
+</blockquote>
+
+<h2>1. Architecture &amp; Navigation</h2>
+<p>Single-page React app with 4 main views via a collapsible left sidebar:</p>
+<table>
+  <tr><th>View</th><th>Purpose</th></tr>
+  <tr><td><strong>Calendar</strong> (home)</td><td>Week view with post previews, drag-and-drop, post selection</td></tr>
+  <tr><td><strong>Creator</strong></td><td>Sandbox to create custom posts, browse image library</td></tr>
+  <tr><td><strong>Insights</strong></td><td>Competitor top posts, scraper data, performance metrics</td></tr>
+  <tr><td><strong>Settings</strong></td><td>Generation config, scraper schedule, posting times</td></tr>
+</table>
+
+<p><strong>Sidebar:</strong> Slim left rail with icons + labels, collapsible. SWG logo at top, active view highlighted in gold. Deep green (#2D4A3E) background.</p>
+
+<p><strong>Top bar:</strong> Current week with prev/next arrows, "Generate" button (dropdown: 1-7 days), quick stats (posts scheduled this week, pending approval count).</p>
+
+<h2>2. Calendar View (Home Page)</h2>
+
+<h3>Layout</h3>
+<p>7-column grid (Mon-Sun). Each column shows that day's posts.</p>
+
+<h3>Day Column Structure</h3>
+<ul>
+  <li>Day header (e.g., "Mon Mar 11") with post count badge</li>
+  <li><strong>Morning slot</strong> (6:30 AM) and <strong>Noon slot</strong> (12:00 PM) visually separated</li>
+  <li>Each post is a compact card (~120px reel thumbnail, content type badge, hook text truncated to 2 lines, status dot, provider badge)</li>
+</ul>
+
+<h3>Post Selection (Multiple Posts Per Slot)</h3>
+<ul>
+  <li>Cards stack vertically within a time slot</li>
+  <li><strong>Radio button</strong> on each card -- selected card is the "active" post for that slot</li>
+  <li>Active card: gold left border, full opacity</li>
+  <li>Inactive cards: slightly dimmed</li>
+  <li>Unselected posts remain as alternatives until posting time</li>
+</ul>
+
+<h3>Drag-and-Drop</h3>
+<ul>
+  <li>Drag any card to a different day (drops into that day's slot list)</li>
+  <li>Gold highlight on target day as drop indicator</li>
+  <li>Using <strong>dnd-kit</strong> library</li>
+</ul>
+
+<h3>Card Actions (Kebab Menu)</h3>
+<ul>
+  <li>Post Now</li>
+  <li>Delete</li>
+  <li>Open in Creator (edit/remix)</li>
+  <li>Swap to AI Image / Swap Reel</li>
+  <li>View Full Details (expand modal with captions, hashtags, reel player)</li>
+</ul>
+
+<p><strong>Click on card:</strong> Expands inline detail panel below calendar with full content preview, captions, hashtags, and reel video player.</p>
+
+<h2>3. Creator Sandbox</h2>
+
+<h3>Layout</h3>
+<p>Two-panel view. Left: editor. Right: live preview (phone-frame mockup).</p>
+
+<h3>Editor Panel</h3>
+<ul>
+  <li><strong>Content type</strong> dropdown (daily_verse, encouragement, marriage_monday, etc.)</li>
+  <li><strong>Text input</strong> -- textarea for custom quote/verse, or "Generate with AI" button</li>
+  <li><strong>Image source</strong> toggle:
+    <ul>
+      <li><strong>Library</strong> -- browse themed folders, search/filter, thumbnails</li>
+      <li><strong>AI Generate</strong> -- text prompt, fal.ai generation, auto-saves to catalog</li>
+      <li><strong>Unsplash</strong> -- search Unsplash directly</li>
+    </ul>
+  </li>
+  <li><strong>Narration</strong> toggle (on/off), picks voice from rotation</li>
+  <li><strong>Reel style</strong> dropdown (classic, quick, cinematic)</li>
+  <li><strong>"Create Reel"</strong> button</li>
+</ul>
+
+<h3>After Creation</h3>
+<ul>
+  <li>Preview plays in right panel</li>
+  <li><strong>"Post Now"</strong> -- posts immediately</li>
+  <li><strong>"Add to Schedule"</strong> -- mini-calendar picker to drop into a day/slot</li>
+</ul>
+
+<h3>Image Library Browser</h3>
+<ul>
+  <li>Grid of thumbnails organized by theme tabs (nature, people, faith, dramatic, interactive, botanical)</li>
+  <li>Shows usage count per image</li>
+  <li>"Unused" filter to surface fresh images</li>
+  <li>New AI images auto-file into correct theme folder via catalog</li>
+</ul>
+
+<h2>4. Insights View</h2>
+
+<h3>Section A: Competitor Top Posts (top of page)</h3>
+<ul>
+  <li>Cards showing top-performing competitor posts from latest scrape</li>
+  <li>Each card: thumbnail, handle, engagement metrics, caption preview, media type badge</li>
+  <li>"Inspire" button -- copies concept to Creator (content type + theme, not text)</li>
+  <li>Filter by: competitor account, media type, date range</li>
+  <li>Scraper runs every other day (Mon/Wed/Fri via Celery beat)</li>
+</ul>
+
+<h3>Section B: Performance Dashboard</h3>
+<ul>
+  <li>KPI row: reach, engagement rate, likes, saves, shares (delta vs last week)</li>
+  <li>Chart: post performance over time (line chart, filterable by content type)</li>
+  <li>Best performing posts table with "Remix" button to create variation in Creator</li>
+</ul>
+
+<h3>Section C: Recommendations</h3>
+<ul>
+  <li>AI-generated insights from performance analyzer</li>
+  <li>Trend alerts from competitor data</li>
+</ul>
+
+<h2>5. Generation Pipeline Changes</h2>
+
+<table>
+  <tr><th>Current</th><th>New</th></tr>
+  <tr><td>Generate full 7-day week on Sunday</td><td>Generate 1-7 days on demand via UI dropdown</td></tr>
+  <tr><td>3 static images + 1 reel per post</td><td>Reel only (drop feed_4x5, 1x1, story_9x16)</td></tr>
+  <tr><td>Carousel generates but often fails</td><td>Carousel 2x/week (Wed + Sat), design TBD later</td></tr>
+  <tr><td>Unsplash + optional AI after</td><td>Unsplash first always, AI Image button for alternative</td></tr>
+  <tr><td>Scraper Mon/Thu</td><td>Scraper every other day (Mon/Wed/Fri)</td></tr>
+  <tr><td>generate-week CLI only</td><td>API endpoint + UI button with day count param</td></tr>
+</table>
+
+<h3>Generation Flow</h3>
+<ol>
+  <li>User clicks "Generate" dropdown, picks 1-7 days</li>
+  <li>API creates content slots for next N days based on calendar schedule</li>
+  <li>For each slot: Claude generates text, Unsplash provides background, reel renders</li>
+  <li>Carousel slots (Wed/Sat) get placeholder status -- design TBD</li>
+  <li>All new content lands as <strong>pending</strong> in calendar (yellow dots)</li>
+  <li>User reviews, approves, selects active post per slot</li>
+</ol>
+
+<h3>Post Selection Logic</h3>
+<ul>
+  <li>Each time slot can have multiple posts (original + regenerated + creator posts)</li>
+  <li>Only the <strong>selected</strong> post gets picked up by Celery posting task</li>
+  <li>If nothing selected at posting time, slot is skipped (no auto-posting unreviewed content)</li>
+</ul>
+
+<h3>Image Catalog Integration</h3>
+<ul>
+  <li>Every Unsplash download auto-registers in <code>catalog.json</code> under content type's theme</li>
+  <li>Every AI generation auto-registers under matching theme</li>
+  <li>Creator's library browser reads from catalog</li>
+</ul>
+
+<h2>6. Visual Design</h2>
+
+<p><strong>Aesthetic:</strong> Refined editorial -- clean, warm, premium feel. High-end devotional app, not generic SaaS.</p>
+
+<h3>Color Palette</h3>
+<table>
+  <tr><th>Purpose</th><th>Color</th><th>Hex</th></tr>
+  <tr><td>Background</td><td>Warm cream</td><td>#FFF8F0</td></tr>
+  <tr><td>Primary accent</td><td>Gold</td><td>#D4A853</td></tr>
+  <tr><td>Sidebar / headings</td><td>Deep green</td><td>#2D4A3E</td></tr>
+  <tr><td>Card surfaces</td><td>White</td><td>#FFFFFF</td></tr>
+  <tr><td>Pending</td><td>Amber</td><td>#F59E0B</td></tr>
+  <tr><td>Approved</td><td>Emerald</td><td>#10B981</td></tr>
+  <tr><td>Posted</td><td>Blue</td><td>#3B82F6</td></tr>
+  <tr><td>Rejected</td><td>Red</td><td>#EF4444</td></tr>
+</table>
+
+<h3>Typography</h3>
+<ul>
+  <li>Headings: <strong>Playfair Display</strong></li>
+  <li>Body/UI: <strong>Lato</strong></li>
+  <li>Stats/numbers: system monospace</li>
+</ul>
+
+<h3>UI Details</h3>
+<ul>
+  <li>Cards: <code>border-radius: 12px</code>, subtle warm box-shadow</li>
+  <li>Selected post: gold left-border</li>
+  <li>Sidebar: deep green bg, gold icon highlights, cream text</li>
+  <li>Today's column: faint gold wash</li>
+  <li>Drag state: card lifts with larger shadow, drop zone glows gold</li>
+  <li>Smooth transitions: 200ms ease on expand/collapse</li>
+  <li>Reel thumbnails: rounded corners, play icon overlay</li>
+  <li>No purple gradients, no Inter font, no cookie-cutter patterns</li>
+</ul>
+
+<h2>7. New API Endpoints Needed</h2>
+<table>
+  <tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/content/generate</code></td><td>POST</td><td>Generate N days of content (body: {days: 1-7})</td></tr>
+  <tr><td><code>/content/{id}/select</code></td><td>POST</td><td>Mark post as selected/active for its time slot</td></tr>
+  <tr><td><code>/content/{id}/move</code></td><td>POST</td><td>Move post to different day (body: {date, time_slot})</td></tr>
+  <tr><td><code>/content/{id}</code></td><td>DELETE</td><td>Delete a post and its images</td></tr>
+  <tr><td><code>/content/create</code></td><td>POST</td><td>Creator sandbox: create custom post</td></tr>
+  <tr><td><code>/content/{id}/render-reel</code></td><td>POST</td><td>Render reel from Creator inputs</td></tr>
+  <tr><td><code>/images/library</code></td><td>GET</td><td>Browse image catalog (filter by theme)</td></tr>
+  <tr><td><code>/images/search</code></td><td>GET</td><td>Search Unsplash from Creator</td></tr>
+  <tr><td><code>/competitors/top-posts</code></td><td>GET</td><td>Top competitor posts (filter by account, type, date)</td></tr>
+</table>
+
+<h2>8. Tech Stack Additions</h2>
+<ul>
+  <li><strong>@dnd-kit/core + @dnd-kit/sortable</strong> -- drag-and-drop</li>
+  <li><strong>recharts</strong> (already used?) or <strong>chart.js</strong> -- performance charts</li>
+  <li><strong>react-router-dom</strong> -- sidebar navigation (if not already)</li>
+  <li>Existing: React 18, Vite, Tailwind, TanStack React Query</li>
+</ul>
+
+</body>
+</html>

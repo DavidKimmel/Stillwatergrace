@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StillWaterGrace Image Pivot Design — 2026-03-21</title>
+<style>
+  body { font-family: 'Georgia', serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #2d2d2d; line-height: 1.7; background: #fefefe; }
+  h1 { color: #2D4A3E; border-bottom: 3px solid #D4A853; padding-bottom: 10px; }
+  h2 { color: #2D4A3E; margin-top: 2em; border-bottom: 1px solid #e0d5c5; padding-bottom: 6px; }
+  h3 { color: #4a6b5e; }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+  th, td { border: 1px solid #d4c9b8; padding: 8px 12px; text-align: left; }
+  th { background: #2D4A3E; color: #FFF8F0; }
+  tr:nth-child(even) { background: #faf5ed; }
+  code { background: #f0ebe3; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+  .meta { color: #888; font-style: italic; margin-bottom: 2em; }
+  .status { display: inline-block; background: #2D4A3E; color: #FFF8F0; padding: 2px 10px; border-radius: 4px; font-size: 0.85em; }
+  ul { margin: 0.5em 0; }
+  li { margin: 0.3em 0; }
+  .note { background: #f9f5ef; border-left: 4px solid #D4A853; padding: 12px 16px; margin: 1em 0; }
+</style>
+</head>
+<body>
+
+<h1>StillWaterGrace Image Pivot Design</h1>
+<p class="meta"><strong>Date:</strong> 2026-03-21 &nbsp;|&nbsp; <span class="status">Approved</span></p>
+<p><strong>Goal:</strong> Pivot from video reels to static image posts (scripture singles + carousels) with a cohesive, branded visual identity.</p>
+
+<h2>Problem Statement</h2>
+<p>Reels have not produced the desired quality despite multiple iterations on rendering, captions, and voice. The visual style lacks brand cohesion. Successful faith accounts like @godswillzmessage and @jentezen demonstrate that text-forward image posts with strong typography and consistent visual identity drive high engagement without video complexity.</p>
+
+<h2>Visual Brand System</h2>
+
+<h3>Core Elements</h3>
+<ul>
+  <li><strong>Background:</strong> SWG green (#2D4A3E) with linen/fabric texture overlay</li>
+  <li><strong>Text color:</strong> Cream (#FFF8F0), Georgia serif</li>
+  <li><strong>Accent:</strong> Gold (#D4A853) — used for highlighted key phrases (underline-style highlight), verse references, and @stillwatergrace watermark</li>
+  <li><strong>Highlights:</strong> Gold semi-transparent underline behind key words/phrases (CSS <code>linear-gradient(180deg, transparent 55%, rgba(212,168,83,0.3) 55%)</code>)</li>
+  <li><strong>Format:</strong> 1080x1080 (square, Instagram feed standard)</li>
+</ul>
+
+<h3>Scripture Post Style</h3>
+<ul>
+  <li>Verse reference at top in gold small caps with letter spacing</li>
+  <li>Verse text centered, large Georgia serif, cream color</li>
+  <li>Key phrases highlighted with gold underline</li>
+  <li><code>@stillwatergrace</code> at bottom in small gold text</li>
+  <li>Green linen-textured background</li>
+</ul>
+
+<h3>Carousel Post Style</h3>
+<ul>
+  <li>Same SWG palette but with slight variation — lighter green shade or warm parchment on some slides to differentiate from scripture posts in the feed</li>
+  <li>Same Georgia font, gold highlights, @stillwatergrace watermark</li>
+  <li>Visually part of the same brand family but distinguishable at a glance</li>
+</ul>
+
+<h3>Reference Accounts</h3>
+<ul>
+  <li><strong>@jentezen</strong> — dark textured background, large elegant serif, 3.7K likes</li>
+  <li><strong>@godswillzmessage</strong> — parchment background, highlighted key phrases, 706 likes</li>
+  <li><strong>@becoming.her2025</strong> — soft minimal, decorative elements</li>
+  <li><strong>@bible_study8551</strong> — clean with pink highlight blocks</li>
+</ul>
+
+<h2>Content Types</h2>
+
+<h3>1. Scripture Single (4 per week)</h3>
+<ul>
+  <li>One 1080x1080 image</li>
+  <li>Layout: verse reference (top, gold) + verse text (center, cream, highlighted phrases) + watermark (bottom)</li>
+  <li>Claude generates: verse selection (via api.bible), which words to highlight, Instagram caption with hashtags</li>
+  <li>Posted via Instagram <code>publish_photo</code> endpoint</li>
+</ul>
+
+<h3>2. Carousel (3 per week)</h3>
+<ul>
+  <li>3 slides, each 1080x1080</li>
+  <li><strong>Slide 1 (Cover):</strong> Hook/title text — e.g., "When You Feel Like Giving Up", "A Prayer for Peace"</li>
+  <li><strong>Slide 2 (Content):</strong> Encouragement, prayer, or short story text</li>
+  <li><strong>Slide 3 (CTA):</strong> Anchoring Bible verse + "Follow @stillwatergrace for daily scripture"</li>
+  <li>Claude generates: topic, all 3 slides of text, which words to highlight, Instagram caption</li>
+  <li>Posted via Instagram <code>publish_carousel</code> endpoint</li>
+</ul>
+
+<h3>Weekly Schedule (7 posts, 1/day)</h3>
+<table>
+  <tr><th>Day</th><th>Type</th></tr>
+  <tr><td>Monday</td><td>Scripture Single</td></tr>
+  <tr><td>Tuesday</td><td>Carousel</td></tr>
+  <tr><td>Wednesday</td><td>Scripture Single</td></tr>
+  <tr><td>Thursday</td><td>Carousel</td></tr>
+  <tr><td>Friday</td><td>Scripture Single</td></tr>
+  <tr><td>Saturday</td><td>Carousel</td></tr>
+  <tr><td>Sunday</td><td>Scripture Single</td></tr>
+</table>
+
+<h2>Technical Architecture</h2>
+
+<h3>Image Generation Pipeline</h3>
+<ol>
+  <li>Claude generates content (text, highlights, verse reference)</li>
+  <li>Jinja2 renders HTML template with content variables</li>
+  <li>Playwright opens the HTML in headless Chrome at 1080x1080 viewport</li>
+  <li><code>page.screenshot()</code> captures PNG</li>
+  <li>PNG uploads to Cloudflare R2</li>
+  <li>Content record updated with R2 URL</li>
+</ol>
+
+<h3>HTML Templates</h3>
+<table>
+  <tr><th>Template</th><th>Purpose</th></tr>
+  <tr><td><code>templates/images/scripture_single.html</code></td><td>Scripture post — verse reference + text + highlights</td></tr>
+  <tr><td><code>templates/images/carousel_cover.html</code></td><td>Carousel slide 1 — hook/title</td></tr>
+  <tr><td><code>templates/images/carousel_content.html</code></td><td>Carousel slide 2 — encouragement/prayer/story</td></tr>
+  <tr><td><code>templates/images/carousel_cta.html</code></td><td>Carousel slide 3 — verse + CTA</td></tr>
+</table>
+
+<h3>Rendering Engine</h3>
+<ul>
+  <li><strong>Playwright</strong> (Python package) renders HTML to PNG via headless Chromium</li>
+  <li>Playwright requires its own managed Chromium — does NOT reuse Remotion's Chrome</li>
+  <li>Dockerfile additions: <code>pip install playwright</code> + <code>RUN playwright install --with-deps chromium</code></li>
+  <li>Viewport set to 1080x1080 for square Instagram format</li>
+  <li>Browser lifecycle: one persistent browser context per Celery worker process (launched on first render, reused). Cleanup on worker shutdown via <code>worker_shutdown</code> signal.</li>
+  <li><strong>Font:</strong> Georgia is not available on Linux. Include <code>fonts-crosextra-caladea</code> (metric-compatible Georgia substitute) in Dockerfile. CSS font stack: <code>'Caladea', 'Georgia', serif</code>. Custom/handwritten fonts can be added later as TTF files.</li>
+  <li><strong>Texture:</strong> A real linen texture image (PNG, ~50KB) stored in <code>templates/images/assets/linen-texture.png</code>. CSS <code>background-image</code> with the green base color underneath. Not SVG feTurbulence — real texture looks better.</li>
+</ul>
+
+<h3>Claude Output Schema</h3>
+<p>Scripture single:</p>
+<ul>
+  <li><code>verse_text</code> — exact verse text</li>
+  <li><code>verse_reference</code> — e.g., "Psalm 46:10 NIV"</li>
+  <li><code>highlight_phrases</code> — list of phrases to highlight with gold</li>
+  <li><code>caption</code> — Instagram caption with reflection + hashtags</li>
+</ul>
+
+<p>Carousel:</p>
+<ul>
+  <li><code>cover_text</code> — hook/title for slide 1 (max 10 words)</li>
+  <li><code>cover_highlights</code> — phrases to highlight on cover slide</li>
+  <li><code>content_text</code> — encouragement/prayer/story for slide 2 (max 80 words — must fit in 1080x1080 at readable size)</li>
+  <li><code>content_highlights</code> — phrases to highlight on content slide</li>
+  <li><code>verse_text</code> — anchoring verse for slide 3</li>
+  <li><code>verse_reference</code> — verse reference for slide 3</li>
+  <li><code>verse_highlights</code> — phrases to highlight on verse slide</li>
+  <li><code>caption</code> — Instagram caption</li>
+</ul>
+
+<p><strong>Highlight matching:</strong> Claude returns exact substring matches from the slide text. The renderer does case-sensitive string replacement, wrapping matched phrases in the gold highlight <code>&lt;span&gt;</code>. Highlights are per-slide to avoid cross-slide ambiguity.</p>
+
+<h2>What Changes</h2>
+
+<table>
+  <tr><th>Component</th><th>Action</th></tr>
+  <tr><td>Remotion rendering</td><td>Unused (keep code, don't delete — may want reels later)</td></tr>
+  <tr><td>ElevenLabs TTS</td><td>Not used for image posts (cost savings)</td></tr>
+  <tr><td>Image pipeline (<code>image_processor.py</code>)</td><td>Generates PNG via Playwright instead of MP4 via Remotion</td></tr>
+  <tr><td>Content generator prompts</td><td>New templates for scripture single + carousel</td></tr>
+  <tr><td>Calendar schedule</td><td>4 scripture + 3 carousel, still 7/week</td></tr>
+  <tr><td>Instagram posting</td><td>Uses <code>publish_photo</code> + <code>publish_carousel</code> instead of <code>publish_reel</code></td></tr>
+  <tr><td>Content type enum</td><td>Reuse existing values: <code>daily_devotional</code> for scripture singles, <code>carousel</code> for carousel posts. No new enum values needed, no migration required.</td></tr>
+</table>
+
+<h2>What Stays Untouched</h2>
+<ul>
+  <li>Dashboard (calendar, approve/reject, detail panel)</li>
+  <li>Celery beat scheduling</li>
+  <li>R2 uploads</li>
+  <li>Facebook cross-posting (single photos only — carousel cross-posting deferred, not critical)</li>
+  <li>Devotional PDFs</li>
+  <li>Analytics, insights, competitor scraper</li>
+  <li>api.bible verse sourcing</li>
+</ul>
+
+<h2>What Gets Built New</h2>
+<ol>
+  <li><strong>HTML image templates</strong> — 4 Jinja2/HTML files for scripture single + carousel slides</li>
+  <li><strong>Playwright image renderer</strong> — Python module that renders HTML to PNG</li>
+  <li><strong>Claude prompt templates</strong> — for scripture single and carousel content generation</li>
+  <li><strong>Updated image pipeline</strong> — wires Playwright renderer into the existing generate flow</li>
+  <li><strong>Updated calendar</strong> — 4 scripture + 3 carousel weekly schedule</li>
+</ol>
+
+<h2>Technical Decisions</h2>
+
+<h3>Image Format</h3>
+<p>All images use <code>feed_1x1</code> (1080x1080) — this value already exists in the <code>ImageFormat</code> enum. Only <code>feed_1x1</code> format is generated per content item. The pipeline does NOT create <code>reel_9x16</code> or <code>story_9x16</code> variants.</p>
+
+<h3>Image Provider</h3>
+<p>Use existing <code>pil_fallback</code> value in <code>ImageProvider</code> enum for Playwright-rendered images. Not worth adding a new enum value for this.</p>
+
+<h3>Carousel Upload Timing</h3>
+<p>All 3 carousel slide PNGs are uploaded to R2 and their URLs verified accessible before calling <code>publish_carousel</code>. The pipeline uploads sequentially and checks HTTP 200 on each R2 URL before proceeding to Instagram API.</p>
+
+<h3>CTA Slide Text</h3>
+<p>The "Follow @stillwatergrace for daily scripture" text on slide 3 is a fixed string, not Claude-generated. Only the verse text and verse reference are dynamic.</p>
+
+<div class="note">
+  <p><strong>Future considerations:</strong> Custom/handwritten fonts for variety. Reels can be reintroduced later using the existing Remotion setup. The image template system is designed to be extensible — new templates can be added without changing the rendering pipeline.</p>
+</div>
+
+</body>
+</html>
