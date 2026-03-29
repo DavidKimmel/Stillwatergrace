@@ -2,13 +2,17 @@
 
 Generates 9:16 (1080x1920) MP4 reels from HTML templates + TTS narration.
 
+Three visual styles, matched to content type:
+  - scripture: Green hook → verse with highlights → cream reflection → CTA
+  - bold:      Cream statement → gold accent frame → green CTA (punchy, minimal)
+  - story:     Cream hook → green narrative → green verse → green CTA (devotional)
+
 Pipeline:
-  1. Render 4 branded frame PNGs via Playwright (hook, verse, reflection, CTA)
+  1. Render branded frame PNGs via Playwright
   2. Generate TTS narration + background music via ElevenLabs
   3. Composite frames + audio into MP4 via FFmpeg concat demuxer
 """
 
-import json
 import logging
 import shutil
 import subprocess
@@ -20,20 +24,58 @@ from core.rendering.html_renderer import render_html_to_image, apply_highlights
 
 logger = logging.getLogger(__name__)
 
-# Default CTA lines — randomly selected per reel
-CTA_OPTIONS = [
-    "Save this for when you need it",
-    "Share this with someone today",
-    "Let this truth settle in your heart",
-    "Tag someone who needs to hear this",
-    "Follow for daily encouragement",
-]
+# ── Style routing: content type → reel visual style ──
+STYLE_MAP: dict[str, str] = {
+    # Scripture style — verse-focused, green bg
+    "daily_verse": "scripture",
+    "daily_devotional": "scripture",
+    "prayer_prompt": "scripture",
+    "gratitude": "scripture",
+    # Bold style — punchy, cream bg, big text
+    "conviction_quote": "bold",
+    "fill_in_blank": "bold",
+    "this_or_that": "bold",
+    "christian_quote": "bold",
+    "marriage_challenge": "bold",
+    "parenting_list": "bold",
+    # Story style — narrative arc, devotional pace
+    "faith_friday": "story",
+    "encouragement": "story",
+    "marriage_monday": "story",
+    "parenting_wednesday": "story",
+}
+
+# Default CTA lines per style
+CTA_OPTIONS: dict[str, list[str]] = {
+    "scripture": [
+        "Save this for when you need it",
+        "Share this with someone today",
+        "Let this truth settle in your heart",
+    ],
+    "bold": [
+        "Type AMEN if you believe this",
+        "Double tap if this hit home",
+        "Tag someone who needs this",
+    ],
+    "story": [
+        "Save this for when you need it",
+        "Share with someone going through it",
+        "Follow for daily encouragement",
+    ],
+}
 
 # Frame timing defaults (seconds)
 HOOK_DURATION = 3.0
 REFLECTION_DURATION = 3.0
 CTA_DURATION = 2.5
+NARRATIVE_DURATION = 5.0
 MIN_VERSE_DURATION = 5.0
+BOLD_STATEMENT_DURATION = 5.0
+
+
+def get_reel_style(content_type: str) -> str:
+    """Get the reel visual style for a content type."""
+    return STYLE_MAP.get(content_type, "scripture")
 
 
 def _get_audio_duration(audio_path: str) -> float:
@@ -51,7 +93,7 @@ def _get_audio_duration(audio_path: str) -> float:
         return float(result.stdout.strip())
     except Exception as e:
         logger.warning(f"ffprobe failed for {audio_path}: {e}")
-        return 15.0  # fallback
+        return 15.0
 
 
 def render_reel_video(
@@ -64,6 +106,8 @@ def render_reel_video(
     narration_path: Optional[str] = None,
     music_mood: str = "daily_verse",
     cta_text: Optional[str] = None,
+    style: Optional[str] = None,
+    narrative_text: Optional[str] = None,
 ) -> Optional[str]:
     """Render a branded reel video from HTML templates + audio.
 
@@ -74,10 +118,12 @@ def render_reel_video(
         highlights: Phrases to highlight in the verse.
         reflection_text: Brief application/reflection line.
         content_id: Content ID for file naming and audio lookup.
-        narration_path: Path to pre-generated narration MP3. If None,
-            generates narration via ElevenLabs.
+        narration_path: Path to pre-generated narration MP3.
         music_mood: Content type for mood-matched music selection.
-        cta_text: Custom CTA text. If None, picks from CTA_OPTIONS.
+        cta_text: Custom CTA text. If None, picks from style defaults.
+        style: Reel style override. If None, derived from music_mood.
+        narrative_text: Longer narrative for story-style reels. Falls
+            back to reflection_text if not provided.
 
     Returns:
         Path to the rendered MP4 file, or None on failure.
@@ -88,12 +134,20 @@ def render_reel_video(
 
     import random
 
+    if not style:
+        style = get_reel_style(music_mood)
+
     if not cta_text:
-        cta_text = random.choice(CTA_OPTIONS)
+        cta_text = random.choice(CTA_OPTIONS.get(style, CTA_OPTIONS["scripture"]))
+
+    if not narrative_text:
+        narrative_text = reflection_text
 
     output_dir = Path(__file__).resolve().parent.parent.parent / "output" / "reels"
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"reel_{content_id}.mp4"
+
+    logger.info(f"Rendering reel #{content_id} with style '{style}'")
 
     # ── Step 1: Generate or locate audio ──
     audio_path = _prepare_audio(
@@ -105,39 +159,39 @@ def render_reel_video(
     )
 
     if audio_path:
-        # Audio already includes hook silence + narration + padding
         audio_duration = _get_audio_duration(audio_path)
         total_duration = max(audio_duration, 12.0)
     else:
         total_duration = 15.0
         logger.warning(f"No audio for reel #{content_id}, using {total_duration}s silent")
 
-    # Calculate frame durations — verse gets whatever time remains
-    verse_duration = max(
-        MIN_VERSE_DURATION,
-        total_duration - HOOK_DURATION - REFLECTION_DURATION - CTA_DURATION,
-    )
-    total_duration = HOOK_DURATION + verse_duration + REFLECTION_DURATION + CTA_DURATION
-
-    # ── Step 2: Render frame PNGs ──
+    # ── Step 2: Render frames + calculate durations per style ──
     with tempfile.TemporaryDirectory() as tmpdir:
-        frames = _render_frames(
-            tmpdir=tmpdir,
-            hook_text=hook_text,
-            verse_text=verse_text,
-            verse_reference=verse_reference,
-            highlights=highlights,
-            reflection_text=reflection_text,
-            cta_text=cta_text,
-            content_id=content_id,
-        )
+        if style == "bold":
+            frames, durations = _render_bold_frames(
+                tmpdir, hook_text, verse_text, cta_text,
+                content_id, total_duration,
+            )
+        elif style == "story":
+            frames, durations = _render_story_frames(
+                tmpdir, hook_text, narrative_text, verse_text,
+                verse_reference, highlights, cta_text,
+                content_id, total_duration,
+            )
+        else:  # scripture (default)
+            frames, durations = _render_scripture_frames(
+                tmpdir, hook_text, verse_text, verse_reference,
+                highlights, reflection_text, cta_text,
+                content_id, total_duration,
+            )
 
-        if len(frames) < 4:
-            logger.error(f"Only rendered {len(frames)}/4 frames for reel #{content_id}")
+        if len(frames) < 2:
+            logger.error(f"Only rendered {len(frames)} frames for reel #{content_id}")
             return None
 
+        total_duration = sum(durations)
+
         # ── Step 3: Composite video via FFmpeg ──
-        durations = [HOOK_DURATION, verse_duration, REFLECTION_DURATION, CTA_DURATION]
         result = _compose_video(
             frame_paths=frames,
             frame_durations=durations,
@@ -149,12 +203,119 @@ def render_reel_video(
         if result:
             logger.info(
                 f"Reel rendered for content #{content_id}: "
-                f"{total_duration:.1f}s, {output_path}"
+                f"style={style}, {total_duration:.1f}s, {output_path}"
             )
             return str(output_path)
 
     return None
 
+
+# ── Style-specific frame renderers ──
+
+def _render_scripture_frames(
+    tmpdir: str, hook_text: str, verse_text: str, verse_reference: str,
+    highlights: list[str], reflection_text: str, cta_text: str,
+    content_id: int, total_duration: float,
+) -> tuple[list[str], list[float]]:
+    """Style 1: Scripture — green hook → verse → cream reflection → CTA."""
+    verse_html = apply_highlights(verse_text, highlights)
+
+    frame_specs = [
+        ("reel_hook.html", {"hook_text": hook_text}),
+        ("reel_verse.html", {"verse_html": verse_html, "verse_reference": verse_reference}),
+        ("reel_reflection.html", {"reflection_text": reflection_text}),
+        ("reel_cta.html", {"cta_text": cta_text}),
+    ]
+
+    frames = _render_frame_list(frame_specs, tmpdir, content_id)
+
+    verse_dur = max(
+        MIN_VERSE_DURATION,
+        total_duration - HOOK_DURATION - REFLECTION_DURATION - CTA_DURATION,
+    )
+    durations = [HOOK_DURATION, verse_dur, REFLECTION_DURATION, CTA_DURATION]
+    return frames, durations
+
+
+def _render_bold_frames(
+    tmpdir: str, hook_text: str, statement_text: str, cta_text: str,
+    content_id: int, total_duration: float,
+) -> tuple[list[str], list[float]]:
+    """Style 2: Bold Statement — cream statement → green accent → CTA.
+
+    Only 3 frames. Statement is the hero — big, punchy, lots of whitespace.
+    """
+    frame_specs = [
+        ("reel_bold_statement.html", {"statement_text": hook_text, "sub_text": ""}),
+        ("reel_bold_statement.html", {"statement_text": statement_text, "sub_text": ""}),
+        ("reel_bold_cta.html", {"cta_text": cta_text}),
+    ]
+
+    frames = _render_frame_list(frame_specs, tmpdir, content_id)
+
+    statement_dur = max(
+        BOLD_STATEMENT_DURATION,
+        total_duration - HOOK_DURATION - CTA_DURATION,
+    )
+    durations = [HOOK_DURATION, statement_dur, CTA_DURATION]
+    return frames, durations
+
+
+def _render_story_frames(
+    tmpdir: str, hook_text: str, narrative_text: str, verse_text: str,
+    verse_reference: str, highlights: list[str], cta_text: str,
+    content_id: int, total_duration: float,
+) -> tuple[list[str], list[float]]:
+    """Style 3: Story — cream hook → green narrative → green verse → CTA.
+
+    Four frames with a narrative arc: hook the viewer, tell the story,
+    anchor with scripture, close with CTA.
+    """
+    verse_html = apply_highlights(verse_text, highlights)
+
+    frame_specs = [
+        ("reel_story_hook.html", {"hook_text": hook_text}),
+        ("reel_story_narrative.html", {"narrative_text": narrative_text}),
+        ("reel_story_verse.html", {"verse_html": verse_html, "verse_reference": verse_reference}),
+        ("reel_cta.html", {"cta_text": cta_text}),
+    ]
+
+    frames = _render_frame_list(frame_specs, tmpdir, content_id)
+
+    verse_dur = max(
+        MIN_VERSE_DURATION,
+        total_duration - HOOK_DURATION - NARRATIVE_DURATION - CTA_DURATION,
+    )
+    durations = [HOOK_DURATION, NARRATIVE_DURATION, verse_dur, CTA_DURATION]
+    return frames, durations
+
+
+def _render_frame_list(
+    frame_specs: list[tuple[str, dict]],
+    tmpdir: str,
+    content_id: int,
+) -> list[str]:
+    """Render a list of (template, variables) to PNG files."""
+    rendered: list[str] = []
+    for i, (template, variables) in enumerate(frame_specs):
+        output_path = f"{tmpdir}/frame_{content_id}_{i}.png"
+        result = render_html_to_image(
+            template_name=template,
+            variables=variables,
+            output_path=output_path,
+            width=1080,
+            height=1920,
+        )
+        if result:
+            rendered.append(result)
+        else:
+            logger.error(
+                f"Failed to render reel frame {i} ({template}) for content #{content_id}"
+            )
+    return rendered
+
+
+# ── Audio preparation ──
 
 def _prepare_audio(
     verse_text: str,
@@ -172,7 +333,6 @@ def _prepare_audio(
     """
     from core.audio.elevenlabs_music import generate_narration, premix_audio
 
-    # Use provided narration or generate fresh
     if narration_path and Path(narration_path).exists():
         narr_path = narration_path
     else:
@@ -186,14 +346,11 @@ def _prepare_audio(
     if not narr_path:
         return None
 
-    # Prepend silence to narration so it starts after the hook frame
     delayed_path = _delay_narration(narr_path, content_id)
     if not delayed_path:
         return None
 
-    # Get total narration duration (including the prepended silence)
     delayed_duration = _get_audio_duration(delayed_path)
-    # Total audio = delayed narration + reflection + CTA
     target_duration = delayed_duration + REFLECTION_DURATION + CTA_DURATION
 
     mixed = premix_audio(
@@ -206,11 +363,7 @@ def _prepare_audio(
 
 
 def _delay_narration(narration_path: str, content_id: int) -> Optional[str]:
-    """Prepend silence equal to HOOK_DURATION before narration.
-
-    This ensures the voice starts when the verse frame appears,
-    not during the hook title card.
-    """
+    """Prepend silence equal to HOOK_DURATION before narration."""
     output_dir = Path(__file__).resolve().parent.parent.parent / "output" / "audio"
     output_dir.mkdir(parents=True, exist_ok=True)
     delayed_path = output_dir / f"delayed_{content_id}.mp3"
@@ -236,45 +389,7 @@ def _delay_narration(narration_path: str, content_id: int) -> Optional[str]:
         return None
 
 
-def _render_frames(
-    tmpdir: str,
-    hook_text: str,
-    verse_text: str,
-    verse_reference: str,
-    highlights: list[str],
-    reflection_text: str,
-    cta_text: str,
-    content_id: int,
-) -> list[str]:
-    """Render the 4 reel frames as PNGs via Playwright."""
-    verse_html = apply_highlights(verse_text, highlights)
-
-    frame_specs = [
-        ("reel_hook.html", {"hook_text": hook_text}),
-        ("reel_verse.html", {"verse_html": verse_html, "verse_reference": verse_reference}),
-        ("reel_reflection.html", {"reflection_text": reflection_text}),
-        ("reel_cta.html", {"cta_text": cta_text}),
-    ]
-
-    rendered: list[str] = []
-    for i, (template, variables) in enumerate(frame_specs):
-        output_path = f"{tmpdir}/frame_{content_id}_{i}.png"
-        result = render_html_to_image(
-            template_name=template,
-            variables=variables,
-            output_path=output_path,
-            width=1080,
-            height=1920,
-        )
-        if result:
-            rendered.append(result)
-        else:
-            logger.error(
-                f"Failed to render reel frame {i} ({template}) for content #{content_id}"
-            )
-
-    return rendered
-
+# ── Video composition ──
 
 def _compose_video(
     frame_paths: list[str],
@@ -283,19 +398,13 @@ def _compose_video(
     output_path: str,
     total_duration: float,
 ) -> bool:
-    """Compose frame images + audio into an MP4 using FFmpeg concat demuxer.
-
-    Each frame is displayed for its specified duration. Cross-fade transitions
-    are not used in v1 to keep things simple and reliable.
-    """
+    """Compose frame images + audio into an MP4 using FFmpeg concat demuxer."""
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".txt", delete=False, encoding="utf-8"
     ) as concat_file:
         for frame_path, duration in zip(frame_paths, frame_durations):
-            # FFmpeg concat format: file + duration
             concat_file.write(f"file '{frame_path}'\n")
             concat_file.write(f"duration {duration}\n")
-        # Repeat last frame to avoid black frame at end
         concat_file.write(f"file '{frame_paths[-1]}'\n")
         concat_list = concat_file.name
 
@@ -319,11 +428,7 @@ def _compose_video(
         ])
 
         if audio_path:
-            cmd.extend([
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-shortest",
-            ])
+            cmd.extend(["-c:a", "aac", "-b:a", "128k", "-shortest"])
         else:
             cmd.extend(["-an"])
 

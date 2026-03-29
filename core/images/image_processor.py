@@ -147,11 +147,23 @@ class ImagePipeline:
 
     # Content types that get a branded reel alongside their feed image
     REEL_CONTENT_TYPES = {
+        # Scripture style
         ContentType.daily_devotional,
         ContentType.daily_verse,
+        ContentType.prayer_prompt,
+        ContentType.gratitude,
+        # Bold style
+        ContentType.conviction_quote,
+        ContentType.fill_in_blank,
+        ContentType.this_or_that,
+        ContentType.christian_quote,
+        ContentType.marriage_challenge,
+        ContentType.parenting_list,
+        # Story style
         ContentType.faith_friday,
         ContentType.encouragement,
-        ContentType.prayer_prompt,
+        ContentType.marriage_monday,
+        ContentType.parenting_wednesday,
     }
 
     def generate_images_for_content(self, content: GeneratedContent) -> list[GeneratedImage]:
@@ -276,9 +288,12 @@ class ImagePipeline:
         # Reflection text — use story_text or a portion of caption_short
         reflection_text = content.story_text or ""
         if not reflection_text and content.caption_short:
-            # Take the first sentence as a reflection
             sentences = content.caption_short.split(".")
             reflection_text = sentences[0].strip() + "." if sentences else ""
+
+        # Narrative text for story-style reels — use caption_short for
+        # a longer narrative block, separate from the one-line reflection
+        narrative_text = content.caption_short or reflection_text
 
         # Parse highlight phrases from image_prompt
         highlights: list[str] = []
@@ -290,7 +305,7 @@ class ImagePipeline:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # Content type as music mood
+        # Content type as music mood and style selector
         music_mood = content.content_type.value if content.content_type else "daily_verse"
 
         video_path = render_reel_video(
@@ -301,6 +316,7 @@ class ImagePipeline:
             reflection_text=reflection_text,
             content_id=content.id,
             music_mood=music_mood,
+            narrative_text=narrative_text,
         )
 
         if not video_path:
