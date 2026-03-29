@@ -79,10 +79,13 @@ function formatDateStr(date) {
 
 function getPreviewImage(post) {
   if (!post?.images?.length) return null;
+  // Prefer feed image for thumbnails (img tag can't render mp4)
+  const feed = post.images.find((img) =>
+    (img.format === 'feed_1x1' || img.format === 'feed_4x5') && img.final_url
+  );
+  if (feed) return { url: feed.final_url, isReel: false };
   const reel = post.images.find((img) => img.format === 'reel_9x16' && img.final_url);
   if (reel) return { url: reel.final_url, isReel: true };
-  const feed = post.images.find((img) => img.final_url);
-  if (feed) return { url: feed.final_url, isReel: false };
   return null;
 }
 
@@ -440,18 +443,19 @@ export default function CalendarPage({ weekStart }) {
             >
               {currentSlide ? (
                 <>
-                  <img
-                    src={currentSlide.url}
-                    alt=""
-                    className="w-full h-full object-contain"
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                  {currentSlide.isReel && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
-                      <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                        <Play size={24} className="text-[#2D4A3E] fill-[#2D4A3E] ml-1" />
-                      </div>
-                    </div>
+                  {currentSlide.isReel ? (
+                    <video
+                      src={currentSlide.url}
+                      controls
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={currentSlide.url}
+                      alt=""
+                      className="w-full h-full object-contain"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
                   )}
                   {/* Carousel prev/next arrows */}
                   {hasMultipleImages && (
