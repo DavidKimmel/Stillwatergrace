@@ -66,6 +66,7 @@ class TestBibleAPIClient:
         # Set up mock DB to return a cached verse
         mock_verse = MagicMock()
         mock_verse.reference = "John 3:16"
+        mock_verse.translation = "NIV"
         self.db.query.return_value.filter.return_value.first.return_value = mock_verse
 
         client = BibleAPIClient(self.db)

@@ -5,7 +5,6 @@ Falls back to bible-api.com (WEB) if API.Bible key is unavailable.
 """
 
 import logging
-import os
 import re
 import random
 from datetime import datetime, timedelta
@@ -14,6 +13,7 @@ from typing import Optional
 import httpx
 from sqlalchemy.orm import Session
 
+from core.config import settings
 from database.models import BibleVerse
 
 logger = logging.getLogger(__name__)
@@ -165,7 +165,7 @@ class BibleAPIClient:
             return cached
 
         # Try API.Bible (NIV) first
-        api_key = os.environ.get("BIBLE_API_KEY", "")
+        api_key = settings.bible_api_key
 
         if api_key:
             try:

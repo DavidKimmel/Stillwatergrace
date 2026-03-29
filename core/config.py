@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     reddit_client_secret: str = ""
     reddit_user_agent: str = "StillWaterGrace/1.0"
 
+    # Bible (API.Bible — NIV)
+    bible_api_key: str = ""
+
     # Unsplash
     unsplash_access_key: str = ""
 
