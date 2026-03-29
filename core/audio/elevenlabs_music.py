@@ -27,59 +27,60 @@ logger = logging.getLogger(__name__)
 
 AUDIO_DIR = Path(__file__).parent.parent.parent / "audio"
 
-# ── Mixkit curated tracks (royalty-free, no attribution required) ──
-# Pattern: https://assets.mixkit.co/music/{ID}/{ID}.mp3
+# ── Pixabay curated tracks (royalty-free, no attribution required) ──
+# Download manually from pixabay.com/music/ and place in audio/ folder.
+# Each track is tagged with content types it suits best.
+PIXABAY_TRACKS: list[dict[str, str | int | list[str]]] = [
+    {
+        "name": "px_chill_ambient",
+        "pixabay_id": 507815,
+        "description": "Chill ambient — relaxed, modern, atmospheric",
+        "moods": ["daily_verse", "gratitude", "daily_devotional", "encouragement"],
+    },
+    {
+        "name": "px_inspiring_cinematic",
+        "pixabay_id": 116199,
+        "description": "Inspiring cinematic ambient — soaring, hopeful build",
+        "moods": ["faith_friday", "conviction_quote", "encouragement"],
+    },
+    {
+        "name": "px_emotional_cinematic",
+        "pixabay_id": 111908,
+        "description": "Emotional cinematic background — reflective, stirring",
+        "moods": ["faith_friday", "encouragement", "conviction_quote"],
+    },
+    {
+        "name": "px_hopeful_piano",
+        "pixabay_id": 417625,
+        "description": "Emotional inspiring piano — hopeful, uplifting",
+        "moods": ["encouragement", "gratitude", "daily_devotional"],
+    },
+    {
+        "name": "px_hopeful_cinematic",
+        "pixabay_id": 348229,
+        "description": "Hopeful cinematic — warm strings, family warmth",
+        "moods": ["marriage_monday", "parenting_wednesday", "gratitude"],
+    },
+    {
+        "name": "px_reflective_ambient",
+        "pixabay_id": 312412,
+        "description": "Sad cinematic ambient — raw, reflective, tender",
+        "moods": ["faith_friday", "prayer_prompt", "daily_verse"],
+    },
+    {
+        "name": "px_piano_strings",
+        "pixabay_id": 10711,
+        "description": "Ambient piano and strings — warm, nurturing",
+        "moods": ["marriage_monday", "parenting_wednesday", "daily_devotional"],
+    },
+]
+
+# Legacy Mixkit tracks (kept as fallback)
 MIXKIT_TRACKS: list[dict[str, str | int]] = [
-    {
-        "name": "peaceful_piano_reflections",
-        "id": 22,
-        "description": "Calm piano reflections — soft, contemplative",
-    },
-    {
-        "name": "relaxing_in_nature",
-        "id": 522,
-        "description": "Relaxing nature ambiance with gentle piano",
-    },
-    {
-        "name": "possible_dreams",
-        "id": 599,
-        "description": "Hopeful piano and pads — uplifting, dreamy",
-    },
-    {
-        "name": "skyline_piano",
-        "id": 601,
-        "description": "Skyline — cinematic piano, reflective mood",
-    },
-    {
-        "name": "valley_sunset",
-        "id": 127,
-        "description": "Valley sunset — ambient, warm, golden hour feel",
-    },
-    {
-        "name": "spirit_in_the_woods",
-        "id": 139,
-        "description": "Spirit in the woods — atmospheric, meditative",
-    },
-    {
-        "name": "forest_treasure",
-        "id": 138,
-        "description": "Forest treasure — nature ambient, peaceful exploration",
-    },
-    {
-        "name": "meditation_ambient",
-        "id": 441,
-        "description": "Meditation — soft ambient pads, calming",
-    },
-    {
-        "name": "rest_now",
-        "id": 584,
-        "description": "Rest now — gentle piano, end-of-day calm",
-    },
-    {
-        "name": "vastness_ambient",
-        "id": 184,
-        "description": "Vastness — expansive ambient, cinematic feel",
-    },
+    {"name": "peaceful_piano_reflections", "id": 22, "description": "Calm piano reflections"},
+    {"name": "relaxing_in_nature", "id": 522, "description": "Relaxing nature ambiance"},
+    {"name": "possible_dreams", "id": 599, "description": "Hopeful piano and pads"},
+    {"name": "valley_sunset", "id": 127, "description": "Valley sunset ambient"},
 ]
 
 # ── ElevenLabs mood-matched music prompts ──
@@ -324,11 +325,30 @@ def _generate_sine_wave_fallback() -> list[Path]:
 def select_music_for_content(content_type: str, content_id: int) -> Optional[Path]:
     """Select a background music track matched to the content type.
 
-    Prefers ElevenLabs mood-matched tracks, falls back to Mixkit.
+    Priority: Pixabay (mood-matched) → ElevenLabs → Mixkit → any MP3.
     """
-    import random as _rand
+    # 1. Pixabay mood-matched tracks (best quality, manually curated)
+    matching_px = [
+        t for t in PIXABAY_TRACKS
+        if content_type in t.get("moods", [])
+    ]
+    if matching_px:
+        entry = matching_px[content_id % len(matching_px)]
+        px_path = AUDIO_DIR / f"{entry['name']}.mp3"
+        if px_path.exists() and px_path.stat().st_size > 1000:
+            logger.info(f"Selected Pixabay track: {entry['name']}")
+            return px_path
 
-    # Try ElevenLabs tracks first (mood-matched)
+    # 2. Any available Pixabay track
+    px_available = [
+        AUDIO_DIR / f"{t['name']}.mp3" for t in PIXABAY_TRACKS
+        if (AUDIO_DIR / f"{t['name']}.mp3").exists()
+        and (AUDIO_DIR / f"{t['name']}.mp3").stat().st_size > 1000
+    ]
+    if px_available:
+        return px_available[content_id % len(px_available)]
+
+    # 3. ElevenLabs mood-matched tracks
     matching_el = [
         e for e in ELEVENLABS_PROMPTS
         if content_type in e.get("moods", [])
@@ -339,19 +359,25 @@ def select_music_for_content(content_type: str, content_id: int) -> Optional[Pat
         if el_path.exists() and el_path.stat().st_size > 1000:
             return el_path
 
-    # Fall back to any ElevenLabs track
-    el_tracks = [AUDIO_DIR / f"{e['name']}.mp3" for e in ELEVENLABS_PROMPTS]
-    el_available = [p for p in el_tracks if p.exists() and p.stat().st_size > 1000]
+    # 4. Any available ElevenLabs track
+    el_available = [
+        AUDIO_DIR / f"{e['name']}.mp3" for e in ELEVENLABS_PROMPTS
+        if (AUDIO_DIR / f"{e['name']}.mp3").exists()
+        and (AUDIO_DIR / f"{e['name']}.mp3").stat().st_size > 1000
+    ]
     if el_available:
         return el_available[content_id % len(el_available)]
 
-    # Fall back to Mixkit
-    mixkit_tracks = [AUDIO_DIR / f"{t['name']}.mp3" for t in MIXKIT_TRACKS]
-    mixkit_available = [p for p in mixkit_tracks if p.exists() and p.stat().st_size > 1000]
+    # 5. Mixkit fallback
+    mixkit_available = [
+        AUDIO_DIR / f"{t['name']}.mp3" for t in MIXKIT_TRACKS
+        if (AUDIO_DIR / f"{t['name']}.mp3").exists()
+        and (AUDIO_DIR / f"{t['name']}.mp3").stat().st_size > 1000
+    ]
     if mixkit_available:
         return mixkit_available[content_id % len(mixkit_available)]
 
-    # Last resort: any MP3 in audio dir
+    # 6. Last resort: any MP3 in audio dir
     all_tracks = [
         p for p in AUDIO_DIR.glob("*.mp3")
         if p.stat().st_size > 1000 and "narration" not in p.name

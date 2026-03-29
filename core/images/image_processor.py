@@ -145,24 +145,44 @@ class ImagePipeline:
 
         return processed
 
+    # Content types that get a branded reel alongside their feed image
+    REEL_CONTENT_TYPES = {
+        ContentType.daily_devotional,
+        ContentType.daily_verse,
+        ContentType.faith_friday,
+        ContentType.encouragement,
+        ContentType.prayer_prompt,
+    }
+
     def generate_images_for_content(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Generate all image formats for a content piece.
 
         daily_devotional and carousel use Playwright HTML renderer.
-        Other types use Unsplash + Remotion reel pipeline.
+        Other types use Unsplash pipeline.
+        Reel-eligible types also get a branded MP4 reel.
         """
         content_type = content.content_type
+        results: list[GeneratedImage] = []
 
         # --- Playwright HTML rendering for daily_devotional ---
         if content_type == ContentType.daily_devotional:
-            return self._generate_scripture_image(content)
+            results = self._generate_scripture_image(content)
 
         # --- Playwright HTML rendering for carousel ---
-        if content_type == ContentType.carousel:
-            return self._generate_carousel_images(content)
+        elif content_type == ContentType.carousel:
+            results = self._generate_carousel_images(content)
 
         # --- Unsplash-only pipeline for other content types ---
-        return self._generate_unsplash_images(content)
+        else:
+            results = self._generate_unsplash_images(content)
+
+        # --- Branded reel video for eligible content types ---
+        if content_type in self.REEL_CONTENT_TYPES:
+            reel_record = self._generate_reel_video(content)
+            if reel_record:
+                results.append(reel_record)
+
+        return results
 
     def _generate_scripture_image(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Render a single scripture image via Playwright HTML renderer."""
@@ -226,6 +246,128 @@ class ImagePipeline:
         self.db.flush()
         logger.info("Scripture image rendered for content #%d", content.id)
         return [record]
+
+    def _generate_reel_video(self, content: GeneratedContent) -> Optional[GeneratedImage]:
+        """Render a branded reel video for a content piece.
+
+        Uses HTML templates + TTS narration + background music → MP4.
+        """
+        from core.rendering.reel_renderer import render_reel_video
+
+        # Extract verse text and reference
+        verse_text = ""
+        verse_reference = ""
+        if content.verse:
+            verse_text = content.verse.text or ""
+            verse_reference = content.verse.reference or ""
+            translation = content.verse.translation or "NIV"
+            if verse_reference and translation:
+                verse_reference = f"{verse_reference} {translation}"
+        if not verse_text:
+            verse_text = content.reel_script_15 or content.hook or ""
+
+        if not verse_text:
+            logger.warning("No verse text for reel content #%d, skipping", content.id)
+            return None
+
+        # Hook text — use the generated hook or fall back to a short excerpt
+        hook_text = content.hook or verse_text[:60]
+
+        # Reflection text — use story_text or a portion of caption_short
+        reflection_text = content.story_text or ""
+        if not reflection_text and content.caption_short:
+            # Take the first sentence as a reflection
+            sentences = content.caption_short.split(".")
+            reflection_text = sentences[0].strip() + "." if sentences else ""
+
+        # Parse highlight phrases from image_prompt
+        highlights: list[str] = []
+        if content.image_prompt:
+            try:
+                parsed = json.loads(content.image_prompt)
+                if isinstance(parsed, list):
+                    highlights = parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # Content type as music mood
+        music_mood = content.content_type.value if content.content_type else "daily_verse"
+
+        video_path = render_reel_video(
+            hook_text=hook_text,
+            verse_text=verse_text,
+            verse_reference=verse_reference,
+            highlights=highlights,
+            reflection_text=reflection_text,
+            content_id=content.id,
+            music_mood=music_mood,
+        )
+
+        if not video_path:
+            logger.error("Reel render failed for content #%d", content.id)
+            return None
+
+        # Upload to R2
+        r2_key = f"content/{content.id}/reel_9x16.mp4"
+        final_url = self._upload_video_to_storage(video_path, content.id, r2_key)
+
+        record = GeneratedImage(
+            content_id=content.id,
+            provider=ImageProvider.pil_fallback,
+            format=ImageFormat.reel_9x16,
+            raw_url=video_path,
+            final_url=final_url,
+            r2_key=r2_key,
+            width=1080,
+            height=1920,
+        )
+        self.db.add(record)
+        self.db.flush()
+        logger.info("Branded reel video created for content #%d", content.id)
+        return record
+
+    def _upload_video_to_storage(
+        self, local_path: str, content_id: int, r2_key: str,
+    ) -> str:
+        """Upload an MP4 video to R2."""
+        if not settings.has_r2:
+            return f"file://{local_path}"
+
+        try:
+            import boto3
+
+            s3 = boto3.client(
+                "s3",
+                endpoint_url=settings.cloudflare_r2_endpoint,
+                aws_access_key_id=settings.cloudflare_r2_access_key,
+                aws_secret_access_key=settings.cloudflare_r2_secret_key,
+            )
+
+            s3.upload_file(
+                local_path,
+                settings.cloudflare_r2_bucket,
+                r2_key,
+                ExtraArgs={"ContentType": "video/mp4"},
+            )
+
+            public_base = settings.cloudflare_r2_public_url.rstrip("/")
+            url = f"{public_base}/{r2_key}"
+            if not url.startswith("https://"):
+                url = f"https://{url.lstrip('http://')}"
+            logger.info("Uploaded reel to R2: %s", url)
+
+            try:
+                Path(local_path).unlink(missing_ok=True)
+            except Exception as cleanup_err:
+                logger.warning(
+                    "Could not delete local reel %s: %s", local_path, cleanup_err,
+                )
+
+            return url
+
+        except Exception as e:
+            logger.error("R2 reel upload failed for content #%d: %s", content_id, e)
+            return f"file://{local_path}"
 
     def _generate_carousel_images(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Render 3 carousel slide images via Playwright HTML renderer."""
