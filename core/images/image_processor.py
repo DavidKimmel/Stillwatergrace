@@ -471,14 +471,13 @@ class ImagePipeline:
     def _generate_unsplash_images(self, content: GeneratedContent) -> list[GeneratedImage]:
         """Unsplash photo pipeline for non-HTML content types.
 
-        Downloads a stock photo and stores it as the raw background image.
-        No reel rendering — reels are handled externally if needed.
+        Downloads a stock photo, processes it (resize + text overlay),
+        uploads to R2, and stores the record.
         """
         images: list[GeneratedImage] = []
         raw_path = None
         provider = ImageProvider.pil_fallback
 
-        # Unsplash
         if settings.unsplash_access_key:
             try:
                 from core.images.unsplash_client import UnsplashClient
@@ -498,29 +497,40 @@ class ImagePipeline:
             logger.warning("No background image for content #%d", content.id)
             return images
 
-        # Store raw image record
-        raw_record = GeneratedImage(
+        # Process the image (resize + overlay) and upload to R2
+        processed_path = self._process_image(
+            raw_path, (1080, 1350), content, ImageFormat.feed_4x5,
+        )
+
+        if processed_path:
+            r2_key = f"content/{content.id}/feed_4x5.jpg"
+            final_url = self._upload_to_storage(processed_path, content.id, ImageFormat.feed_4x5)
+        else:
+            # Fallback: upload raw image directly
+            r2_key = f"content/{content.id}/feed_4x5.jpg"
+            final_url = self._upload_to_storage(raw_path, content.id, ImageFormat.feed_4x5)
+
+        record = GeneratedImage(
             content_id=content.id,
             provider=provider,
             format=ImageFormat.feed_4x5,
             raw_url=raw_path,
-            final_url=None,
+            final_url=final_url,
+            r2_key=r2_key if final_url and final_url.startswith("https://") else None,
             width=1080,
             height=1350,
         )
-        self.db.add(raw_record)
-        images.append(raw_record)
-        logger.info("Unsplash image stored for content #%d", content.id)
+        self.db.add(record)
+        images.append(record)
 
-        # Clean up raw source image after all processing is done
-        if settings.has_r2:
-            try:
-                Path(raw_path).unlink(missing_ok=True)
-                logger.info("Cleaned up raw image: %s", raw_path)
-            except Exception as e:
-                logger.warning("Could not delete raw image %s: %s", raw_path, e)
+        # Clean up raw source image
+        try:
+            Path(raw_path).unlink(missing_ok=True)
+        except Exception:
+            pass
 
         self.db.flush()
+        logger.info("Unsplash image processed for content #%d: %s", content.id, final_url)
         return images
 
     def _process_image(

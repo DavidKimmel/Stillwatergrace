@@ -5,8 +5,11 @@ import { parseISO } from 'date-fns';
 
 const TYPE_COLORS = {
   daily_verse: 'bg-blue-100 text-blue-700',
+  daily_devotional: 'bg-blue-100 text-blue-700',
   marriage_monday: 'bg-pink-100 text-pink-700',
+  marriage_challenge: 'bg-pink-100 text-pink-700',
   parenting_wednesday: 'bg-purple-100 text-purple-700',
+  parenting_list: 'bg-purple-100 text-purple-700',
   faith_friday: 'bg-emerald-100 text-emerald-700',
   encouragement: 'bg-amber-100 text-amber-700',
   prayer_prompt: 'bg-indigo-100 text-indigo-700',
@@ -14,14 +17,18 @@ const TYPE_COLORS = {
   carousel: 'bg-cyan-100 text-cyan-700',
   reel: 'bg-rose-100 text-rose-700',
   christian_quote: 'bg-orange-100 text-orange-700',
+  conviction_quote: 'bg-orange-100 text-orange-700',
   this_or_that: 'bg-violet-100 text-violet-700',
   fill_in_blank: 'bg-teal-100 text-teal-700',
 };
 
 const TYPE_LABELS = {
   daily_verse: 'Verse',
+  daily_devotional: 'Devotional',
   marriage_monday: 'Marriage',
+  marriage_challenge: 'Marriage',
   parenting_wednesday: 'Parenting',
+  parenting_list: 'Parenting',
   faith_friday: 'Faith',
   encouragement: 'Encourage',
   prayer_prompt: 'Prayer',
@@ -29,6 +36,7 @@ const TYPE_LABELS = {
   carousel: 'Carousel',
   reel: 'Reel',
   christian_quote: 'Quote',
+  conviction_quote: 'Conviction',
   this_or_that: 'This/That',
   fill_in_blank: 'Fill In',
 };
@@ -73,7 +81,7 @@ export default function CalendarCard({ content, isSelected, onSelect, onAction, 
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
 
-  const feedImage = content.images?.find((img) => img.format === 'feed_4x5');
+  const feedImage = content.images?.find((img) => img.format === 'feed_4x5' || img.format === 'feed_1x1');
   const hasReel = content.images?.some((img) => img.format === 'reel_9x16');
   const provider = content.images?.[0]?.provider;
 

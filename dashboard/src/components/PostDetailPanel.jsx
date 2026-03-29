@@ -67,7 +67,7 @@ export default function PostDetailPanel({ content, onClose, onAction, onRegenera
   // Find the primary preview image — reel, feed image, or carousel slides
   const reelImages = content.images?.filter((img) => img.format === 'reel_9x16') || [];
   const reelImage = reelImages.find((img) => img.provider === 'fal') || reelImages[0];
-  const feedImages = content.images?.filter((img) => img.format === 'feed_1x1') || [];
+  const feedImages = content.images?.filter((img) => img.format === 'feed_1x1' || img.format === 'feed_4x5') || [];
   const primaryFeedImage = feedImages[0];
   const allImages = content.images || [];
 
@@ -167,7 +167,7 @@ export default function PostDetailPanel({ content, onClose, onAction, onRegenera
       )}
 
       {/* Feed image preview (scripture singles + carousels) */}
-      {!reelImage?.final_url && feedImages.length > 0 && (
+      {feedImages.length > 0 && (
         <div className="mb-4">
           <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">
             {feedImages.length > 1 ? `Carousel Preview (${feedImages.length} slides)` : 'Image Preview'}
