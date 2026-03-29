@@ -124,7 +124,8 @@ class InstagramClient:
 
         creation_id = container.get("id")
 
-        # Step 3: Publish
+        # Step 3: Wait for processing, then publish
+        self._wait_for_processing(creation_id, max_wait=60)
         result = self._publish_container(creation_id)
         self._daily_post_count += 1
 

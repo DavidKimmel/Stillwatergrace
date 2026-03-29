@@ -458,12 +458,12 @@ def _publish_carousel(db, client, content):
 
     caption = _build_caption(content)
 
-    # Find carousel slide images (stored as feed_4x5 with r2_key like carousel_N.jpg)
+    # Find carousel slide images (stored as feed_4x5 or feed_1x1 with r2_key like carousel_N.jpg)
     all_feed = (
         db.query(GeneratedImage)
         .filter(
             GeneratedImage.content_id == content.id,
-            GeneratedImage.format == ImageFormat.feed_4x5,
+            GeneratedImage.format.in_([ImageFormat.feed_4x5, ImageFormat.feed_1x1]),
         )
         .order_by(GeneratedImage.id)
         .all()
@@ -581,7 +581,7 @@ def _post_to_facebook(db, content):
                 db.query(GeneratedImage)
                 .filter(
                     GeneratedImage.content_id == content.id,
-                    GeneratedImage.format == ImageFormat.feed_4x5,
+                    GeneratedImage.format.in_([ImageFormat.feed_4x5, ImageFormat.feed_1x1]),
                 )
                 .first()
             )
