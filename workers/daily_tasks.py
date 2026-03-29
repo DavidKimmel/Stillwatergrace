@@ -339,6 +339,30 @@ def generate_weekly_report():
 
 
 @app.task
+@app.task(name="workers.daily_tasks.run_weekly_cleanup")
+def run_weekly_cleanup():
+    """Clean up local temp files — processed images, reel videos, old narration.
+
+    Preserves music library and recent narration cache (<30 days).
+    Runs weekly via Celery beat.
+    """
+    import subprocess
+    logger.info("Running weekly local file cleanup...")
+    try:
+        result = subprocess.run(
+            ["python", "manage.py", "purge-local"],
+            capture_output=True, text=True, timeout=60,
+        )
+        logger.info(f"Cleanup output: {result.stdout.strip()}")
+        if result.returncode != 0:
+            logger.error(f"Cleanup stderr: {result.stderr.strip()}")
+        return {"status": "completed", "output": result.stdout.strip()}
+    except Exception as e:
+        logger.error(f"Weekly cleanup failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+@app.task(name="workers.daily_tasks.refresh_instagram_token_task")
 def refresh_instagram_token_task():
     """Check Instagram token health and refresh if needed.
 

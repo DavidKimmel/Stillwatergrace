@@ -411,63 +411,85 @@ def token_status():
 
 
 def purge_local_media():
-    """Delete local image/video/narration files that have been uploaded to R2.
+    """Comprehensive cleanup of local temp files.
 
-    Keeps: audio music tracks (reused), test renders, files not yet on R2.
+    Deletes:
+      - images/processed/ — renders already uploaded to R2
+      - images/raw/ — Unsplash downloads (always disposable)
+      - output/reels/ — reel MP4s already uploaded to R2
+      - output/audio/ — mixed/delayed audio (ephemeral per-render)
+      - audio/narration/ — TTS cache older than 30 days
+      - templates/images/_render_* — temp Playwright HTML files
+
+    Preserves:
+      - audio/*.mp3 — music library (px_*, el_*, mixkit)
+      - audio/narration/ files < 30 days old (may be reused for re-renders)
+      - test_* and demo_* files
     """
     from pathlib import Path
-    from database.session import get_db
-    from database.models import GeneratedImage
-
-    raw_dir = Path("images/raw")
-    processed_dir = Path("images/processed")
-    narration_dir = Path("audio/narration")
+    from datetime import datetime, timedelta
 
     deleted = 0
     freed_bytes = 0
+    cutoff = datetime.now() - timedelta(days=30)
 
-    # Delete processed files that have R2 URLs (not file:// URLs)
-    with get_db() as db:
-        uploaded = (
-            db.query(GeneratedImage)
-            .filter(GeneratedImage.final_url.like("https://%"))
-            .all()
-        )
-        r2_content_ids = {img.content_id for img in uploaded}
-        print(f"Found {len(uploaded)} images/reels on R2 across {len(r2_content_ids)} content pieces")
-
-    # Clean processed files
-    if processed_dir.exists():
-        for f in processed_dir.iterdir():
-            if f.name.startswith("test_"):
-                continue  # Keep test renders
-            try:
-                # Extract content_id from filename like "29_feed_4x5.jpg"
-                content_id = int(f.stem.split("_")[0])
-                if content_id in r2_content_ids:
-                    size = f.stat().st_size
-                    f.unlink()
-                    deleted += 1
-                    freed_bytes += size
-            except (ValueError, IndexError):
+    def _clean_dir(directory: Path, pattern: str = "*", max_age_days: int = 0,
+                   skip_prefixes: tuple[str, ...] = ()) -> tuple[int, int]:
+        """Delete matching files. Returns (count, bytes)."""
+        count = 0
+        size = 0
+        if not directory.exists():
+            return 0, 0
+        for f in directory.glob(pattern):
+            if not f.is_file():
                 continue
-
-    # Clean raw Unsplash downloads
-    if raw_dir.exists():
-        for f in raw_dir.iterdir():
-            size = f.stat().st_size
+            if any(f.name.startswith(p) for p in skip_prefixes):
+                continue
+            if max_age_days > 0:
+                mtime = datetime.fromtimestamp(f.stat().st_mtime)
+                if mtime > cutoff:
+                    continue
+            fsize = f.stat().st_size
             f.unlink()
-            deleted += 1
-            freed_bytes += size
+            count += 1
+            size += fsize
+        return count, size
 
-    # Clean narration cache
-    if narration_dir.exists():
-        for f in narration_dir.iterdir():
-            if f.suffix == ".mp3":
-                size = f.stat().st_size
-                f.unlink()
-                deleted += 1
-                freed_bytes += size
+    # 1. Processed images (already uploaded to R2)
+    d, s = _clean_dir(Path("images/processed"), skip_prefixes=("test_",))
+    deleted += d; freed_bytes += s
+    if d: print(f"  images/processed: {d} files")
+
+    # 2. Raw Unsplash downloads (always disposable)
+    d, s = _clean_dir(Path("images/raw"))
+    deleted += d; freed_bytes += s
+    if d: print(f"  images/raw: {d} files")
+
+    # 3. Reel videos (uploaded to R2 on creation)
+    d, s = _clean_dir(Path("output/reels"), pattern="*.mp4",
+                      skip_prefixes=("test_", "demo_"))
+    deleted += d; freed_bytes += s
+    if d: print(f"  output/reels: {d} files")
+
+    # 4. Mixed/delayed audio (ephemeral per-render)
+    d, s = _clean_dir(Path("output/audio"), pattern="*.mp3")
+    deleted += d; freed_bytes += s
+    if d: print(f"  output/audio: {d} files")
+
+    # 5. TTS narration cache > 30 days old
+    d, s = _clean_dir(Path("audio/narration"), pattern="*.mp3", max_age_days=30)
+    deleted += d; freed_bytes += s
+    if d: print(f"  audio/narration (>30d): {d} files")
+
+    # 6. Temp Playwright render HTML files
+    d, s = _clean_dir(Path("templates/images"), pattern="_render_*")
+    deleted += d; freed_bytes += s
+    if d: print(f"  templates/images/_render_*: {d} files")
+
+    # 7. Timestamp sidecar files for narration
+    d, s = _clean_dir(Path("audio/narration"), pattern="*.timestamps.json",
+                      max_age_days=30)
+    deleted += d; freed_bytes += s
 
     freed_mb = freed_bytes / (1024 * 1024)
     print(f"\nDeleted {deleted} files, freed {freed_mb:.1f} MB")

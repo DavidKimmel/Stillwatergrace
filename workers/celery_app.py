@@ -56,6 +56,11 @@ app.conf.update(
             "schedule": crontab(hour=10, minute=0),
             "args": ("morning",),
         },
+        "evening-post": {
+            "task": "workers.posting_tasks.post_scheduled_content",
+            "schedule": crontab(hour=19, minute=0),
+            "args": ("evening",),
+        },
         # ── Analytics Collection ──
         "analytics-1hr": {
             "task": "workers.daily_tasks.collect_analytics",
@@ -111,6 +116,12 @@ app.conf.update(
         "weekly-instagram-token-refresh": {
             "task": "workers.daily_tasks.refresh_instagram_token_task",
             "schedule": crontab(hour=3, minute=0, day_of_week="wednesday"),
+        },
+
+        # ── Cleanup ──
+        "weekly-local-cleanup": {
+            "task": "workers.daily_tasks.run_weekly_cleanup",
+            "schedule": crontab(hour=4, minute=0, day_of_week="sunday"),
         },
     },
 )

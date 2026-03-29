@@ -25,20 +25,43 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────
 
 # Day of week (0=Monday) → content type mapping
-# 4 scripture singles (daily_devotional) + 3 carousels per week
+# Morning: feed posts (scripture singles + carousels)
+# Evening: reels (themed series + engagement formats)
 WEEKLY_SCHEDULE = {
-    0: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful}},      # Mon: scripture
-    1: {"morning": {"type": ContentType.carousel, "tone": EmotionalTone.reflective}},             # Tue: carousel
-    2: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},     # Wed: scripture
-    3: {"morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful}},                # Thu: carousel
-    4: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.challenging}},    # Fri: scripture
-    5: {"morning": {"type": ContentType.carousel, "tone": EmotionalTone.celebratory}},            # Sat: carousel
-    6: {"morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective}},     # Sun: scripture
+    0: {  # Monday
+        "morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.hopeful},
+        "evening": {"type": ContentType.marriage_monday, "tone": EmotionalTone.hopeful},
+    },
+    1: {  # Tuesday
+        "morning": {"type": ContentType.carousel, "tone": EmotionalTone.reflective},
+        "evening": {"type": ContentType.daily_verse, "tone": EmotionalTone.reflective},
+    },
+    2: {  # Wednesday
+        "morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective},
+        "evening": {"type": ContentType.parenting_wednesday, "tone": EmotionalTone.hopeful},
+    },
+    3: {  # Thursday
+        "morning": {"type": ContentType.carousel, "tone": EmotionalTone.hopeful},
+        "evening": {"type": ContentType.conviction_quote, "tone": EmotionalTone.challenging},
+    },
+    4: {  # Friday
+        "morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.challenging},
+        "evening": {"type": ContentType.faith_friday, "tone": EmotionalTone.reflective},
+    },
+    5: {  # Saturday
+        "morning": {"type": ContentType.carousel, "tone": EmotionalTone.celebratory},
+        "evening": {"type": ContentType.encouragement, "tone": EmotionalTone.hopeful},
+    },
+    6: {  # Sunday
+        "morning": {"type": ContentType.daily_devotional, "tone": EmotionalTone.reflective},
+        "evening": {"type": ContentType.daily_verse, "tone": EmotionalTone.hopeful},
+    },
 }
 
 # Posting times (EST)
 POSTING_TIMES = {
     "morning": time(10, 0),
+    "evening": time(19, 0),
 }
 
 

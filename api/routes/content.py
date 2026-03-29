@@ -542,18 +542,55 @@ def move_post(content_id: int, body: dict = Body(...), db: Session = Depends(get
 
 @router.delete("/{content_id}")
 def delete_post(content_id: int, db: Session = Depends(get_db_dependency)):
-    """Delete a post and its associated images. Cannot delete posted content."""
+    """Delete a post, its associated images, R2 files, and posting logs."""
     content = db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
     if not content:
         raise HTTPException(status_code=404, detail="Content not found")
     if content.status == ContentStatus.posted:
         raise HTTPException(status_code=400, detail="Cannot delete posted content")
 
-    # Delete images first (FK constraint)
+    # Delete R2 objects for all images
+    images = db.query(GeneratedImage).filter(GeneratedImage.content_id == content_id).all()
+    _delete_r2_objects([img.r2_key for img in images if img.r2_key])
+
+    # Delete in FK order: posting_log → images → content
+    from database.models import PostingLog
+    db.query(PostingLog).filter(PostingLog.content_id == content_id).delete()
     db.query(GeneratedImage).filter(GeneratedImage.content_id == content_id).delete()
     db.delete(content)
     db.commit()
     return {"success": True, "deleted_id": content_id}
+
+
+def _delete_r2_objects(r2_keys: list[str]) -> int:
+    """Delete objects from Cloudflare R2. Returns count of deleted objects."""
+    from core.config import settings
+    if not settings.has_r2 or not r2_keys:
+        return 0
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        import boto3
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=settings.cloudflare_r2_endpoint,
+            aws_access_key_id=settings.cloudflare_r2_access_key,
+            aws_secret_access_key=settings.cloudflare_r2_secret_key,
+        )
+        deleted = 0
+        for key in r2_keys:
+            try:
+                s3.delete_object(Bucket=settings.cloudflare_r2_bucket, Key=key)
+                deleted += 1
+            except Exception as e:
+                logger.warning(f"Failed to delete R2 object {key}: {e}")
+        logger.info(f"Deleted {deleted}/{len(r2_keys)} R2 objects")
+        return deleted
+    except Exception as e:
+        logger.error(f"R2 cleanup failed: {e}")
+        return 0
 
 
 @router.post("/{content_id}/regenerate")
